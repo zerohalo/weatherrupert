@@ -59,16 +59,21 @@ type Renderer struct {
 	// (HTTP handler goroutine) and written by Run (renderer goroutine).
 	slideMu sync.Mutex
 
+	// cachedPreview holds the last successfully rendered preview PNG
+	// (when weather data was available). Used as a fallback when the
+	// pipeline is suspended and no live render is possible.
+	cachedPreview atomic.Pointer[[]byte]
+
 	// slideStart is reset every time the active slide changes.
 	// It lets animated slides (radar) distribute frames across the slide duration.
 	slideStart time.Time
 
 	// Slide scheduler state.
-	weatherIdx      int  // current position in weatherSlides
-	specialIdx      int  // index of the currently-showing special slide
+	weatherIdx      int   // current position in weatherSlides
+	specialIdx      int   // index of the currently-showing special slide
 	pendingSpecials []int // indices of specials queued to show after the current one
 	showingSpecial  bool  // true while a special slide is active
-	slideSeq        int  // increments on every slide advance; used as frame cache key
+	slideSeq        int   // increments on every slide advance; used as frame cache key
 
 	// Frame cache — avoids re-rendering identical frames.
 	cachePix     []byte
@@ -110,25 +115,25 @@ func New(w, h, frameRate int, label string,
 			{name: "current-conditions", fn: NewSlideCurrentConditions(use24h, useMetric, fonts)},
 			{name: "hourly-forecast", fn: NewSlideHourlyForecast(use24h, useMetric, fonts)},
 			{name: "precipitation", fn: NewSlidePrecipitation(use24h, useMetric, fonts), skip: func() func(*weather.WeatherData) bool {
-			noPrecipCount := 0
-			return func(d *weather.WeatherData) bool {
-				// Check if any hourly period has precipitation probability > 0.
-				hasPrecip := false
-				for _, p := range d.HourlyPeriods {
-					if p.ProbabilityOfPrecipitation.Value != nil && *p.ProbabilityOfPrecipitation.Value > 0 {
-						hasPrecip = true
-						break
+				noPrecipCount := 0
+				return func(d *weather.WeatherData) bool {
+					// Check if any hourly period has precipitation probability > 0.
+					hasPrecip := false
+					for _, p := range d.HourlyPeriods {
+						if p.ProbabilityOfPrecipitation.Value != nil && *p.ProbabilityOfPrecipitation.Value > 0 {
+							hasPrecip = true
+							break
+						}
 					}
+					if hasPrecip {
+						noPrecipCount = 0
+						return false // always show when there's precipitation
+					}
+					// No precipitation — show every other cycle.
+					noPrecipCount++
+					return noPrecipCount%2 == 0
 				}
-				if hasPrecip {
-					noPrecipCount = 0
-					return false // always show when there's precipitation
-				}
-				// No precipitation — show every other cycle.
-				noPrecipCount++
-				return noPrecipCount%2 == 0
-			}
-		}()},
+			}()},
 			{name: "extended-forecast", fn: NewSlideExtendedForecast(use24h, useMetric, fonts)},
 			{name: "moon-tides", fn: NewSlideMoonTides(use24h, useMetric, fonts)},
 			{name: "night-sky", fn: NewSlideNightSky(use24h, useMetric, getPlanetLiveAlways, fonts)},
@@ -136,7 +141,7 @@ func New(w, h, frameRate int, label string,
 				return d.Solar == nil || (d.Solar.SunspotImage == nil && d.Solar.CoronaImage == nil)
 			}},
 			{name: "satellite", fn: NewSlideSatellite(use24h, fonts), skip: func(d *weather.WeatherData) bool { return len(d.SatelliteFrames) == 0 }},
-		{name: "radar", fn: NewSlideRadar(use24h, fonts)},
+			{name: "radar", fn: NewSlideRadar(use24h, fonts)},
 		},
 		specialSlides: []specialSlideEntry{
 			{
@@ -423,11 +428,15 @@ func extractPixels(dc *gg.Context) ([]byte, error) {
 }
 
 // RenderPreview renders the current slide as a PNG image and returns the bytes.
-// Returns nil if weather data is not yet available.
+// When weather data is available, the result is cached so it can be served
+// later via CachedPreview even after the pipeline is suspended.
 func (r *Renderer) RenderPreview() ([]byte, error) {
 	data := r.wc.Current()
 	if data == nil {
-		// Render loading screen.
+		// Return cached preview if available, otherwise render loading screen.
+		if cached := r.CachedPreview(); cached != nil {
+			return cached, nil
+		}
 		dc := gg.NewContext(r.w, r.h)
 		DrawGradientBackground(dc)
 		dc.SetRGBA(1, 1, 1, 0.25)
@@ -458,7 +467,20 @@ func (r *Renderer) RenderPreview() ([]byte, error) {
 		slide(dc, data, elapsed, r.getSlideDuration())
 	}()
 
-	return encodePNG(dc)
+	png, err := encodePNG(dc)
+	if err == nil {
+		r.cachedPreview.Store(&png)
+	}
+	return png, err
+}
+
+// CachedPreview returns the last successfully rendered preview PNG, or nil
+// if no preview has been rendered yet.
+func (r *Renderer) CachedPreview() []byte {
+	if p := r.cachedPreview.Load(); p != nil {
+		return *p
+	}
+	return nil
 }
 
 // RenderFavicon generates a 32x32 PNG favicon using the sun logo.

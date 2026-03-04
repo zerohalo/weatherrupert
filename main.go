@@ -184,8 +184,9 @@ func main() {
 		} else {
 			streamURL = fmt.Sprintf("%s://%s/stream?zip=%s&clock=%s&units=%s", scheme, host, loc.ZipCode, clock, units)
 		}
+		baseURL := fmt.Sprintf("%s://%s", scheme, host)
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
-		fmt.Fprint(w, guide.M3U(cfg.ChannelNumber, channelID, location, streamURL))
+		fmt.Fprint(w, guide.M3U(cfg.ChannelNumber, channelID, location, streamURL, baseURL, loc.ZipCode, clock, units))
 	})
 
 	// GET /guide.xml?zip=90210[&clock=12|24]
@@ -271,15 +272,29 @@ func main() {
 		}
 		clock := clockParam(r)
 		units := unitsParam(r)
-		p, err := mgr.Get(zip, clock, units)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		pngData, err := p.rnd.RenderPreview()
-		if err != nil {
-			http.Error(w, "preview render error", http.StatusInternalServerError)
-			return
+
+		// Try existing pipeline first (no side effects).
+		// Fall back to creating one only if no cached preview is available.
+		var pngData []byte
+		if p := mgr.Peek(zip, clock, units); p != nil {
+			var err error
+			pngData, err = p.rnd.RenderPreview()
+			if err != nil {
+				http.Error(w, "preview render error", http.StatusInternalServerError)
+				return
+			}
+		} else {
+			// No pipeline running — spin one up to get a preview.
+			p, err := mgr.Get(zip, clock, units)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			pngData, err = p.rnd.RenderPreview()
+			if err != nil {
+				http.Error(w, "preview render error", http.StatusInternalServerError)
+				return
+			}
 		}
 		w.Header().Set("Content-Type", "image/png")
 		w.Header().Set("Cache-Control", "no-cache, no-store")

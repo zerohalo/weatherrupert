@@ -228,6 +228,26 @@ func (m *Manager) Get(zip, clockFormat, units string) (*Pipeline, error) {
 	return p, nil
 }
 
+// Peek returns an existing pipeline for the given ZIP/clock/units without
+// creating one. Returns nil if no pipeline is running for that combination.
+func (m *Manager) Peek(zip, clockFormat, units string) *Pipeline {
+	if clockFormat != config.ClockFormat12h && clockFormat != config.ClockFormat24h {
+		clockFormat = config.ClockFormat24h
+	}
+	if units != config.UnitsImperial && units != config.UnitsMetric {
+		units = config.UnitsImperial
+	}
+	loc, err := geo.Lookup(zip)
+	if err != nil {
+		return nil
+	}
+	key := loc.ZipCode + "#" + clockFormat + "#" + units
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.pipelines[key]
+}
+
 // start launches all goroutines for a new pipeline. The pipeline is returned
 // immediately; weather bootstrapping runs in the background so the stream
 // begins serving a "Loading..." slide right away. clockFormat is "12" or "24".
