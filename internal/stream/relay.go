@@ -23,24 +23,25 @@ const relayBufLen = 256 // chunks to buffer per subscriber before dropping
 // subscriber is active, the relay disconnects from the stream to avoid
 // wasting bandwidth.  It reconnects when any subscriber becomes active again.
 type MusicRelay struct {
-	url     string
-	http    *http.Client
-	mu      sync.Mutex
-	clients map[*relayClient]struct{}
-	started bool
-	active      int              // number of subscribers with viewers
-	stopCh      chan struct{}     // closed to signal the fetch loop to exit
-	wakeCh      chan struct{}     // signalled when active transitions from 0 → >0
-	connectedCh chan struct{}     // closed when fetch() establishes an HTTP connection
+	url         string
+	http        *http.Client
+	mu          sync.Mutex
+	clients     map[*relayClient]struct{}
+	started     bool
+	active      int           // number of subscribers with viewers
+	stopCh      chan struct{} // closed to signal the fetch loop to exit
+	wakeCh      chan struct{} // signalled when active transitions from 0 → >0
+	connectedCh chan struct{} // closed when fetch() establishes an HTTP connection
 }
 
 type relayClient struct {
-	pr     *os.File      // read end — given to FFmpeg via ExtraFiles
-	pw     *os.File      // write end — writer goroutine writes here
-	ch     chan []byte    // buffered channel fed by broadcast
-	done   chan struct{}  // closed when writer goroutine exits
-	active bool          // true when this client's pipeline has viewers
-	drops  int64         // chunks dropped because channel was full
+	pr       *os.File      // read end — given to FFmpeg via ExtraFiles
+	pw       *os.File      // write end — writer goroutine writes here
+	ch       chan []byte   // buffered channel fed by broadcast
+	done     chan struct{} // closed when writer goroutine exits
+	active   bool          // true when this client's pipeline has viewers
+	detached bool          // set before closing ch so writer goroutine skips pw.Close
+	drops    int64         // chunks dropped because channel was full
 }
 
 // NewMusicRelay creates a relay for the given stream URL.
@@ -80,15 +81,7 @@ func (r *MusicRelay) Subscribe() *os.File {
 	// Writer goroutine: reads from channel, writes to OS pipe.
 	// Blocks when FFmpeg is suspended (pipe buffer full) — that's fine;
 	// the channel fills up and broadcast drops data for this client.
-	go func() {
-		defer close(c.done)
-		defer pw.Close()
-		for data := range c.ch {
-			if _, err := pw.Write(data); err != nil {
-				return
-			}
-		}
-	}()
+	go runRelayWriter(c)
 
 	r.mu.Lock()
 	r.clients[c] = struct{}{}
@@ -205,6 +198,89 @@ func (r *MusicRelay) DrainPipe(pr *os.File) {
 	if drained > 0 {
 		log.Printf("music relay: drained %d bytes of stale audio from pipe", drained)
 	}
+}
+
+// runRelayWriter is the writer goroutine for a relay client.  It reads chunks
+// from the client's channel and writes them to the OS pipe.  When the channel
+// is closed, the goroutine exits.  If the client was detached (not unsubscribed),
+// the pipe write end is left open so a new relay can reuse it.
+func runRelayWriter(c *relayClient) {
+	defer close(c.done)
+	defer func() {
+		if !c.detached {
+			c.pw.Close()
+		}
+	}()
+	for data := range c.ch {
+		if _, err := c.pw.Write(data); err != nil {
+			return
+		}
+	}
+}
+
+// DetachPipe removes a subscriber without closing the pipe file descriptors.
+// Returns the write end of the pipe so it can be passed to AttachPipe on a
+// different relay.  The subscriber must not be active (call SetActive(pr, false)
+// first).  Returns nil if the subscriber is not found.
+func (r *MusicRelay) DetachPipe(pr *os.File) *os.File {
+	r.mu.Lock()
+	var found *relayClient
+	for c := range r.clients {
+		if c.pr == pr {
+			found = c
+			if c.active {
+				c.active = false
+				r.active--
+			}
+			delete(r.clients, c)
+			break
+		}
+	}
+	shouldStop := len(r.clients) == 0 && r.started
+	if shouldStop {
+		r.started = false
+		close(r.stopCh)
+	}
+	r.mu.Unlock()
+
+	if found == nil {
+		return nil
+	}
+
+	// Signal the writer goroutine to exit without closing pw.
+	found.detached = true
+	close(found.ch)
+	<-found.done
+
+	log.Printf("music relay: subscriber detached (%d remaining) for %s", r.clientCount(), r.url)
+	return found.pw
+}
+
+// AttachPipe adds an existing pipe (from DetachPipe) as a new subscriber.
+// The subscriber starts inactive; call SetActive to begin receiving data.
+func (r *MusicRelay) AttachPipe(pr, pw *os.File) {
+	c := &relayClient{
+		pr:   pr,
+		pw:   pw,
+		ch:   make(chan []byte, relayBufLen),
+		done: make(chan struct{}),
+	}
+	go runRelayWriter(c)
+
+	r.mu.Lock()
+	r.clients[c] = struct{}{}
+	needStart := !r.started
+	if needStart {
+		r.started = true
+		r.stopCh = make(chan struct{})
+	}
+	r.mu.Unlock()
+
+	if needStart {
+		go r.run()
+	}
+
+	log.Printf("music relay: subscriber attached (%d total) for %s", r.clientCount(), r.url)
 }
 
 // WaitConnected blocks until the relay has an active HTTP connection or the

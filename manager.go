@@ -36,6 +36,7 @@ type Pipeline struct {
 	lastSeen      atomic.Pointer[time.Time] // set when last viewer disconnects
 	cancel        context.CancelFunc
 	locationReady chan struct{}      // closed when bootstrap resolves the city name
+	relayMu       sync.Mutex         // protects relay + relayPipe (rotated on reconnect)
 	relayPipe     *os.File           // relay pipe read end (nil if not using relay)
 	relay         *stream.MusicRelay // relay reference for unsubscribe on shutdown
 }
@@ -131,9 +132,12 @@ func (m *Manager) ActivePipelines() []admin.PipelineInfo {
 			alertCount = len(wd.Alerts)
 		}
 		var audioDrops int64
+		p.relayMu.Lock()
 		if p.relay != nil && p.relayPipe != nil {
 			audioDrops = p.relay.Drops(p.relayPipe)
 		}
+		musicStream := p.musicStream
+		p.relayMu.Unlock()
 		diag := p.seg.Diagnostics()
 		hubDiag := p.hub.Diagnostics()
 		infos = append(infos, admin.PipelineInfo{
@@ -146,7 +150,7 @@ func (m *Manager) ActivePipelines() []admin.PipelineInfo {
 			Views:            p.hub.TotalViews() - p.seg.HubSubscriptions(),
 			HLSViewers:       hlsActive,
 			HLSViews:         p.seg.TotalViews(),
-			MusicStream:      p.musicStream,
+			MusicStream:      musicStream,
 			ViewTime:         p.hub.TotalViewTime() - p.seg.HubSubscriptionTime(),
 			HLSViewTime:      p.seg.TotalViewTime(),
 			LastSeen:         lastSeen,
@@ -341,19 +345,28 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string) (*Pipeline,
 	// Suspend FFmpeg when no viewers are connected to stop music stream
 	// bandwidth and CPU usage. Resume when the first viewer connects.
 	hub.OnActive = func() {
+		// Rotate to a random music stream on each reconnection (only when
+		// using admin-configured streams, not a pinned MUSIC_STREAM_URL).
+		if m.cfg.MusicStreamURL == "" && relayPipe != nil {
+			m.rotateRelay(p, ctx)
+		}
+
 		// Tell the relay this pipeline has viewers so it stays connected.
-		if relay != nil && relayPipe != nil {
-			relay.SetActive(relayPipe, true)
+		p.relayMu.Lock()
+		curRelay, curPipe := p.relay, p.relayPipe
+		p.relayMu.Unlock()
+		if curRelay != nil && curPipe != nil {
+			curRelay.SetActive(curPipe, true)
 			// Block until relay has an active HTTP connection so ffmpeg
 			// doesn't produce video-only output during the audio gap.
 			waitCtx, waitCancel := context.WithTimeout(ctx, 5*time.Second)
 			defer waitCancel()
-			if err := relay.WaitConnected(waitCtx); err != nil {
+			if err := curRelay.WaitConnected(waitCtx); err != nil {
 				log.Printf("pipeline %s: music relay wait: %v (resuming without audio)", loc.ZipCode, err)
 			}
 			// Drain stale audio from the OS pipe kernel buffer while
 			// ffmpeg is still frozen so it starts with fresh audio.
-			relay.DrainPipe(relayPipe)
+			curRelay.DrainPipe(curPipe)
 		}
 		// Reset the flush window so it starts from the actual resume
 		// moment, not the earlier Subscribe call which may have been
@@ -376,8 +389,11 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string) (*Pipeline,
 		}
 		// Tell the relay this pipeline is idle so it can disconnect
 		// from the stream if no other pipeline needs it.
-		if relay != nil && relayPipe != nil {
-			relay.SetActive(relayPipe, false)
+		p.relayMu.Lock()
+		curRelay, curPipe := p.relay, p.relayPipe
+		p.relayMu.Unlock()
+		if curRelay != nil && curPipe != nil {
+			curRelay.SetActive(curPipe, false)
 		}
 	}
 
@@ -404,11 +420,70 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string) (*Pipeline,
 		ff.Stdin().Close()
 		ff.Wait()
 		// Clean up relay subscription so the writer goroutine and pipe FDs are released.
-		if relay != nil && relayPipe != nil {
-			relay.Unsubscribe(relayPipe)
+		p.relayMu.Lock()
+		r, rp := p.relay, p.relayPipe
+		p.relayMu.Unlock()
+		if r != nil && rp != nil {
+			r.Unsubscribe(rp)
 		}
 	}()
 
 	log.Printf("pipeline %s: started (%dx%d @ %dfps)", loc.ZipCode, m.cfg.Width, m.cfg.Height, m.cfg.FrameRate)
 	return p, nil
+}
+
+// rotateRelay picks a new random music stream and switches the pipeline's
+// relay subscription.  Called from OnActive so each viewer session gets a
+// different stream.  No-op when fewer than 2 admin streams are configured.
+func (m *Manager) rotateRelay(p *Pipeline, ctx context.Context) {
+	entries := m.store.Streams()
+	if len(entries) < 2 {
+		return // nothing to rotate
+	}
+
+	entry := entries[rand.Intn(len(entries))]
+	newURL := entry.URL
+	newName := entry.DisplayName()
+
+	p.relayMu.Lock()
+	oldRelay := p.relay
+	oldPipe := p.relayPipe
+	p.relayMu.Unlock()
+
+	if oldRelay == nil || oldPipe == nil {
+		return
+	}
+
+	// Detach the pipe from the old relay (stops its writer goroutine
+	// without closing the pipe FDs that FFmpeg is reading from).
+	pw := oldRelay.DetachPipe(oldPipe)
+	if pw == nil {
+		return
+	}
+
+	// Get or create the relay for the new stream URL.
+	m.mu.Lock()
+	newRelay := m.relays[newURL]
+	if newRelay == nil {
+		newRelay = stream.NewMusicRelay(newURL, m.streamClient)
+		m.relays[newURL] = newRelay
+	}
+	m.mu.Unlock()
+
+	// Attach the existing pipe to the new relay.
+	newRelay.AttachPipe(oldPipe, pw)
+
+	p.relayMu.Lock()
+	p.relay = newRelay
+	p.musicStream = newName
+	p.relayMu.Unlock()
+
+	// Register the stream hostname so API stats show a friendly name.
+	if m.classifier != nil {
+		if u, err := url.Parse(newURL); err == nil && u.Hostname() != "" {
+			m.classifier.RegisterStream(u.Hostname(), newName)
+		}
+	}
+
+	log.Printf("pipeline %s: rotated music to %s", p.zip, newName)
 }
