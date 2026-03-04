@@ -184,8 +184,9 @@ func main() {
 		} else {
 			streamURL = fmt.Sprintf("%s://%s/stream?zip=%s&clock=%s&units=%s", scheme, host, loc.ZipCode, clock, units)
 		}
+		baseURL := fmt.Sprintf("%s://%s", scheme, host)
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
-		fmt.Fprint(w, guide.M3U(cfg.ChannelNumber, channelID, location, streamURL))
+		fmt.Fprint(w, guide.M3U(cfg.ChannelNumber, channelID, location, streamURL, baseURL, loc.ZipCode, clock, units))
 	})
 
 	// GET /guide.xml?zip=90210[&clock=12|24]

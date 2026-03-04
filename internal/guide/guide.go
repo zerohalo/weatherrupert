@@ -16,19 +16,28 @@ func cityOnly(location string) string {
 }
 
 // M3U returns the M3U playlist content pointing to the stream endpoint.
-func M3U(channelNumber, channelID, location, streamURL string) string {
+// baseURL is the scheme://host prefix used to build logo and preview art URLs.
+// zip, clock, and units are passed through for the preview query string.
+func M3U(channelNumber, channelID, location, streamURL, baseURL, zip, clock, units string) string {
 	chanName := "Local Weather"
-	return fmt.Sprintf("#EXTM3U\n#EXTINF:-1 channel-id=%q channel-number=%q tvg-id=%q tvg-name=%q tvc-guide-placeholders=\"3600\",%s\n%s\n",
-		channelID, channelNumber, channelID, chanName, chanName, streamURL)
+	logoURL := baseURL + "/favicon.ico"
+	artURL := fmt.Sprintf("%s/preview?zip=%s&clock=%s&units=%s", baseURL, zip, clock, units)
+	return fmt.Sprintf("#EXTM3U\n#EXTINF:-1 channel-id=%q channel-number=%q tvg-id=%q tvg-name=%q"+
+		" tvg-logo=%q group-title=\"Weather\""+
+		" tvc-guide-placeholders=\"3600\" tvc-guide-genres=\"News\" tvc-guide-tags=\"HDTV,Live\""+
+		" tvc-guide-art=%q tvc-stream-vcodec=\"h264\" tvc-stream-acodec=\"aac\""+
+		",%s\n%s\n",
+		channelID, channelNumber, channelID, chanName,
+		logoURL, artURL, chanName, streamURL)
 }
 
 // xmlTV is the root XMLTV element.
 type xmlTV struct {
-	XMLName         xml.Name    `xml:"tv"`
-	SourceInfoName  string      `xml:"source-info-name,attr"`
-	GeneratorName   string      `xml:"generator-info-name,attr"`
-	Channels        []xmlChannel `xml:"channel"`
-	Programmes      []xmlProgramme `xml:"programme"`
+	XMLName        xml.Name       `xml:"tv"`
+	SourceInfoName string         `xml:"source-info-name,attr"`
+	GeneratorName  string         `xml:"generator-info-name,attr"`
+	Channels       []xmlChannel   `xml:"channel"`
+	Programmes     []xmlProgramme `xml:"programme"`
 }
 
 type xmlChannel struct {
@@ -37,11 +46,11 @@ type xmlChannel struct {
 }
 
 type xmlProgramme struct {
-	Start   string `xml:"start,attr"`
-	Stop    string `xml:"stop,attr"`
-	Channel string `xml:"channel,attr"`
-	Title   xmlLang `xml:"title"`
-	Desc    xmlLang `xml:"desc"`
+	Start    string  `xml:"start,attr"`
+	Stop     string  `xml:"stop,attr"`
+	Channel  string  `xml:"channel,attr"`
+	Title    xmlLang `xml:"title"`
+	Desc     xmlLang `xml:"desc"`
 	Category xmlLang `xml:"category"`
 }
 
@@ -66,11 +75,11 @@ func XMLTV(channelID, location, zip string) ([]byte, error) {
 		start := now.Add(time.Duration(i) * time.Hour)
 		stop := start.Add(time.Hour)
 		programmes = append(programmes, xmlProgramme{
-			Start:   start.Format(xmltvTimeLayout),
-			Stop:    stop.Format(xmltvTimeLayout),
-			Channel: channelID,
-			Title:   xmlLang{Lang: "en", Value: progTitle},
-			Desc:    xmlLang{Lang: "en", Value: desc},
+			Start:    start.Format(xmltvTimeLayout),
+			Stop:     stop.Format(xmltvTimeLayout),
+			Channel:  channelID,
+			Title:    xmlLang{Lang: "en", Value: progTitle},
+			Desc:     xmlLang{Lang: "en", Value: desc},
 			Category: xmlLang{Lang: "en", Value: "Weather"},
 		})
 	}
