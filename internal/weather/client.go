@@ -33,11 +33,11 @@ type Client struct {
 	lat, lon   float64
 	locationMu sync.Mutex
 	location   string
-	gridID    string
-	gridX     int
-	gridY     int
+	gridID     string
+	gridX      int
+	gridY      int
 	stationIDs []string // observation stations, nearest first
-	data      atomic.Pointer[WeatherData]
+	data       atomic.Pointer[WeatherData]
 
 	// Tide station state (populated at bootstrap, best-effort).
 	tideStations  []TideStation
@@ -363,31 +363,32 @@ func (c *Client) Location() string {
 }
 
 func (c *Client) fetch(ctx context.Context) (*WeatherData, error) {
-	// Fetch daily forecast.
+	// Fetch daily forecast (3 attempts).
 	forecastURL := fmt.Sprintf("%s/gridpoints/%s/%d,%d/forecast",
 		c.baseURL, c.gridID, c.gridX, c.gridY)
 	var dailyResp ForecastResponse
-	if err := c.getJSON(ctx, forecastURL, &dailyResp); err != nil {
+	if err := c.getJSONRetry(ctx, "forecast", forecastURL, &dailyResp, 3); err != nil {
 		return nil, fmt.Errorf("forecast: %w", err)
 	}
 
-	// Fetch hourly forecast.
+	// Fetch hourly forecast (3 attempts).
 	hourlyURL := fmt.Sprintf("%s/gridpoints/%s/%d,%d/forecast/hourly",
 		c.baseURL, c.gridID, c.gridX, c.gridY)
 	var hourlyResp ForecastResponse
-	if err := c.getJSON(ctx, hourlyURL, &hourlyResp); err != nil {
+	if err := c.getJSONRetry(ctx, "hourly forecast", hourlyURL, &hourlyResp, 3); err != nil {
 		return nil, fmt.Errorf("hourly forecast: %w", err)
 	}
 
 	// Fetch latest observation, trying stations in order until we get one
 	// with a non-null temperature (NWS occasionally returns null for key fields).
+	// Each station attempt retries up to 3 times for transient errors.
 	var obsResp ObservationResponse
 	var obsStation string
 	for _, sid := range c.stationIDs {
 		obsURL := fmt.Sprintf("%s/stations/%s/observations/latest",
 			c.baseURL, sid)
 		var resp ObservationResponse
-		if err := c.getJSON(ctx, obsURL, &resp); err != nil {
+		if err := c.getJSONRetry(ctx, "observation "+sid, obsURL, &resp, 3); err != nil {
 			log.Printf("weather: station %s observation failed: %v", sid, err)
 			continue
 		}
@@ -430,24 +431,53 @@ func (c *Client) fetch(ctx context.Context) (*WeatherData, error) {
 	var tideData *TideData
 	if c.nearestTide != nil {
 		now := time.Now().Local()
-		tideCtx, tideCancel := context.WithTimeout(ctx, 10*time.Second)
-		preds, err := fetchTidePredictions(tideCtx, c.http, c.nearestTide.ID, now)
-		tideCancel()
-		if err != nil {
-			log.Printf("weather: tide predictions failed (non-fatal): %v", err)
-		} else if len(preds) > 0 {
+		const tideRetries = 3
+		var preds []TidePrediction
+		var tideErr error
+		for attempt := 1; attempt <= tideRetries; attempt++ {
+			tideCtx, tideCancel := context.WithTimeout(ctx, 10*time.Second)
+			preds, tideErr = fetchTidePredictions(tideCtx, c.http, c.nearestTide.ID, now)
+			tideCancel()
+			if tideErr == nil {
+				break
+			}
+			if ctx.Err() != nil {
+				break
+			}
+			if attempt < tideRetries {
+				log.Printf("weather: tide predictions attempt %d/%d failed: %v, retrying", attempt, tideRetries, tideErr)
+				time.Sleep(2 * time.Second)
+			} else {
+				log.Printf("weather: tide predictions failed after %d attempts (non-fatal): %v", tideRetries, tideErr)
+			}
+		}
+		if tideErr == nil && len(preds) > 0 {
 			tideData = &TideData{
 				Station:       *c.nearestTide,
 				DistanceMiles: c.tideDistMiles,
 				Predictions:   preds,
 			}
-			// Fetch exact high/low tide times (best-effort).
-			hiloCtx, hiloCancel := context.WithTimeout(ctx, 10*time.Second)
-			hilo, err := fetchTideHiLo(hiloCtx, c.http, c.nearestTide.ID, now)
-			hiloCancel()
-			if err != nil {
-				log.Printf("weather: tide hilo failed (non-fatal): %v", err)
-			} else {
+			// Fetch exact high/low tide times (best-effort, 3 attempts).
+			var hilo []TideHiLo
+			var hiloErr error
+			for attempt := 1; attempt <= tideRetries; attempt++ {
+				hiloCtx, hiloCancel := context.WithTimeout(ctx, 10*time.Second)
+				hilo, hiloErr = fetchTideHiLo(hiloCtx, c.http, c.nearestTide.ID, now)
+				hiloCancel()
+				if hiloErr == nil {
+					break
+				}
+				if ctx.Err() != nil {
+					break
+				}
+				if attempt < tideRetries {
+					log.Printf("weather: tide hilo attempt %d/%d failed: %v, retrying", attempt, tideRetries, hiloErr)
+					time.Sleep(2 * time.Second)
+				} else {
+					log.Printf("weather: tide hilo failed after %d attempts (non-fatal): %v", tideRetries, hiloErr)
+				}
+			}
+			if hiloErr == nil {
 				tideData.HiLo = hilo
 			}
 		}
@@ -462,21 +492,21 @@ func (c *Client) fetch(ctx context.Context) (*WeatherData, error) {
 	precipMM, snowMM := c.fetchGridPointRaw(ctx)
 
 	return &WeatherData{
-		Location:       c.location,
-		FetchedAt:      time.Now(),
-		Current:        parseObservation(&obsResp),
-		HourlyPeriods:  hourly,
-		DailyPeriods:   daily,
+		Location:        c.location,
+		FetchedAt:       time.Now(),
+		Current:         parseObservation(&obsResp),
+		HourlyPeriods:   hourly,
+		DailyPeriods:    daily,
 		RadarFrames:     frames,
 		SatelliteFrames: satFrames,
 		StaticMap:       c.staticMap,
-		MoonPhase:      moon,
-		Planets:        planets,
-		TideData:       tideData,
-		Alerts:         alerts,
-		Solar:          c.solarData.Load(),
-		PrecipTotal24h: precipMM,
-		SnowTotal24h:   snowMM,
+		MoonPhase:       moon,
+		Planets:         planets,
+		TideData:        tideData,
+		Alerts:          alerts,
+		Solar:           c.solarData.Load(),
+		PrecipTotal24h:  precipMM,
+		SnowTotal24h:    snowMM,
 	}, nil
 }
 
@@ -680,6 +710,26 @@ func (c *Client) getJSON(ctx context.Context, url string, dst any) error {
 	}
 
 	return json.NewDecoder(resp.Body).Decode(dst)
+}
+
+// getJSONRetry calls getJSON up to maxAttempts times with a 2-second delay
+// between attempts. It gives up immediately if the parent context is cancelled.
+func (c *Client) getJSONRetry(ctx context.Context, label string, url string, dst any, maxAttempts int) error {
+	var err error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		err = c.getJSON(ctx, url, dst)
+		if err == nil {
+			return nil
+		}
+		if ctx.Err() != nil {
+			return err
+		}
+		if attempt < maxAttempts {
+			log.Printf("weather: %s attempt %d/%d failed: %v, retrying", label, attempt, maxAttempts, err)
+			time.Sleep(2 * time.Second)
+		}
+	}
+	return err
 }
 
 // fetchGridPointRaw fetches the raw gridpoint data and returns 24h precipitation
