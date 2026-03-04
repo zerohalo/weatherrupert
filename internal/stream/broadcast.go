@@ -34,10 +34,11 @@ type Hub struct {
 	bytesTotal    atomic.Int64 // total bytes broadcast
 	lastBroadcast atomic.Int64 // UnixMilli of most recent broadcast
 
-	// activatedAt is set when the hub transitions from idle to active.
-	// Chunks arriving within flushWindow after activation are discarded,
-	// draining stale data from FFmpeg's pipe buffer after a SIGCONT resume.
+	// activatedAt / flushUntil bracket the post-resume discard window.
+	// Chunks arriving before flushUntil are discarded, draining stale
+	// data from FFmpeg's pipe buffer after a SIGCONT resume.
 	activatedAt time.Time
+	flushUntil  time.Time
 
 	// OnActive is called (without lock held) when the first client connects.
 	// OnIdle is called (without lock held) when the last client disconnects.
@@ -45,19 +46,18 @@ type Hub struct {
 	OnIdle   func()
 }
 
-// flushWindow is how long after activation the hub discards stale data
-// from FFmpeg's internal and OS pipe buffers before broadcasting to clients.
-// OnIdle drains the relay channel and suspends FFmpeg promptly, so the
-// thread queue (AudioThreadQueueSize) is mostly empty at freeze time.
-// 1s covers the realistic worst case with margin to spare.
-const flushWindow = 1 * time.Second
+// maxFlushWindow caps the flush duration at the audio thread queue capacity.
+// Each MP3 packet is ~26ms; AudioThreadQueueSize packets plus 300ms margin
+// for the muxer to flush the interleaved output.
+const maxFlushWindow = time.Duration(AudioThreadQueueSize)*26*time.Millisecond + 300*time.Millisecond
 
-// ResetFlushWindow restarts the flush window from now.  Call this just
-// before resuming FFmpeg so the window covers the actual resume moment
-// rather than the (potentially much earlier) Subscribe call.
+// ResetFlushWindow restarts the flush window from now.  Called right before
+// ff.Resume() so the window starts from the actual resume moment, not the
+// earlier Subscribe() call which may have been seconds ago.
 func (h *Hub) ResetFlushWindow() {
 	h.mu.Lock()
 	h.activatedAt = time.Now()
+	h.flushUntil = h.activatedAt.Add(maxFlushWindow)
 	h.mu.Unlock()
 }
 
@@ -96,6 +96,7 @@ func (h *Hub) Subscribe() chan []byte {
 	activate = len(h.clients) == 0 && h.OnActive != nil
 	if activate {
 		h.activatedAt = time.Now()
+		h.flushUntil = h.activatedAt.Add(maxFlushWindow) // conservative until ResetFlushWindow
 	}
 	h.clients[ch] = struct{}{}
 	h.clientDrops[ch] = &atomic.Int64{}
@@ -136,7 +137,7 @@ func (h *Hub) broadcast(chunk []byte) {
 	// After a resume from suspension, FFmpeg's pipe buffer contains stale
 	// encoded data from before the pause. Discard it so clients don't see
 	// a flash of old frames before fresh content arrives.
-	if !h.activatedAt.IsZero() && time.Since(h.activatedAt) < flushWindow {
+	if !h.flushUntil.IsZero() && time.Now().Before(h.flushUntil) {
 		return
 	}
 
