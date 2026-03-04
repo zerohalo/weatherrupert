@@ -85,8 +85,8 @@ type HLSSegmenter struct {
 	// Hub subscription state (protected by mu).
 	ch           chan []byte // non-nil when subscribed
 	subscribed   bool
-	subscribedAt time.Time   // when the current subscription started
-	hubSubs      int         // total number of hub subscriptions
+	subscribedAt time.Time     // when the current subscription started
+	hubSubs      int           // total number of hub subscriptions
 	hubSubTime   time.Duration // accumulated hub subscription time from past subscriptions
 	ready        chan struct{} // closed when first segment available after subscribe
 	readyOnce    sync.Once
@@ -276,29 +276,18 @@ func (s *HLSSegmenter) subscribe() {
 	s.hubSubs++
 	s.accumBuf = nil
 	s.accumT = time.Time{}
-	// Keep existing segments in the ring — they may still be needed by
-	// clients that received a playlist just before we unsubscribed. The
-	// ring naturally ages out old segments as new ones are written.
-	hasSegments := false
-	for _, seg := range s.ring {
-		if seg != nil {
-			hasSegments = true
-			break
-		}
+	// Clear stale segments from the ring. After a suspend/resume gap,
+	// old segments contain outdated audio/video that causes discontinuity
+	// artifacts (audio dropout or stream stalls) when mixed with fresh
+	// segments. Wait for new segments instead (~3s for one segment).
+	for i := range s.ring {
+		s.ring[i] = nil
 	}
-	if hasSegments {
-		// Already have segments from a recent session — signal ready immediately
-		// so playlist requests don't block waiting for a new segment.
-		s.ready = make(chan struct{})
-		s.readyOnce = sync.Once{}
-		s.readyOnce.Do(func() { close(s.ready) })
-		s.readyClosed = true
-	} else {
-		s.ready = make(chan struct{})
-		s.readyOnce = sync.Once{}
-		s.readyClosed = false
-	}
-	log.Printf("hls: segmenter subscribed to hub (hasSegments=%v, zip %s)", hasSegments, s.zip)
+	s.ringPos = 0
+	s.ready = make(chan struct{})
+	s.readyOnce = sync.Once{}
+	s.readyClosed = false
+	log.Printf("hls: segmenter subscribed to hub (zip %s)", s.zip)
 }
 
 // unsubscribe disconnects from the Hub if currently subscribed.
@@ -550,7 +539,7 @@ func (s *HLSSegmenter) TotalViewTime() time.Duration {
 // HLSDiagnostics is a point-in-time snapshot of HLS health metrics.
 type HLSDiagnostics struct {
 	SegCount      int
-	SegSizeMin    int     // 0 if none produced
+	SegSizeMin    int // 0 if none produced
 	SegSizeMax    int
 	SegSizeAvg    int
 	SecSinceSeg   float64 // 0 if never produced
