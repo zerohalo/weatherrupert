@@ -38,9 +38,11 @@ func (m *MusicSource) FFmpegArgs() []string {
 	case m.RelayPipe != nil:
 		// Audio arrives via an OS pipe from a shared MusicRelay.
 		// The pipe is passed as ExtraFiles[0] which becomes fd 3.
-		// Raise thread_queue_size so the audio input thread doesn't block
-		// while the video encoder is busy (default 8 causes stuttering).
-		return []string{"-thread_queue_size", "512", "-i", "pipe:3"}
+		// Keep thread_queue_size modest: a large queue (e.g. 512) means
+		// ~13s of stale audio after a SIGSTOP/SIGCONT cycle because we
+		// can drain the OS pipe but not FFmpeg's internal thread queue.
+		// 64 packets ≈ 1.7s of MP3, enough headroom for encode spikes.
+		return []string{"-thread_queue_size", "64", "-i", "pipe:3"}
 	case m.PlaylistPath != "":
 		return []string{
 			"-thread_queue_size", "512",

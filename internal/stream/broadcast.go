@@ -47,7 +47,9 @@ type Hub struct {
 
 // flushWindow is how long after activation the hub discards stale data
 // from FFmpeg's internal and OS pipe buffers before broadcasting to clients.
-const flushWindow = 750 * time.Millisecond
+// Must be long enough to cover FFmpeg's audio thread queue (~1.7s at
+// thread_queue_size=64) plus some margin for the muxer to flush it.
+const flushWindow = 2 * time.Second
 
 // ResetFlushWindow restarts the flush window from now.  Call this just
 // before resuming FFmpeg so the window covers the actual resume moment

@@ -158,6 +158,13 @@ func (r *MusicRelay) SetActive(pr *os.File, active bool) {
 					}
 				}
 			} else if !active && c.active {
+				// Drain pending audio so the writer goroutine
+				// stops feeding the pipe and FFmpeg's thread
+				// queue doesn't accumulate more stale data
+				// before the caller suspends it.
+				for len(c.ch) > 0 {
+					<-c.ch
+				}
 				c.active = false
 				r.active--
 			}

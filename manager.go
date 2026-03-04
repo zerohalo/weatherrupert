@@ -382,18 +382,20 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string) (*Pipeline,
 	hub.OnIdle = func() {
 		now := time.Now()
 		p.lastSeen.Store(&now)
-		if err := ff.Suspend(); err != nil {
-			log.Printf("pipeline %s: ffmpeg suspend: %v", loc.ZipCode, err)
-		} else {
-			log.Printf("pipeline %s: ffmpeg suspended (no viewers)", loc.ZipCode)
-		}
-		// Tell the relay this pipeline is idle so it can disconnect
-		// from the stream if no other pipeline needs it.
+		// Stop audio flow BEFORE suspending FFmpeg so the relay doesn't
+		// keep pumping data into the pipe while FFmpeg is still reading.
+		// This minimizes stale audio that accumulates in FFmpeg's internal
+		// thread queue before the freeze.
 		p.relayMu.Lock()
 		curRelay, curPipe := p.relay, p.relayPipe
 		p.relayMu.Unlock()
 		if curRelay != nil && curPipe != nil {
 			curRelay.SetActive(curPipe, false)
+		}
+		if err := ff.Suspend(); err != nil {
+			log.Printf("pipeline %s: ffmpeg suspend: %v", loc.ZipCode, err)
+		} else {
+			log.Printf("pipeline %s: ffmpeg suspended (no viewers)", loc.ZipCode)
 		}
 	}
 
