@@ -96,10 +96,10 @@ type persistedData struct {
 	TriviaBuiltin        *bool           `json:"triviaBuiltin,omitempty"`
 	PlanetLiveAlways     *bool           `json:"planetLiveAlways,omitempty"`
 	SatelliteProduct     string          `json:"satelliteProduct,omitempty"` // "IR" or "VIS"
-	ClockFormat          string          `json:"clockFormat,omitempty"`  // "12" or "24"
-	UnitSystem           string          `json:"unitSystem,omitempty"`  // "imperial" or "metric"
-	Streams              json.RawMessage `json:"streams,omitempty"`     // current: []StreamEntry
-	OldStreamURLs        []string        `json:"streamURLs,omitempty"`  // legacy: []string (read-only migration)
+	ClockFormat          string          `json:"clockFormat,omitempty"`      // "12" or "24"
+	UnitSystem           string          `json:"unitSystem,omitempty"`       // "imperial" or "metric"
+	Streams              json.RawMessage `json:"streams,omitempty"`          // current: []StreamEntry
+	OldStreamURLs        []string        `json:"streamURLs,omitempty"`       // legacy: []string (read-only migration)
 	Announcements        json.RawMessage `json:"announcements,omitempty"`
 	Trivia               []triviaJSON    `json:"trivia"`
 }
@@ -112,28 +112,30 @@ type triviaJSON struct {
 // Store is a thread-safe store for announcements, trivia, duration settings,
 // and music stream entries.
 type Store struct {
-	mu             sync.RWMutex
-	path           string
-	announcements  []ann.Announcement
-	triviaItems    []trivia.TriviaItem
-	slideDur       time.Duration
-	annDur         time.Duration
-	annInterval    int    // weather cycles between announcement slides; 0 = disabled
-	triviaDur       time.Duration
-	triviaInterval  int    // weather cycles between trivia slides; 0 = disabled
-	triviaRandomize bool   // when true, questions are drawn from a shuffled deck
-	triviaAPI           bool   // when true, include API-fetched trivia in the pool
-	triviaAPIAmount     int    // number of questions to fetch (default 50)
-	triviaAPICategory   int    // 0 = any; 9–32 = specific category
-	triviaAPIDifficulty string        // "" = any; "easy", "medium", "hard"
-	triviaAPIRefresh    time.Duration // how often to re-fetch from API; 0 = startup only
-	triviaBuiltin       bool          // when true, include built-in/admin trivia in the pool
-	triviaAPIItems  []trivia.TriviaItem // populated once at startup by SetAPITrivia
-	planetLiveAlways bool   // when true, night sky always shows current positions
-	satelliteProduct string // "IR" (infrared) or "VIS" (visible); default: "IR"
-	clockFormat     string // default clock format: "12" or "24"
-	unitSystem      string // default unit system: "imperial" or "metric"
-	streams         []StreamEntry // music streams; one is chosen at random per pipeline
+	mu                  sync.RWMutex
+	path                string
+	announcements       []ann.Announcement
+	triviaItems         []trivia.TriviaItem
+	slideDur            time.Duration
+	annDur              time.Duration
+	annInterval         int // weather cycles between announcement slides; 0 = disabled
+	triviaDur           time.Duration
+	triviaInterval      int                 // weather cycles between trivia slides; 0 = disabled
+	triviaRandomize     bool                // when true, questions are drawn from a shuffled deck
+	triviaAPI           bool                // when true, include API-fetched trivia in the pool
+	triviaAPIAmount     int                 // number of questions to fetch (default 50)
+	triviaAPICategory   int                 // 0 = any; 9–32 = specific category
+	triviaAPIDifficulty string              // "" = any; "easy", "medium", "hard"
+	triviaAPIRefresh    time.Duration       // how often to re-fetch from API; 0 = startup only
+	triviaBuiltin       bool                // when true, include built-in/admin trivia in the pool
+	triviaAPIItems      []trivia.TriviaItem // populated once at startup by SetAPITrivia
+	planetLiveAlways    bool                // when true, night sky always shows current positions
+	satelliteProduct    string              // "IR" (infrared) or "VIS" (visible); default: "IR"
+	clockFormat         string              // default clock format: "12" or "24"
+	unitSystem          string              // default unit system: "imperial" or "metric"
+	streams             []StreamEntry       // music streams; one is chosen at random per pipeline
+
+	startedAt time.Time // container start time for uptime display
 
 	// getPipelines is set by the manager after startup so the dashboard can
 	// display active streams. May be nil if not wired up yet.
@@ -141,6 +143,9 @@ type Store struct {
 
 	// getAPIStats returns lifetime API byte/request counters.
 	getAPIStats func() []apistats.ServiceStat
+
+	// getSystemStats returns host load average and container CPU percentage.
+	getSystemStats func() (loadAvg [3]float64, cpuPct float64)
 }
 
 // NewStore creates a Store with initial data from the given slices and defaults.
@@ -154,25 +159,26 @@ func NewStore(path string, anns []ann.Announcement, triviaItems []trivia.TriviaI
 	defaultTriviaAPIDifficulty string, defaultTriviaAPIRefresh time.Duration,
 	defaultTriviaBuiltin bool) *Store {
 	s := &Store{
-		path:             path,
-		announcements:    anns,
-		triviaItems:      triviaItems,
-		slideDur:         defaultSlide,
-		annDur:           defaultAnn,
-		annInterval:      defaultAnnInterval,
-		triviaDur:        defaultTrivia,
-		triviaInterval:   defaultTriviaInterval,
-		triviaRandomize:  true,
-		triviaAPI:        defaultTriviaAPI,
-		triviaAPIAmount:  defaultTriviaAPIAmount,
+		path:                path,
+		startedAt:           time.Now(),
+		announcements:       anns,
+		triviaItems:         triviaItems,
+		slideDur:            defaultSlide,
+		annDur:              defaultAnn,
+		annInterval:         defaultAnnInterval,
+		triviaDur:           defaultTrivia,
+		triviaInterval:      defaultTriviaInterval,
+		triviaRandomize:     true,
+		triviaAPI:           defaultTriviaAPI,
+		triviaAPIAmount:     defaultTriviaAPIAmount,
 		triviaAPICategory:   defaultTriviaAPICategory,
 		triviaAPIDifficulty: defaultTriviaAPIDifficulty,
-		triviaAPIRefresh: defaultTriviaAPIRefresh,
-		triviaBuiltin:   defaultTriviaBuiltin,
-		satelliteProduct: config.SatelliteIR,
-		clockFormat:      config.ClockFormat24h,
-		unitSystem:       config.UnitsImperial,
-		streams:          append([]StreamEntry(nil), defaultStreams...),
+		triviaAPIRefresh:    defaultTriviaAPIRefresh,
+		triviaBuiltin:       defaultTriviaBuiltin,
+		satelliteProduct:    config.SatelliteIR,
+		clockFormat:         config.ClockFormat24h,
+		unitSystem:          config.UnitsImperial,
+		streams:             append([]StreamEntry(nil), defaultStreams...),
 	}
 	s.loadFromDisk()
 	return s
@@ -190,6 +196,13 @@ func (s *Store) SetPipelineSource(fn func() []PipelineInfo) {
 func (s *Store) SetAPIStatsSource(fn func() []apistats.ServiceStat) {
 	s.mu.Lock()
 	s.getAPIStats = fn
+	s.mu.Unlock()
+}
+
+// SetSystemStatsSource wires the dashboard to a live system stats query function.
+func (s *Store) SetSystemStatsSource(fn func() (loadAvg [3]float64, cpuPct float64)) {
+	s.mu.Lock()
+	s.getSystemStats = fn
 	s.mu.Unlock()
 }
 
@@ -636,6 +649,22 @@ func fmtBytes(b int64) string {
 	}
 }
 
+// fmtUptime formats a duration as "Xd Xh Xm" or "Xh Xm Xs" for short uptimes.
+func fmtUptime(d time.Duration) string {
+	d = d.Truncate(time.Second)
+	days := int(d.Hours()) / 24
+	hours := int(d.Hours()) % 24
+	mins := int(d.Minutes()) % 60
+	secs := int(d.Seconds()) % 60
+	if days > 0 {
+		return fmt.Sprintf("%dd %dh %dm", days, hours, mins)
+	}
+	if hours > 0 {
+		return fmt.Sprintf("%dh %dm %ds", hours, mins, secs)
+	}
+	return fmt.Sprintf("%dm %ds", mins, secs)
+}
+
 // renderPipelinesHTML returns the inner HTML for the active streams section.
 func (s *Store) renderAPIStatsHTML() string {
 	s.mu.RLock()
@@ -904,9 +933,24 @@ func (s *Store) renderPipelinesHTML() string {
 func (s *Store) handlePipelinesJSON(w http.ResponseWriter, r *http.Request) {
 	html := s.renderPipelinesHTML()
 	w.Header().Set("Content-Type", "application/json")
-	resp := map[string]string{"html": html}
+	resp := map[string]interface{}{
+		"html":   html,
+		"uptime": fmtUptime(time.Since(s.startedAt)),
+	}
 	if statsHTML := s.renderAPIStatsHTML(); statsHTML != "" {
 		resp["apiStats"] = statsHTML
+	}
+	s.mu.RLock()
+	fn := s.getSystemStats
+	s.mu.RUnlock()
+	if fn != nil {
+		loadAvg, cpuPct := fn()
+		resp["loadAvg"] = fmt.Sprintf("%.2f %.2f %.2f", loadAvg[0], loadAvg[1], loadAvg[2])
+		if cpuPct < 0 {
+			resp["cpuPct"] = "N/A"
+		} else {
+			resp["cpuPct"] = fmt.Sprintf("%.1f%%", cpuPct)
+		}
 	}
 	data, _ := json.Marshal(resp)
 	w.Write(data)
@@ -1007,7 +1051,22 @@ func (s *Store) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	pipelineHTML := s.renderPipelinesHTML()
 	apiStatsHTML := s.renderAPIStatsHTML()
 
+	loadAvgStr, cpuPctStr := "N/A", "N/A"
+	s.mu.RLock()
+	sysFn := s.getSystemStats
+	s.mu.RUnlock()
+	if sysFn != nil {
+		la, cpu := sysFn()
+		if la != [3]float64{} {
+			loadAvgStr = fmt.Sprintf("%.2f %.2f %.2f", la[0], la[1], la[2])
+		}
+		if cpu >= 0 {
+			cpuPctStr = fmt.Sprintf("%.1f%%", cpu)
+		}
+	}
+
 	body := fmt.Sprintf(`<p>At-a-glance status for active streams and content settings.</p>
+<p style="color:#888; margin:4px 0 16px">Uptime: <span id="uptime" style="color:#FFFF00">%s</span> | Load: <span id="loadavg" style="color:#FFFF00">%s</span> | CPU: <span id="cpupct" style="color:#FFFF00">%s</span></p>
 <table style="max-width:560px">
 <tr><td colspan="2" style="color:#FFFF00; letter-spacing:1px; padding:10px 0 2px"><b>DISPLAY</b></td></tr>
 <tr><td>Clock format</td><td style="color:#FFFF00">%s</td></tr>
@@ -1041,11 +1100,15 @@ setInterval(function() {
     .then(function(r) { return r.json(); })
     .then(function(d) {
       document.getElementById('pipelines').innerHTML = d.html;
+      if (d.uptime) document.getElementById('uptime').textContent = d.uptime;
+      if (d.loadAvg) document.getElementById('loadavg').textContent = d.loadAvg;
+      if (d.cpuPct) document.getElementById('cpupct').textContent = d.cpuPct;
       if (d.apiStats) document.getElementById('apistats').innerHTML = d.apiStats;
     })
     .catch(function() {});
 }, 5000);
 </script>`,
+		fmtUptime(time.Since(s.startedAt)), loadAvgStr, cpuPctStr,
 		clockDisplay, unitDisplay, satDisplay, yn(planetLive), slide,
 		na, annD, fmtInterval(annInt),
 		nt, trivD, fmtInterval(trivInt), yn(trivRand), yn(trivBuiltin), trivAPIDetail,
@@ -1640,7 +1703,7 @@ func (s *Store) handleSettingsPost(w http.ResponseWriter, r *http.Request) {
 
 func ptrStr(s string) *string { return &s }
 func ptrBool(b bool) *bool    { return &b }
-func ptrInt(n int) *int        { return &n }
+func ptrInt(n int) *int       { return &n }
 
 // htmlEscape escapes HTML special characters for safe embedding in attributes and text.
 func htmlEscape(s string) string {

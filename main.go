@@ -10,15 +10,16 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/zerohalo/weatherrupert/internal/apiurl"
 	"github.com/zerohalo/weatherrupert/internal/admin"
 	"github.com/zerohalo/weatherrupert/internal/announcements"
 	"github.com/zerohalo/weatherrupert/internal/apistats"
+	"github.com/zerohalo/weatherrupert/internal/apiurl"
 	"github.com/zerohalo/weatherrupert/internal/config"
 	"github.com/zerohalo/weatherrupert/internal/geo"
 	"github.com/zerohalo/weatherrupert/internal/guide"
 	"github.com/zerohalo/weatherrupert/internal/renderer"
 	"github.com/zerohalo/weatherrupert/internal/stream"
+	"github.com/zerohalo/weatherrupert/internal/sysstat"
 	"github.com/zerohalo/weatherrupert/internal/trivia"
 )
 
@@ -108,6 +109,13 @@ func main() {
 	}
 	store.SetPipelineSource(mgr.ActivePipelines)
 	store.SetAPIStatsSource(apiTracker.Stats)
+
+	cpuSampler := sysstat.NewCPUSampler()
+	defer cpuSampler.Stop()
+	store.SetSystemStatsSource(func() (loadAvg [3]float64, cpuPct float64) {
+		l1, l5, l15, _ := sysstat.LoadAvg()
+		return [3]float64{l1, l5, l15}, cpuSampler.Usage()
+	})
 
 	favicon, err := renderer.RenderFavicon()
 	if err != nil {
