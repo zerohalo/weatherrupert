@@ -47,9 +47,10 @@ type Hub struct {
 
 // flushWindow is how long after activation the hub discards stale data
 // from FFmpeg's internal and OS pipe buffers before broadcasting to clients.
-// Derived from AudioThreadQueueSize: each MP3 packet is ~26ms, and we add
-// 500ms of margin for the muxer to flush the interleaved output.
-const flushWindow = time.Duration(AudioThreadQueueSize)*26*time.Millisecond + 500*time.Millisecond
+// OnIdle drains the relay channel and suspends FFmpeg promptly, so the
+// thread queue (AudioThreadQueueSize) is mostly empty at freeze time.
+// 1s covers the realistic worst case with margin to spare.
+const flushWindow = 1 * time.Second
 
 // ResetFlushWindow restarts the flush window from now.  Call this just
 // before resuming FFmpeg so the window covers the actual resume moment
