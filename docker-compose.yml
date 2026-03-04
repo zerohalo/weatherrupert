@@ -1,0 +1,33 @@
+services:
+  weatherrupert:
+    build: .
+    container_name: weatherrupert
+    restart: unless-stopped
+    ports:
+      - "9798:9798"
+    environment:
+      # NWS API base URL. Defaults to api.weather.gov (US only).
+      # Can be overridden to a WS4KP server-mode proxy:
+      #   WEATHER_API_URL: http://ws4kp:8080/api
+      WEATHER_API_URL: ${WEATHER_API_URL:-https://api.weather.gov}
+
+      FRAME_RATE: ${FRAME_RATE:-5}
+      CHANNEL_NUMBER: ${CHANNEL_NUMBER:-100}
+      PORT: 9798
+      WEATHER_REFRESH: ${WEATHER_REFRESH:-20m}
+      SLIDE_DURATION: ${SLIDE_DURATION:-8s}
+      MUSIC_DIR: /music
+      TZ: ${TZ:-America/New_York}
+    volumes:
+      - weatherrupert-data:/data
+    # Uncomment to override music, announcements, or trivia with local files:
+    #   - ./my-music:/music:ro
+    #   - ./my-announcements:/announcements:ro
+    #   - ./my-trivia:/trivia:ro
+    mem_limit: 512m
+    # Each concurrent stream (ZIP code) uses ~0.3–0.5 CPU cores at 5fps.
+    # Raise this if you run more than 3–4 simultaneous streams.
+    cpus: "2.0"
+
+volumes:
+  weatherrupert-data:

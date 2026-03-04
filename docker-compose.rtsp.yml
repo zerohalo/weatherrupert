@@ -1,0 +1,15 @@
+services:
+  mediamtx:
+    image: bluenviron/mediamtx:latest-ffmpeg
+    container_name: mediamtx
+    restart: unless-stopped
+    environment:
+      MTX_PATHS_WEATHER_SOURCE: http://weatherrupert:9798/stream?zip=${RTSP_ZIP:-90210}
+    ports:
+      - "8554:8554"     # RTSP
+      - "1935:1935"     # RTMP
+      - "8888:8888"     # HLS (MediaMTX native)
+      - "8889:8889"     # WebRTC
+      - "8890:8890/udp" # SRT
+    depends_on:
+      - weatherrupert
