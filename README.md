@@ -135,6 +135,7 @@ All settings are environment variables. Copy `.env.example` to `.env` to overrid
 | Variable | Default | Description |
 |---|---|---|
 | `MUSIC_DIR` | `/music` | Directory of audio files for background music |
+| `MUSIC_STREAM_URL` | *(empty)* | HTTP/Icecast stream URL. Pins a single stream for all pipelines (no rotation). When empty, admin-configured streams are used instead. |
 
 #### Streaming
 
@@ -260,6 +261,8 @@ Each subscriber has a buffered channel (256 chunks). If a pipeline's FFmpeg fall
 
 The relay also tracks which subscribers are **active** (have viewers). When no pipeline has viewers the relay disconnects from the upstream stream to save bandwidth, and reconnects when a viewer arrives.
 
+When multiple admin-configured streams exist, a pipeline rotates to a random stream each time a viewer reconnects. The pipe is detached from the old relay and attached to the new one without closing FFmpeg's input fd, so the transition is seamless.
+
 ### Packages
 
 | Package | Role |
@@ -357,7 +360,7 @@ Background audio plays continuously on the weather stream. There are three ways 
    MUSIC_STREAM_URL=https://ice1.somafm.com/secretagent-128-mp3
    ```
 
-3. **Admin panel** — add named music stream URLs at `/admin/settings`. One stream is chosen at random for each new pipeline.
+3. **Admin panel** — add named music stream URLs at `/admin/settings`. When multiple streams are configured, each viewer session randomly selects one from the list. A pinned `MUSIC_STREAM_URL` disables rotation.
 
 If no music source is configured, the stream runs in silence.
 
