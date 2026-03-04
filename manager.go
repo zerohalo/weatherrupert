@@ -36,6 +36,7 @@ type Pipeline struct {
 	lastSeen      atomic.Pointer[time.Time] // set when last viewer disconnects
 	cancel        context.CancelFunc
 	locationReady chan struct{}      // closed when bootstrap resolves the city name
+	activeMu      sync.Mutex         // serializes OnActive/OnIdle and shutdown cleanup
 	relayMu       sync.Mutex         // protects relay + relayPipe (rotated on reconnect)
 	relayPipe     *os.File           // relay pipe read end (nil if not using relay)
 	relay         *stream.MusicRelay // relay reference for unsubscribe on shutdown
@@ -345,6 +346,11 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string) (*Pipeline,
 	// Suspend FFmpeg when no viewers are connected to stop music stream
 	// bandwidth and CPU usage. Resume when the first viewer connects.
 	hub.OnActive = func() {
+		// Serialize with OnIdle and shutdown cleanup to prevent races
+		// on FFmpeg state and relay active counts.
+		p.activeMu.Lock()
+		defer p.activeMu.Unlock()
+
 		// Rotate to a random music stream on each reconnection (only when
 		// using admin-configured streams, not a pinned MUSIC_STREAM_URL).
 		if m.cfg.MusicStreamURL == "" && relayPipe != nil {
@@ -380,6 +386,9 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string) (*Pipeline,
 		wc.Wake() // trigger immediate weather refresh with fresh data
 	}
 	hub.OnIdle = func() {
+		p.activeMu.Lock()
+		defer p.activeMu.Unlock()
+
 		now := time.Now()
 		p.lastSeen.Store(&now)
 		// Stop audio flow BEFORE suspending FFmpeg so the relay doesn't
@@ -421,10 +430,14 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string) (*Pipeline,
 		}
 		ff.Stdin().Close()
 		ff.Wait()
-		// Clean up relay subscription so the writer goroutine and pipe FDs are released.
+		// Serialize with OnActive/OnIdle so we read the final relay
+		// after any in-flight rotation has completed.
+		p.activeMu.Lock()
 		p.relayMu.Lock()
 		r, rp := p.relay, p.relayPipe
 		p.relayMu.Unlock()
+		p.activeMu.Unlock()
+		// Clean up relay subscription so the writer goroutine and pipe FDs are released.
 		if r != nil && rp != nil {
 			r.Unsubscribe(rp)
 		}
@@ -456,13 +469,6 @@ func (m *Manager) rotateRelay(p *Pipeline, ctx context.Context) {
 		return
 	}
 
-	// Detach the pipe from the old relay (stops its writer goroutine
-	// without closing the pipe FDs that FFmpeg is reading from).
-	pw := oldRelay.DetachPipe(oldPipe)
-	if pw == nil {
-		return
-	}
-
 	// Get or create the relay for the new stream URL.
 	m.mu.Lock()
 	newRelay := m.relays[newURL]
@@ -471,6 +477,19 @@ func (m *Manager) rotateRelay(p *Pipeline, ctx context.Context) {
 		m.relays[newURL] = newRelay
 	}
 	m.mu.Unlock()
+
+	// Skip the detach/attach cycle if we picked the same relay
+	// (avoids a brief audio gap for no benefit).
+	if newRelay == oldRelay {
+		return
+	}
+
+	// Detach the pipe from the old relay (stops its writer goroutine
+	// without closing the pipe FDs that FFmpeg is reading from).
+	pw := oldRelay.DetachPipe(oldPipe)
+	if pw == nil {
+		return
+	}
 
 	// Attach the existing pipe to the new relay.
 	newRelay.AttachPipe(oldPipe, pw)

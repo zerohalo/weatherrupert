@@ -349,7 +349,9 @@ func (r *MusicRelay) run() {
 		}
 
 		// Wait until at least one subscriber is active before connecting.
-		if !r.isActive() {
+		// Loop to discard stale wake signals that arrived after the
+		// previous fetch() disconnected but before isActive went true.
+		for !r.isActive() {
 			log.Printf("music relay: idle, waiting for active viewer for %s", r.url)
 			select {
 			case <-r.wakeCh:
