@@ -35,8 +35,8 @@ type Pipeline struct {
 	ff            *stream.FFmpeg
 	lastSeen      atomic.Pointer[time.Time] // set when last viewer disconnects
 	cancel        context.CancelFunc
-	locationReady chan struct{} // closed when bootstrap resolves the city name
-	relayPipe     *os.File          // relay pipe read end (nil if not using relay)
+	locationReady chan struct{}      // closed when bootstrap resolves the city name
+	relayPipe     *os.File           // relay pipe read end (nil if not using relay)
 	relay         *stream.MusicRelay // relay reference for unsubscribe on shutdown
 }
 
@@ -53,16 +53,16 @@ func (p *Pipeline) Location() string {
 
 // Manager lazily creates and caches one Pipeline per ZIP code.
 type Manager struct {
-	mu          sync.Mutex
-	pipelines   map[string]*Pipeline
-	relays      map[string]*stream.MusicRelay // keyed by stream URL
-	cfg         *config.Config
-	music       *stream.MusicSource
-	store       *admin.Store
-	rootCtx     context.Context
-	httpClient   *http.Client        // tracked HTTP client for weather APIs
-	streamClient *http.Client        // tracked HTTP client for music streams (no timeout)
-	classifier   *apiurl.Classifier  // hostname→label mapper (registers stream names)
+	mu           sync.Mutex
+	pipelines    map[string]*Pipeline
+	relays       map[string]*stream.MusicRelay // keyed by stream URL
+	cfg          *config.Config
+	music        *stream.MusicSource
+	store        *admin.Store
+	rootCtx      context.Context
+	httpClient   *http.Client       // tracked HTTP client for weather APIs
+	streamClient *http.Client       // tracked HTTP client for music streams (no timeout)
+	classifier   *apiurl.Classifier // hostname→label mapper (registers stream names)
 }
 
 // NewManager creates a Manager. rootCtx should be the application shutdown context.
@@ -355,6 +355,10 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string) (*Pipeline,
 			// ffmpeg is still frozen so it starts with fresh audio.
 			relay.DrainPipe(relayPipe)
 		}
+		// Reset the flush window so it starts from the actual resume
+		// moment, not the earlier Subscribe call which may have been
+		// seconds ago while waiting for the relay to connect.
+		hub.ResetFlushWindow()
 		if err := ff.Resume(); err != nil {
 			log.Printf("pipeline %s: ffmpeg resume: %v", loc.ZipCode, err)
 		} else {

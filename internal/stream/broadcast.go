@@ -24,10 +24,10 @@ type Hub struct {
 	mu          sync.RWMutex
 	clients     map[chan []byte]struct{}
 	clientDrops map[chan []byte]*atomic.Int64 // per-client drop counter
-	connectTime map[chan []byte]time.Time // when each client connected
-	viewTotal   time.Duration            // accumulated viewing time from disconnected clients
-	viewCount   int                      // total number of connections (subscribe calls)
-	dropsTotal  int64                    // accumulated drops from disconnected clients
+	connectTime map[chan []byte]time.Time     // when each client connected
+	viewTotal   time.Duration                 // accumulated viewing time from disconnected clients
+	viewCount   int                           // total number of connections (subscribe calls)
+	dropsTotal  int64                         // accumulated drops from disconnected clients
 
 	// Stream health counters (lock-free atomics, updated on broadcast hot path).
 	chunkCount    atomic.Int64 // total chunks broadcast
@@ -48,6 +48,15 @@ type Hub struct {
 // flushWindow is how long after activation the hub discards stale data
 // from FFmpeg's internal and OS pipe buffers before broadcasting to clients.
 const flushWindow = 750 * time.Millisecond
+
+// ResetFlushWindow restarts the flush window from now.  Call this just
+// before resuming FFmpeg so the window covers the actual resume moment
+// rather than the (potentially much earlier) Subscribe call.
+func (h *Hub) ResetFlushWindow() {
+	h.mu.Lock()
+	h.activatedAt = time.Now()
+	h.mu.Unlock()
+}
 
 // NewHub creates a ready-to-use Hub.
 func NewHub() *Hub {
