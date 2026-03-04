@@ -21,7 +21,7 @@ func cityOnly(location string) string {
 func M3U(channelNumber, channelID, location, streamURL, baseURL, zip, clock, units string) string {
 	chanName := "Local Weather"
 	logoURL := baseURL + "/favicon.ico"
-	artURL := fmt.Sprintf("%s/preview?zip=%s&clock=%s&units=%s", baseURL, zip, clock, units)
+	artURL := fmt.Sprintf("%s/preview?zip=%s", baseURL, zip)
 	return fmt.Sprintf("#EXTM3U\n#EXTINF:-1 channel-id=%q channel-number=%q tvg-id=%q tvg-name=%q"+
 		" tvg-logo=%q group-title=\"Weather\""+
 		" tvc-guide-placeholders=\"3600\" tvc-guide-genres=\"News\" tvc-guide-tags=\"HDTV,Live\""+
