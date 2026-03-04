@@ -122,6 +122,8 @@ func (r *MusicRelay) Unsubscribe(pr *os.File) {
 	r.mu.Unlock()
 
 	if found != nil {
+		// Drain the pipe so a blocked pw.Write() can complete.
+		drainPipeBuffer(found.pr)
 		close(found.ch)
 		<-found.done // wait for writer goroutine to finish
 		found.pr.Close()
@@ -170,12 +172,20 @@ func (r *MusicRelay) SetActive(pr *os.File, active bool) {
 // read old audio on resume.  The read end is shared with ffmpeg via dup'd fd,
 // but since ffmpeg is frozen we can safely read from it here.
 func (r *MusicRelay) DrainPipe(pr *os.File) {
+	if n := drainPipeBuffer(pr); n > 0 {
+		log.Printf("music relay: drained %d bytes of stale audio from pipe", n)
+	}
+}
+
+// drainPipeBuffer does a non-blocking read loop on the pipe's read end,
+// discarding all buffered data. Returns the number of bytes drained.
+func drainPipeBuffer(pr *os.File) int {
 	fd := int(pr.Fd())
 
 	// Set non-blocking so reads return immediately when the buffer is empty.
 	if err := syscall.SetNonblock(fd, true); err != nil {
 		log.Printf("music relay: drain: set nonblock: %v", err)
-		return
+		return 0
 	}
 
 	buf := make([]byte, 4096)
@@ -195,9 +205,7 @@ func (r *MusicRelay) DrainPipe(pr *os.File) {
 		log.Printf("music relay: drain: restore blocking: %v", err)
 	}
 
-	if drained > 0 {
-		log.Printf("music relay: drained %d bytes of stale audio from pipe", drained)
-	}
+	return drained
 }
 
 // runRelayWriter is the writer goroutine for a relay client.  It reads chunks
@@ -246,6 +254,11 @@ func (r *MusicRelay) DetachPipe(pr *os.File) *os.File {
 	if found == nil {
 		return nil
 	}
+
+	// The writer goroutine may be blocked on pw.Write() because FFmpeg is
+	// suspended and the OS pipe buffer is full.  Drain the pipe's read end
+	// to make room so the write completes and the goroutine can exit.
+	drainPipeBuffer(found.pr)
 
 	// Signal the writer goroutine to exit without closing pw.
 	found.detached = true
