@@ -39,6 +39,8 @@ If both Channels DVR and WeatherRupert are running in Docker on the same host, u
 
 ![Channels DVR custom channel setup](screenshots/channels-dvr-setup.png)
 
+The M3U includes Channels DVR-specific metadata: channel logo (`tvg-logo`), live preview art (`tvc-guide-art`), genre and tag badges, and codec hints (`h264`/`aac`) for faster tuning. The guide art is a live snapshot of the current weather slide, updated each time Channels DVR refreshes the source.
+
 ### HLS playback
 
 An HLS endpoint is available for browsers, Safari, VLC, smart TVs, and other standard HLS clients:
@@ -84,7 +86,7 @@ Multiple ZIP codes can run concurrently. Each ZIP gets its own independent pipel
 
 Visit `http://<host>:9798/admin/` to manage content live without restarting:
 
-- **Dashboard** — live view of active pipelines, viewer counts, and stream status
+- **Dashboard** — live view of active pipelines, viewer counts, stream health, host load average, and container CPU usage
 - **Announcements** — scrolling text shown between weather cycles
 - **Trivia** — Q&A trivia slides shown between weather cycles
 - **Settings** — slide duration, announcement/trivia intervals, clock format, unit system, satellite product, music streams
@@ -275,6 +277,7 @@ When multiple admin-configured streams exist, a pipeline rotates to a random str
 | `internal/guide` | Generates the M3U playlist and XMLTV guide XML. |
 | `internal/announcements` | Announcement data type with optional date filtering (everyday or MM-DD specific). |
 | `internal/trivia` | Trivia question types, built-in defaults, CSV persistence, and Open Trivia Database API fetching (multiple choice & true/false). |
+| `internal/sysstat` | Reads host load average (`/proc/loadavg`) and container CPU usage (cgroup v2/v1) for the admin dashboard. Degrades gracefully on non-Linux (shows N/A). |
 | `internal/admin` | Thread-safe store for announcements, trivia, and settings; serves the `/admin/` web UI. |
 | `manager.go` | Creates and caches one `Pipeline` per (ZIP, clock format, unit system) tuple. Pools `MusicRelay` instances by stream URL so multiple pipelines share a single HTTP connection. Pipelines start on first request; weather bootstrap runs in the background so the stream begins immediately (showing a loading slide until data arrives). |
 
