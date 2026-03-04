@@ -333,8 +333,12 @@ func (r *Renderer) Run(ctx context.Context) error {
 
 			// On the first rendered frame of a new slide, honour any custom
 			// duration the slide returned (e.g. per-announcement timing).
-			if slideJustStarted && slideDur > 0 && slideDur != r.getSlideDuration() {
-				slideTimer.Reset(slideDur)
+			if slideJustStarted {
+				if slideDur > 0 && slideDur != r.getSlideDuration() {
+					slideTimer.Reset(slideDur)
+				}
+				// Snapshot a PNG for the preview cache on each slide change.
+				r.updateCachedPreview(pix)
 			}
 			slideJustStarted = false
 
@@ -481,6 +485,22 @@ func (r *Renderer) CachedPreview() []byte {
 		return *p
 	}
 	return nil
+}
+
+// updateCachedPreview encodes the raw RGBA pixel buffer as a PNG and stores
+// it in cachedPreview. Called from the render loop on slide transitions.
+func (r *Renderer) updateCachedPreview(pix []byte) {
+	img := &image.RGBA{
+		Pix:    pix,
+		Stride: r.w * 4,
+		Rect:   image.Rect(0, 0, r.w, r.h),
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		return
+	}
+	b := buf.Bytes()
+	r.cachedPreview.Store(&b)
 }
 
 // RenderFavicon generates a 32x32 PNG favicon using the sun logo.
