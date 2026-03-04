@@ -4,7 +4,7 @@ A Go application that streams a retro WeatherStar 4000-style weather channel int
 
 No headless browser. No Puppeteer. No WS4KP required. No API keys needed — all data comes from free public sources (NWS, NOAA, Iowa Mesonet, NASA SDO, Open Trivia DB).
 
-Inspired by [WS4KP](https://github.com/netbymatt/ws4kp) and [ws4channels](https://github.com/rice9797/ws4channels).
+Inspired by [WS4KP](https://github.com/netbymatt/ws4kp) and [ws4channels](https://github.com/rice9797/ws4channels). See [screenshots](#screenshots) below.
 
 ### Why?
 
@@ -328,7 +328,7 @@ go relay.writer()     → one per subscriber: reads channel → writes to OS pip
 
 **SIGSTOP/SIGCONT for idle pipelines** — When all viewers disconnect from a pipeline, the FFmpeg subprocess is frozen with `SIGSTOP` at the OS level. It doesn't spin in a loop or decode silence — it's fully stopped by the kernel and consumes zero CPU. When a viewer reconnects, it's resumed with `SIGCONT`. This is the main mechanism behind the "does nothing when idle" goal.
 
-**Flush window on resume** — Resuming a frozen FFmpeg creates a problem: old encoded frames and audio sit in OS pipe buffers from before the pause. Without intervention, the viewer sees a brief flash of the previous slide and hears a stutter. To handle this, the broadcast hub drops all output for 750ms after resume, and the music relay drains stale audio from the kernel pipe buffer using a non-blocking read on a duplicated file descriptor. The result is a clean transition.
+**Flush window on resume** — Resuming a frozen FFmpeg creates a problem: old encoded frames and audio sit in FFmpeg's internal thread queue and OS pipe buffers from before the pause. Without intervention, the viewer hears a burst of stale audio. To handle this, the music relay drains stale audio from the kernel pipe buffer using non-blocking reads, and the broadcast hub discards all output for a flush window derived from the audio thread queue size (~1.7s). The window is reset at the actual moment of resume, not when the viewer first connects, so relay reconnection time doesn't eat into it.
 
 **Lock-free weather reads via `atomic.Pointer`** — The renderer reads weather data on every frame (5 fps, ~3.5 MB RGBA per frame). Using `atomic.Pointer[WeatherData]` means the background refresh goroutine can swap in new data without ever blocking the render loop. No mutex on the hottest path in the system.
 
