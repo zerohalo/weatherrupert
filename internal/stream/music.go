@@ -5,8 +5,16 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
+
+// AudioThreadQueueSize is the FFmpeg -thread_queue_size for relay pipe audio.
+// Each MP3 packet is ~26ms, so 64 packets ≈ 1.7s of audio.  This limits how
+// much stale audio accumulates in FFmpeg's internal buffer during a
+// SIGSTOP/SIGCONT cycle (we can drain the OS pipe but not FFmpeg's queue).
+// The Hub's flushWindow is derived from this value.
+const AudioThreadQueueSize = 64
 
 var audioExtensions = map[string]bool{
 	".mp3":  true,
@@ -42,7 +50,7 @@ func (m *MusicSource) FFmpegArgs() []string {
 		// ~13s of stale audio after a SIGSTOP/SIGCONT cycle because we
 		// can drain the OS pipe but not FFmpeg's internal thread queue.
 		// 64 packets ≈ 1.7s of MP3, enough headroom for encode spikes.
-		return []string{"-thread_queue_size", "64", "-i", "pipe:3"}
+		return []string{"-thread_queue_size", strconv.Itoa(AudioThreadQueueSize), "-i", "pipe:3"}
 	case m.PlaylistPath != "":
 		return []string{
 			"-thread_queue_size", "512",
