@@ -57,6 +57,7 @@ func (p *Pipeline) Location() string {
 type Manager struct {
 	mu           sync.Mutex
 	pipelines    map[string]*Pipeline
+	previewCache map[string][]byte             // ZIP → last good preview PNG
 	relays       map[string]*stream.MusicRelay // keyed by stream URL
 	cfg          *config.Config
 	music        *stream.MusicSource
@@ -71,6 +72,7 @@ type Manager struct {
 func NewManager(rootCtx context.Context, cfg *config.Config, music *stream.MusicSource, store *admin.Store, httpClient, streamClient *http.Client, classifier *apiurl.Classifier) *Manager {
 	return &Manager{
 		pipelines:    make(map[string]*Pipeline),
+		previewCache: make(map[string][]byte),
 		relays:       make(map[string]*stream.MusicRelay),
 		cfg:          cfg,
 		music:        music,
@@ -228,8 +230,9 @@ func (m *Manager) Get(zip, clockFormat, units string) (*Pipeline, error) {
 	return p, nil
 }
 
-// Peek returns an existing pipeline for the given ZIP/clock/units without
-// creating one. Returns nil if no pipeline is running for that combination.
+// Peek returns an existing pipeline for the given ZIP without creating one.
+// It first tries the exact clock/units match, then falls back to any pipeline
+// for the same ZIP. Returns nil if no pipeline exists.
 func (m *Manager) Peek(zip, clockFormat, units string) *Pipeline {
 	if clockFormat != config.ClockFormat12h && clockFormat != config.ClockFormat24h {
 		clockFormat = config.ClockFormat24h
@@ -245,7 +248,42 @@ func (m *Manager) Peek(zip, clockFormat, units string) *Pipeline {
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.pipelines[key]
+
+	// Exact match.
+	if p, ok := m.pipelines[key]; ok {
+		return p
+	}
+	// Any pipeline for this ZIP (different clock/units variant).
+	prefix := loc.ZipCode + "#"
+	for k, p := range m.pipelines {
+		if len(k) > len(prefix) && k[:len(prefix)] == prefix {
+			return p
+		}
+	}
+	return nil
+}
+
+// CachedPreview returns the manager-level cached preview PNG for a ZIP,
+// or nil if none has been stored yet.
+func (m *Manager) CachedPreview(zip string) []byte {
+	loc, err := geo.Lookup(zip)
+	if err != nil {
+		return nil
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.previewCache[loc.ZipCode]
+}
+
+// StoreCachedPreview saves a preview PNG for a ZIP at the manager level.
+func (m *Manager) StoreCachedPreview(zip string, png []byte) {
+	loc, err := geo.Lookup(zip)
+	if err != nil {
+		return
+	}
+	m.mu.Lock()
+	m.previewCache[loc.ZipCode] = png
+	m.mu.Unlock()
 }
 
 // start launches all goroutines for a new pipeline. The pipeline is returned

@@ -274,7 +274,6 @@ func main() {
 		units := unitsParam(r)
 
 		// Try existing pipeline first (no side effects).
-		// Fall back to creating one only if no cached preview is available.
 		var pngData []byte
 		if p := mgr.Peek(zip, clock, units); p != nil {
 			var err error
@@ -283,8 +282,13 @@ func main() {
 				http.Error(w, "preview render error", http.StatusInternalServerError)
 				return
 			}
+			// Store at manager level so it survives even without a pipeline.
+			mgr.StoreCachedPreview(zip, pngData)
+		} else if cached := mgr.CachedPreview(zip); cached != nil {
+			// No pipeline running but we have a cached preview from a previous session.
+			pngData = cached
 		} else {
-			// No pipeline running — spin one up to get a preview.
+			// No pipeline and no cache — spin one up to get a preview.
 			p, err := mgr.Get(zip, clock, units)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
