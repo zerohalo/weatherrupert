@@ -282,25 +282,21 @@ func drawCloudShape(dc *gg.Context, cx, cy, size float64, r, g, b float64) {
 		dc.Fill()
 	}
 
-	// Fill the base with rounded bottom corners and a gentle upward curve.
-	// Align edges with the outermost circles to avoid notches.
-	left := cx - size*0.415
-	right := cx + size*0.425
-	top := baseY - size*0.01
-	bottom := baseY + size*0.21
-	sag := size * 0.06    // how far the center curve dips
-	corner := size * 0.08 // corner radius
+	// Fill shape at the bottom to unify the cloud silhouette into a flat base
+	// with rounded bottom corners.
+	rectL := circles[0].x - circles[0].r + size*0.03
+	rectR := circles[len(circles)-1].x + circles[len(circles)-1].r - size*0.03
+	rectTop := baseY - size*0.01
+	rectBot := baseY + size*0.16
+	corner := size * 0.06
 
 	dc.NewSubPath()
-	dc.MoveTo(left, top)
-	dc.LineTo(right, top)
-	// Round bottom-right corner
-	dc.LineTo(right, bottom-sag-corner)
-	dc.QuadraticTo(right, bottom-sag, right-corner, bottom-sag)
-	// Bottom curve
-	dc.QuadraticTo(cx, bottom+sag, left+corner, bottom-sag)
-	// Round bottom-left corner
-	dc.QuadraticTo(left, bottom-sag, left, bottom-sag-corner)
+	dc.MoveTo(rectL, rectTop)
+	dc.LineTo(rectR, rectTop)
+	dc.LineTo(rectR, rectBot-corner)
+	dc.QuadraticTo(rectR, rectBot, rectR-corner, rectBot)
+	dc.LineTo(rectL+corner, rectBot)
+	dc.QuadraticTo(rectL, rectBot, rectL, rectBot-corner)
 	dc.ClosePath()
 	dc.Fill()
 }
