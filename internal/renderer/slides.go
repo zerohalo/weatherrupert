@@ -1396,6 +1396,7 @@ func slideMoonTides(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 			if use24h {
 				timeFmt = "15:04"
 			}
+			now := time.Now()
 			for _, e := range data.TideData.HiLo {
 				kind := "HIGH"
 				r, g, b := textR, textG, textB
@@ -1403,7 +1404,7 @@ func slideMoonTides(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 					kind = "LOW"
 					r, g, b = lowR, lowG, lowB
 				}
-				label := fmt.Sprintf("%s  %s", kind, e.Time.Local().Format(timeFmt))
+				label := fmt.Sprintf("%s  %s  %s", kind, e.Time.Local().Format(timeFmt), fmtRelTime(e.Time, now))
 				dc.SetFontFace(fonts.small)
 				drawShadowTextAnchored(dc, label, moonCX, tideY, 0.5, 0.5, r, g, b)
 				tideY += 26.0
@@ -1545,6 +1546,31 @@ func slideMoonTides(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 	}
 
 	return 0
+}
+
+// fmtRelTime returns a short relative-time string like "(in 3h 5m)" or "(2h 10m ago)".
+func fmtRelTime(event, now time.Time) string {
+	d := event.Sub(now)
+	ago := false
+	if d < 0 {
+		d = -d
+		ago = true
+	}
+	h := int(d.Hours())
+	m := int(d.Minutes()) % 60
+	var s string
+	switch {
+	case h > 0 && m > 0:
+		s = fmt.Sprintf("%dh %dm", h, m)
+	case h > 0:
+		s = fmt.Sprintf("%dh", h)
+	default:
+		s = fmt.Sprintf("%dm", m)
+	}
+	if ago {
+		return "(" + s + " ago)"
+	}
+	return "(in " + s + ")"
 }
 
 // formatTideTime formats a tide prediction time for the X-axis.
@@ -2061,10 +2087,12 @@ func slideNightSky(dc *gg.Context, data *weather.WeatherData, use24h bool, getPl
 	// ── Rise/set times ──
 	rowY += 15
 	dc.SetFontFace(fonts.small)
-	// Fixed columns for rise/set table: PLANET  EVENT  TIME
+	// Fixed columns for rise/set table: PLANET  EVENT  TIME  (relative)
 	colRSName := colName
 	colRSEvent := tableLeft + (tableRight-tableLeft)*0.25
 	colRSTime := tableLeft + (tableRight-tableLeft)*0.48
+	colRSRel := tableLeft + (tableRight-tableLeft)*0.72
+	now := data.Planets.ComputedAt
 	for _, p := range sorted {
 		hasEvent := false
 		col := planetColors[p.Name]
@@ -2077,6 +2105,7 @@ func slideNightSky(dc *gg.Context, data *weather.WeatherData, use24h bool, getPl
 			drawShadowText(dc, strings.ToUpper(p.Name), colRSName, rowY, nameR, nameG, nameB)
 			drawShadowText(dc, "RISES", colRSEvent, rowY, nameR, nameG, nameB)
 			drawShadowText(dc, p.RiseTime.Local().Format(timeFmt), colRSTime, rowY, nameR, nameG, nameB)
+			drawShadowText(dc, fmtRelTime(*p.RiseTime, now), colRSRel, rowY, subR, subG, subB)
 			rowY += 22
 			hasEvent = true
 		}
@@ -2084,6 +2113,7 @@ func slideNightSky(dc *gg.Context, data *weather.WeatherData, use24h bool, getPl
 			drawShadowText(dc, "", colRSName, rowY, nameR, nameG, nameB)
 			drawShadowText(dc, "SETS", colRSEvent, rowY, nameR, nameG, nameB)
 			drawShadowText(dc, p.SetTime.Local().Format(timeFmt), colRSTime, rowY, nameR, nameG, nameB)
+			drawShadowText(dc, fmtRelTime(*p.SetTime, now), colRSRel, rowY, subR, subG, subB)
 			rowY += 22
 			hasEvent = true
 		}
