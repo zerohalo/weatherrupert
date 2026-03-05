@@ -490,6 +490,57 @@ func (r *MusicRelay) Drops(pr *os.File) int64 {
 	return 0
 }
 
+// WritePipe returns the write end of the OS pipe for the subscriber
+// identified by its read end.  Returns nil if the subscriber is not found.
+// This is used by the manager to pass the write end to PumpSilence.
+func (r *MusicRelay) WritePipe(pr *os.File) *os.File {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for c := range r.clients {
+		if c.pr == pr {
+			return c.pw
+		}
+	}
+	return nil
+}
+
+// mp3SilenceFrame is a valid MPEG-1 Layer III frame (128kbps, 44100Hz,
+// joint-stereo) with all audio samples zeroed.  Each frame is 417 bytes
+// and represents ~26ms of silence.  FFmpeg's `-c:a copy` passes these
+// through unchanged, so the player decodes them as silence.
+var mp3SilenceFrame = func() []byte {
+	// MPEG-1 Layer III header: 0xFFFB9004
+	//   sync=0xFFF, version=MPEG1(11), layer=III(01), no CRC(1)
+	//   bitrate=128kbps(1001), samplerate=44100(00), no padding(0), private(0)
+	//   channel=joint-stereo(01), ...
+	frame := make([]byte, 417)
+	frame[0] = 0xFF
+	frame[1] = 0xFB
+	frame[2] = 0x90
+	frame[3] = 0x04
+	// Remaining bytes are zero — valid silence for Layer III.
+	return frame
+}()
+
+// PumpSilence writes MP3 silence frames to pw at ~26ms intervals until
+// stop is closed or a write error occurs.  This keeps FFmpeg's pipe:3
+// audio input fed so it produces MPEG-TS output immediately while the
+// real music stream connects.
+func PumpSilence(pw *os.File, stop <-chan struct{}) {
+	ticker := time.NewTicker(26 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-stop:
+			return
+		case <-ticker.C:
+			if _, err := pw.Write(mp3SilenceFrame); err != nil {
+				return
+			}
+		}
+	}
+}
+
 func (r *MusicRelay) broadcast(data []byte) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

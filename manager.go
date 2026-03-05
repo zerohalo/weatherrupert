@@ -421,20 +421,27 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string) (*Pipeline,
 		p.relayMu.Unlock()
 		if curRelay != nil && curPipe != nil {
 			curRelay.SetActive(curPipe, true)
-			// Block until relay has an active HTTP connection so ffmpeg
-			// doesn't produce video-only output during the audio gap.
-			waitCtx, waitCancel := context.WithTimeout(ctx, 5*time.Second)
-			defer waitCancel()
-			if err := curRelay.WaitConnected(waitCtx); err != nil {
-				log.Printf("pipeline %s: music relay wait: %v (resuming without audio)", loc.ZipCode, err)
-			}
 			// Drain stale audio from the OS pipe kernel buffer while
 			// ffmpeg is still frozen so it starts with fresh audio.
 			curRelay.DrainPipe(curPipe)
+			// Pump MP3 silence into the pipe so FFmpeg produces output
+			// immediately without waiting for the music relay to connect.
+			silenceStop := make(chan struct{})
+			pw := curRelay.WritePipe(curPipe)
+			if pw != nil {
+				go stream.PumpSilence(pw, silenceStop)
+			}
+			// Wait for relay connection in the background, then stop the
+			// silence pump so real music takes over seamlessly.
+			go func() {
+				waitCtx, waitCancel := context.WithTimeout(ctx, 5*time.Second)
+				defer waitCancel()
+				if err := curRelay.WaitConnected(waitCtx); err != nil {
+					log.Printf("pipeline %s: music relay wait: %v", loc.ZipCode, err)
+				}
+				close(silenceStop)
+			}()
 		}
-		// Reset the flush window so it starts from the actual resume
-		// moment, not the earlier Subscribe call which may have been
-		// seconds ago while waiting for the relay to connect.
 		hub.ResetFlushWindow()
 		if err := ff.Resume(); err != nil {
 			log.Printf("pipeline %s: ffmpeg resume: %v", loc.ZipCode, err)

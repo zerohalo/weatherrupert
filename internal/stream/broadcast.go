@@ -46,10 +46,11 @@ type Hub struct {
 	OnIdle   func()
 }
 
-// maxFlushWindow caps the flush duration at the audio thread queue capacity.
-// Each MP3 packet is ~26ms; AudioThreadQueueSize packets plus 300ms margin
-// for the muxer to flush the interleaved output.
-const maxFlushWindow = time.Duration(AudioThreadQueueSize)*26*time.Millisecond + 300*time.Millisecond
+// maxFlushWindow caps the post-resume discard window.  Since the renderer
+// stops writing while there are no clients, FFmpeg's encoder drains and
+// stdout has minimal stale data by resume time.  500ms is enough for the
+// encoder to settle without making the client wait.
+const maxFlushWindow = 500 * time.Millisecond
 
 // ResetFlushWindow restarts the flush window from now.  Called right before
 // ff.Resume() so the window starts from the actual resume moment, not the
