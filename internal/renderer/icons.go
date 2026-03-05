@@ -1,7 +1,10 @@
 package renderer
 
 import (
+	"fmt"
+	"image/png"
 	"math"
+	"os"
 	"strings"
 
 	"git.sr.ht/~sbinet/gg"
@@ -256,10 +259,16 @@ func drawMoon(dc *gg.Context, cx, cy, size float64) {
 	dc.DrawCircle(cx, cy, r)
 	dc.Fill()
 
-	// Overlay an offset disc in the background color to carve the crescent
+	// Clip to the moon disc so the overlay can't bleed into the background.
+	dc.DrawCircle(cx, cy, r)
+	dc.Clip()
+
+	// Overlay an offset disc in the background color to carve the crescent.
 	dc.SetRGB(bgR, bgG, bgB)
-	dc.DrawCircle(cx+r*0.45, cy-r*0.10, r*0.78)
+	dc.DrawCircle(cx+r*0.55, cy-r*0.15, r)
 	dc.Fill()
+
+	dc.ResetClip()
 }
 
 // drawCloudShape draws a cloud made of overlapping circles with a flat base.
@@ -313,9 +322,13 @@ func drawPartlyCloudy(dc *gg.Context, cx, cy, size float64, night bool) {
 		dc.SetRGB(0.95, 0.95, 0.80)
 		dc.DrawCircle(bx, by, br)
 		dc.Fill()
+		// Clip to moon disc so overlay doesn't bleed into background.
+		dc.DrawCircle(bx, by, br)
+		dc.Clip()
 		dc.SetRGB(bgR, bgG, bgB)
-		dc.DrawCircle(bx+br*0.45, by-br*0.10, br*0.78)
+		dc.DrawCircle(bx+br*0.55, by-br*0.15, br)
 		dc.Fill()
+		dc.ResetClip()
 	} else {
 		// Rays
 		dc.SetRGB(hlR, hlG, 0)
@@ -362,8 +375,24 @@ func drawRain(dc *gg.Context, cx, cy, size float64) {
 	dc.SetRGB(divR, divG, divB)
 	dc.SetLineWidth(size * 0.06)
 	dropTopY := cloudCY + size*0.27
-	for _, dx := range []float64{-size * 0.22, 0, size * 0.22} {
-		dc.DrawLine(cx+dx-size*0.05, dropTopY, cx+dx+size*0.05, dropTopY+size*0.22)
+	// All streaks share the same angle. Outer streaks are shorter.
+	// Shifted slightly right to align with the cloud base visual center.
+	type streak struct{ dx, length float64 }
+	outerSlant := size * 0.05
+	spacing := size * 0.15
+	centerLen := size * 0.22
+	outerLen := size * 0.16
+	centerSlant := outerSlant * centerLen / outerLen
+	centerDx := centerSlant - outerSlant // keeps tops equidistant
+	nudge := size * 0.04                 // align with cloud base center
+	streaks := []streak{
+		{-spacing + nudge, outerLen},
+		{centerDx + nudge, centerLen},
+		{spacing + nudge, outerLen},
+	}
+	for _, s := range streaks {
+		slant := outerSlant * s.length / outerLen
+		dc.DrawLine(cx+s.dx-slant, dropTopY, cx+s.dx+slant, dropTopY+s.length)
 		dc.Stroke()
 	}
 }
@@ -373,24 +402,31 @@ func drawThunderstorm(dc *gg.Context, cx, cy, size float64) {
 	cloudCY := cy - size*0.14
 	drawCloudShape(dc, cx, cloudCY, size*0.80, 0.45, 0.45, 0.55)
 
-	// Lightning bolt (two-segment zigzag)
-	boltX := cx - size*0.02
-	boltY := cloudCY + size*0.22
-	dc.SetRGB(hlR, hlG, 0)
-	dc.SetLineWidth(size * 0.09)
-	dc.MoveTo(boltX+size*0.09, boltY)
-	dc.LineTo(boltX-size*0.04, boltY+size*0.13)
-	dc.LineTo(boltX+size*0.05, boltY+size*0.13)
-	dc.LineTo(boltX-size*0.09, boltY+size*0.30)
-	dc.Stroke()
+	// Rain streaks — same style as drawRain (equidistant, nudged right).
+	boltY := cloudCY + size*0.27
+	stormSlant := size * 0.04
+	stormSpacing := size * 0.15
+	stormLen := size * 0.14
+	stormNudge := size * 0.04
 
-	// Rain streaks flanking the bolt
 	dc.SetRGB(divR, divG, divB)
 	dc.SetLineWidth(size * 0.055)
-	for _, dx := range []float64{-size * 0.24, size * 0.20} {
-		dc.DrawLine(cx+dx-size*0.04, boltY, cx+dx+size*0.04, boltY+size*0.18)
-		dc.Stroke()
-	}
+	lx := cx - stormSpacing + stormNudge
+	rx := cx + stormSpacing + stormNudge
+	dc.DrawLine(lx-stormSlant, boltY, lx+stormSlant, boltY+stormLen)
+	dc.Stroke()
+	dc.DrawLine(rx-stormSlant, boltY, rx+stormSlant, boltY+stormLen)
+	dc.Stroke()
+
+	// Lightning bolt centered between the streaks, slanting same direction as rain.
+	boltCX := (lx + rx) / 2
+	dc.SetRGB(hlR, hlG, 0)
+	dc.SetLineWidth(size * 0.06)
+	dc.MoveTo(boltCX-size*0.04, boltY)
+	dc.LineTo(boltCX+size*0.04, boltY+size*0.13)
+	dc.LineTo(boltCX-size*0.03, boltY+size*0.13)
+	dc.LineTo(boltCX+size*0.06, boltY+size*0.30)
+	dc.Stroke()
 }
 
 // drawSnow draws a cloud with three snowflake asterisks beneath it.
@@ -399,9 +435,9 @@ func drawSnow(dc *gg.Context, cx, cy, size float64) {
 	drawCloudShape(dc, cx, cloudCY, size*0.80, 0.78, 0.84, 0.90)
 
 	dc.SetRGB(0.55, 0.78, 1.0)
-	dc.SetLineWidth(size * 0.055)
-	flakeY := cloudCY + size*0.32
-	flakeR := size * 0.10
+	dc.SetLineWidth(size * 0.045)
+	flakeY := cloudCY + size*0.38
+	flakeR := size * 0.07
 
 	for _, fx := range []float64{cx - size*0.22, cx, cx + size*0.22} {
 		// 3-axis asterisk (0°, 60°, 120°)
@@ -423,22 +459,28 @@ func drawSleet(dc *gg.Context, cx, cy, size float64) {
 
 	dropTopY := cloudCY + size*0.27
 
+	// Rain streaks symmetric about cloud base center; center has ice pellet.
+	sleetSpacing := size * 0.15
+	sleetSlant := size * 0.04
+	sleetLen := size * 0.16
+	sleetNudge := size * 0.04 // align with cloud base center
+
 	// Left: rain streak
 	dc.SetRGB(divR, divG, divB)
 	dc.SetLineWidth(size * 0.06)
-	dc.DrawLine(cx-size*0.22-size*0.04, dropTopY, cx-size*0.22+size*0.04, dropTopY+size*0.20)
+	lx := cx - sleetSpacing + sleetNudge
+	dc.DrawLine(lx-sleetSlant, dropTopY, lx+sleetSlant, dropTopY+sleetLen)
 	dc.Stroke()
-
-	// Center: ice pellet dot
-	dc.SetRGB(0.80, 0.92, 1.0)
-	dc.DrawCircle(cx, dropTopY+size*0.12, size*0.075)
-	dc.Fill()
 
 	// Right: rain streak
-	dc.SetRGB(divR, divG, divB)
-	dc.SetLineWidth(size * 0.06)
-	dc.DrawLine(cx+size*0.22-size*0.04, dropTopY, cx+size*0.22+size*0.04, dropTopY+size*0.20)
+	rx := cx + sleetSpacing + sleetNudge
+	dc.DrawLine(rx-sleetSlant, dropTopY, rx+sleetSlant, dropTopY+sleetLen)
 	dc.Stroke()
+
+	// Ice pellet dot centered between the two streaks, nudged up.
+	dc.SetRGB(0.80, 0.92, 1.0)
+	dc.DrawCircle((lx+rx)/2, dropTopY+size*0.08, size*0.075)
+	dc.Fill()
 }
 
 // drawFog draws four rounded horizontal bars of decreasing opacity.
@@ -497,4 +539,69 @@ func drawWindy(dc *gg.Context, cx, cy, size float64) {
 		dc.CubicTo(l.cp1x, l.cp1y, l.cp2x, l.cp2y, l.ex, l.ey)
 		dc.Stroke()
 	}
+}
+
+// RenderIconSheet draws all weather condition icons in a grid and saves to path.
+func RenderIconSheet(path string) error {
+	type entry struct {
+		icon  iconType
+		label string
+	}
+	icons := []entry{
+		{iconSunny, "Sunny"},
+		{iconNightClear, "Night Clear"},
+		{iconPartlyCloudy, "Partly Cloudy"},
+		{iconNightPartlyCloudy, "Night Partly Cloudy"},
+		{iconMostlyCloudy, "Mostly Cloudy"},
+		{iconCloudy, "Cloudy"},
+		{iconRain, "Rain"},
+		{iconThunderstorm, "Thunderstorm"},
+		{iconSnow, "Snow"},
+		{iconSleet, "Sleet"},
+		{iconFog, "Fog"},
+		{iconWindy, "Windy"},
+	}
+
+	cols := 4
+	rows := (len(icons) + cols - 1) / cols
+	cellW, cellH := 320.0, 280.0
+	w := float64(cols) * cellW
+	h := float64(rows) * cellH
+
+	dc := gg.NewContext(int(w), int(h))
+
+	for y := 0; y < int(h); y++ {
+		t := float64(y) / h
+		r := 0.063*(1-t) + 0.0*t
+		g := 0.125*(1-t) + 0.063*t
+		b := 0.502*(1-t) + 0.251*t
+		dc.SetRGB(r, g, b)
+		dc.DrawRectangle(0, float64(y), w, 1)
+		dc.Fill()
+	}
+
+	iconSize := 160.0
+	for i, e := range icons {
+		col := i % cols
+		row := i / cols
+		cx := float64(col)*cellW + cellW/2
+		cy := float64(row)*cellH + cellH/2 - 20
+
+		drawIcon(dc, e.icon, cx, cy, iconSize)
+
+		dc.SetRGB(textR, textG, textB)
+		dc.SetFontFace(defaultFonts.small)
+		dc.DrawStringAnchored(e.label, cx, cy+iconSize/2+20, 0.5, 0.5)
+	}
+
+	f, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("create %s: %w", path, err)
+	}
+	defer f.Close()
+	if err := png.Encode(f, dc.Image()); err != nil {
+		return fmt.Errorf("encode: %w", err)
+	}
+	fmt.Printf("wrote %s (%dx%d)\n", path, int(w), int(h))
+	return nil
 }
