@@ -507,11 +507,9 @@ func drawSleet(dc *gg.Context, cx, cy, size float64) {
 	dc.Stroke()
 
 	// Ice pellet dots angled to match the rain streaks, centered between them.
-	// The rain streaks slant from (-slant, 0) to (+slant, len), so the angle is:
-	// dx/dy = (2*slant)/len per unit of vertical distance.
 	midX := (lx + rx) / 2
 	pelletR := size * 0.04
-	slopeX := (2 * sleetSlant) / sleetLen // horizontal shift per unit of vertical
+	slopeX := (2 * sleetSlant) / sleetLen
 	y1 := dropTopY + size*0.06
 	y2 := dropTopY + size*0.19
 	x1 := midX + (y1-dropTopY)*slopeX - sleetSlant
