@@ -147,7 +147,9 @@ func drawMoonPhase(dc *gg.Context, cx, cy, size, phase float64) {
 	// cos(2π·phase) maps: 0→1, 0.25→0, 0.5→−1, 0.75→0, 1→1
 	terminatorX := r * math.Abs(math.Cos(2*math.Pi*phase))
 
-	dc.SetRGB(bgR, bgG, bgB)
+	// Darken shadow slightly from the background so the unlit side is
+	// visible against the blue sky.
+	dc.SetRGB(bgR*0.5, bgG*0.5, bgB*0.5)
 
 	// Build shadow path at fine resolution.
 	const steps = 64
@@ -224,12 +226,12 @@ func drawMoonPhase(dc *gg.Context, cx, cy, size, phase float64) {
 // drawSun draws a bright yellow circle with 8 radiating rays.
 func drawSun(dc *gg.Context, cx, cy, size float64) {
 	r := size * 0.27
-	inner := size * 0.33
-	outer := size * 0.47
+	inner := size * 0.32
+	outer := size * 0.40
 
 	// Rays
 	dc.SetRGB(hlR, hlG, 0)
-	dc.SetLineWidth(size * 0.07)
+	dc.SetLineWidth(size * 0.06)
 	for i := 0; i < 8; i++ {
 		a := float64(i) * math.Pi / 4
 		dc.DrawLine(
@@ -280,8 +282,26 @@ func drawCloudShape(dc *gg.Context, cx, cy, size float64, r, g, b float64) {
 		dc.Fill()
 	}
 
-	// Fill rectangle at the bottom to unify the cloud silhouette into a flat base.
-	dc.DrawRectangle(cx-size*0.42, baseY-size*0.01, size*0.84, size*0.22)
+	// Fill the base with rounded bottom corners and a gentle upward curve.
+	// Align edges with the outermost circles to avoid notches.
+	left := cx - size*0.415
+	right := cx + size*0.425
+	top := baseY - size*0.01
+	bottom := baseY + size*0.21
+	sag := size * 0.06    // how far the center curve dips
+	corner := size * 0.08 // corner radius
+
+	dc.NewSubPath()
+	dc.MoveTo(left, top)
+	dc.LineTo(right, top)
+	// Round bottom-right corner
+	dc.LineTo(right, bottom-sag-corner)
+	dc.QuadraticTo(right, bottom-sag, right-corner, bottom-sag)
+	// Bottom curve
+	dc.QuadraticTo(cx, bottom+sag, left+corner, bottom-sag)
+	// Round bottom-left corner
+	dc.QuadraticTo(left, bottom-sag, left, bottom-sag-corner)
+	dc.ClosePath()
 	dc.Fill()
 }
 
@@ -303,9 +323,9 @@ func drawPartlyCloudy(dc *gg.Context, cx, cy, size float64, night bool) {
 	} else {
 		// Rays
 		dc.SetRGB(hlR, hlG, 0)
-		dc.SetLineWidth(size * 0.055)
-		inner := br + size*0.04
-		outer := br + size*0.14
+		dc.SetLineWidth(size * 0.045)
+		inner := br + size*0.03
+		outer := br + size*0.10
 		for i := 0; i < 8; i++ {
 			a := float64(i) * math.Pi / 4
 			dc.DrawLine(
