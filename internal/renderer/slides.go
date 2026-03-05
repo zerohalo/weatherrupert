@@ -15,10 +15,10 @@ import (
 	"time"
 
 	"git.sr.ht/~sbinet/gg"
-	xdraw "golang.org/x/image/draw"
 	ann "github.com/zerohalo/weatherrupert/internal/announcements"
 	"github.com/zerohalo/weatherrupert/internal/trivia"
 	"github.com/zerohalo/weatherrupert/internal/weather"
+	xdraw "golang.org/x/image/draw"
 )
 
 // WeatherStar 4000+ authentic color palette (R, G, B as 0–1 floats).
@@ -83,8 +83,8 @@ func circledLetter(letter string, size int) image.Image {
 
 // gradCache holds a pre-rendered gradient image to avoid recomputing it every frame.
 var (
-	gradMu   sync.Mutex
-	gradImg  *image.RGBA
+	gradMu       sync.Mutex
+	gradImg      *image.RGBA
 	gradW, gradH int
 )
 
@@ -195,9 +195,9 @@ func currentIsDaytime(data *weather.WeatherData) bool {
 
 // ── Unit conversion helpers (display-time only; stored data remains Imperial) ──
 
-func fToC(f float64) float64      { return (f - 32) * 5 / 9 }
-func mphToKmh(mph float64) float64 { return mph * 1.60934 }
-func milesToKm(mi float64) float64  { return mi * 1.60934 }
+func fToC(f float64) float64         { return (f - 32) * 5 / 9 }
+func mphToKmh(mph float64) float64   { return mph * 1.60934 }
+func milesToKm(mi float64) float64   { return mi * 1.60934 }
 func inHgToHPa(inHg float64) float64 { return inHg * 33.8639 }
 
 // fmtOr formats a nullable float with the given format string, or returns
@@ -683,7 +683,7 @@ func tempStr(temp int, unit string, useMetric bool) string {
 // png.Decode + xdraw.BiLinear.Scale only run once per weather data refresh
 // rather than once per animation frame render.
 type radarFrameCache struct {
-	fetched int64          // data.FetchedAt.Unix() when cache was built
+	fetched int64         // data.FetchedAt.Unix() when cache was built
 	scaled  []*image.RGBA // one entry per RadarFrame, panel-sized
 	dstY    int           // vertical offset into the panel (same for all frames)
 }
@@ -1253,46 +1253,88 @@ func NewSlideTrivia(getItems func() []trivia.TriviaItem, getDur func() time.Dura
 		} else {
 			// ── Answer phase ──────────────────────────────────────────────────
 
-			// Question text — small and gray at the top
-			const smallWrap = 72
-			const smallLineH = 28.0
-			qSmall := truncateLines(wrapText(strings.ToUpper(cur.Question), smallWrap), 3)
-			dc.SetFontFace(fonts.small)
-			for i, line := range qSmall {
-				y := contentTop + 18.0 + float64(i)*smallLineH
-				drawShadowTextAnchored(dc, line, cx, y, 0.5, 0.5, subR, subG, subB)
-			}
-
-			// Divider below the question
-			divY := contentTop + 18.0 + float64(len(qSmall))*smallLineH + 14.0
-			dc.SetRGBA(1, 1, 1, 0.25)
-			dc.DrawRectangle(40, divY, w-80, 1)
-			dc.Fill()
-
-			// "ANSWER:" label
+			// "ANSWER:" header — same position as the question-phase header
 			dc.SetFontFace(fonts.title)
-			drawShadowTextAnchored(dc, "ANSWER:", cx, divY+55, 0.5, 0.5, titleR, titleG, titleB)
+			drawShadowTextAnchored(dc, "ANSWER:", cx, contentTop+47, 0.5, 0.5, titleR, titleG, titleB)
 
-			// Answer text — large yellow, word-wrapped, centered in remaining space
-			answerText := strings.ToUpper(cur.Answer)
-			aLines := wrapText(answerText, 28)
-			const aLineH = 76.0
-			aBlockH := float64(len(aLines)) * aLineH
-			aAreaTop := divY + 85.0
-			aAreaBot := h - 100.0
-			aStartY := aAreaTop + (aAreaBot-aAreaTop-aBlockH)/2 + aLineH*0.5
+			if n := len(cur.Choices); n >= 3 && n <= 4 {
+				// MC answer: same layout as question phase, correct choice yellow, others gray
+				qLines := wrapText(strings.ToUpper(cur.Question), 52)
+				const qLineH = 42.0
+				const choiceLineH = 52.0
 
-			if correctLetter != "" {
-				// Draw circled letter icon above the answer text
-				const ansCircleSize = 56
-				circleY := aStartY - aLineH*0.85
-				icon := circledLetter(correctLetter, ansCircleSize)
-				dc.DrawImageAnchored(icon, int(cx), int(circleY), 0.5, 0.5)
-			}
+				qBlockH := float64(len(qLines)) * qLineH
+				choicesH := float64(n) * choiceLineH
+				totalBlockH := qBlockH + 30.0 + choicesH
 
-			dc.SetFontFace(fonts.xl)
-			for i, line := range aLines {
-				drawShadowTextAnchored(dc, line, cx, aStartY+float64(i)*aLineH, 0.5, 0.5, hlR, hlG, hlB)
+				qAreaTop := contentTop + 100.0
+				qAreaBot := h - 36.0
+				contentAvail := qAreaBot - qAreaTop
+
+				// Static positioning — no scrolling on answer slide
+				var startY float64
+				if totalBlockH <= contentAvail {
+					startY = qAreaTop
+				} else {
+					startY = qAreaTop // clamp to top if it overflows
+				}
+
+				// Question text
+				dc.SetFontFace(fonts.medium)
+				for i, line := range qLines {
+					drawShadowTextAnchored(dc, line, cx, startY+float64(i)*qLineH, 0.5, 0.5, textR, textG, textB)
+				}
+
+				// Choices — same layout as question phase
+				choiceTop := startY + qBlockH + 30.0
+				const choiceCircleSize = 36
+				const choiceGap = 14.0
+
+				// Measure the widest choice to compute block width (same as question phase)
+				dc.SetFontFace(fonts.medium)
+				var maxTextW float64
+				choiceTexts := make([]string, n)
+				for i, choice := range cur.Choices {
+					choiceTexts[i] = strings.ToUpper(choice)
+					if len(choiceTexts[i]) > 46 {
+						choiceTexts[i] = choiceTexts[i][:43] + "..."
+					}
+					if tw, _ := dc.MeasureString(choiceTexts[i]); tw > maxTextW {
+						maxTextW = tw
+					}
+				}
+				blockW := float64(choiceCircleSize) + choiceGap + maxTextW
+				choiceX := (w - blockW) / 2
+
+				const dimR, dimG, dimB = 0.3, 0.3, 0.3 // dark gray for wrong answers
+				for i := range cur.Choices {
+					y := choiceTop + float64(i)*choiceLineH
+					if allLabels[i] == correctLetter {
+						// Correct: circle icon + yellow text
+						icon := circledLetter(allLabels[i], choiceCircleSize)
+						dc.DrawImageAnchored(icon, int(choiceX+float64(choiceCircleSize)/2), int(y+5), 0.5, 0.5)
+						dc.SetFontFace(fonts.medium)
+						drawShadowTextAnchored(dc, choiceTexts[i], choiceX+float64(choiceCircleSize)+choiceGap, y, 0.0, 0.5, titleR, titleG, titleB)
+					} else {
+						// Wrong: no circle icon, dark gray text, same x position as labeled text
+						dc.SetFontFace(fonts.medium)
+						drawShadowTextAnchored(dc, choiceTexts[i], choiceX+float64(choiceCircleSize)+choiceGap, y, 0.0, 0.5, dimR, dimG, dimB)
+					}
+				}
+			} else {
+				// Q&A / True-False: original compact answer layout
+				answerText := strings.ToUpper(cur.Answer)
+				aLines := wrapText(answerText, 28)
+				const aLineH = 76.0
+				aBlockH := float64(len(aLines)) * aLineH
+				aAreaTop := contentTop + 100.0
+				aAreaBot := h - 100.0
+				aStartY := aAreaTop + (aAreaBot-aAreaTop-aBlockH)/2 + aLineH*0.5
+
+				dc.SetFontFace(fonts.xl)
+				for i, line := range aLines {
+					drawShadowTextAnchored(dc, line, cx, aStartY+float64(i)*aLineH, 0.5, 0.5, hlR, hlG, hlB)
+				}
 			}
 		}
 
@@ -1575,7 +1617,7 @@ func slidePrecipitation(dc *gg.Context, data *weather.WeatherData, use24h, useMe
 		plotRight  = 1250.0
 		plotTop    = 180.0
 		plotBottom = 620.0
-		iconSize  = 50.0
+		iconSize   = 50.0
 	)
 	plotW := plotRight - plotLeft
 	plotH := plotBottom - plotTop
@@ -1850,11 +1892,11 @@ func NewSlideNightSky(use24h, useMetric bool, getPlanetLiveAlways func() bool, f
 
 // Planet color palette (R, G, B as 0–1 floats).
 var planetColors = map[string][3]float64{
-	"Mercury": {0.75, 0.75, 0.75},   // light gray
-	"Venus":   {1.0, 1.0, 0.85},     // bright yellow-white
-	"Mars":    {1.0, 0.4, 0.3},      // reddish
-	"Jupiter": {1.0, 0.95, 0.85},    // warm white
-	"Saturn":  {0.95, 0.90, 0.70},   // pale gold
+	"Mercury": {0.75, 0.75, 0.75}, // light gray
+	"Venus":   {1.0, 1.0, 0.85},   // bright yellow-white
+	"Mars":    {1.0, 0.4, 0.3},    // reddish
+	"Jupiter": {1.0, 0.95, 0.85},  // warm white
+	"Saturn":  {0.95, 0.90, 0.70}, // pale gold
 }
 
 func slideNightSky(dc *gg.Context, data *weather.WeatherData, use24h bool, getPlanetLiveAlways func() bool, fonts *fontSet) time.Duration {
@@ -1883,7 +1925,7 @@ func slideNightSky(dc *gg.Context, data *weather.WeatherData, use24h bool, getPl
 	sorted := weather.SortPlanetsByAltitude(planets)
 
 	// ── Left half: Sky dome ──
-	domeR := contentH*0.40
+	domeR := contentH * 0.40
 	domeCX := midX / 2
 	domeCY := contentTop + contentH*0.45
 
@@ -2074,9 +2116,9 @@ func slideNightSky(dc *gg.Context, data *weather.WeatherData, use24h bool, getPl
 
 // solarImageCache holds pre-decoded and pre-scaled solar disk images.
 type solarImageCache struct {
-	fetched  int64
-	sunspot  *image.RGBA
-	corona   *image.RGBA
+	fetched int64
+	sunspot *image.RGBA
+	corona  *image.RGBA
 }
 
 // NewSlideSolarWeather returns a SlideFunc for the solar weather slide.
@@ -2119,9 +2161,9 @@ func drawSolarSlide(dc *gg.Context, data *weather.WeatherData, cache *solarImage
 	panelCX2 := midX + midX/2 // center of right panel
 
 	// Vertical layout: label + image + 3 stat rows, centred in content area.
-	labelH := 24.0  // title label height
-	gap1 := 20.0    // gap between label and image
-	gap2 := 20.0    // gap between image and stats
+	labelH := 24.0 // title label height
+	gap1 := 20.0   // gap between label and image
+	gap2 := 20.0   // gap between image and stats
 	rowH := 28.0
 	statsH := rowH * 3
 	totalH := labelH + gap1 + imgSize + gap2 + statsH
