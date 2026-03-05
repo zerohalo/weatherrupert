@@ -37,8 +37,9 @@ type Hub struct {
 	// activatedAt / flushUntil bracket the post-resume discard window.
 	// Chunks arriving before flushUntil are discarded, draining stale
 	// data from FFmpeg's pipe buffer after a SIGCONT resume.
-	activatedAt time.Time
-	flushUntil  time.Time
+	activatedAt    time.Time
+	flushUntil     time.Time
+	firstChunkSent bool // reset on activation; logs first broadcast for timing
 
 	// OnActive is called (without lock held) when the first client connects.
 	// OnIdle is called (without lock held) when the last client disconnects.
@@ -59,6 +60,7 @@ func (h *Hub) ResetFlushWindow() {
 	h.mu.Lock()
 	h.activatedAt = time.Now()
 	h.flushUntil = h.activatedAt.Add(maxFlushWindow)
+	h.firstChunkSent = false
 	h.mu.Unlock()
 }
 
@@ -140,6 +142,12 @@ func (h *Hub) broadcast(chunk []byte) {
 	// a flash of old frames before fresh content arrives.
 	if !h.flushUntil.IsZero() && time.Now().Before(h.flushUntil) {
 		return
+	}
+
+	if !h.firstChunkSent && !h.activatedAt.IsZero() {
+		h.firstChunkSent = true
+		log.Printf("stream: first chunk from ffmpeg %dms after resume (%d bytes)",
+			time.Since(h.activatedAt).Milliseconds(), len(chunk))
 	}
 
 	h.chunkCount.Add(1)
@@ -250,10 +258,12 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ch := h.Subscribe()
 	defer h.Unsubscribe(ch)
 
+	connectTime := time.Now()
 	log.Printf("stream: client connected from %s | User-Agent: %s | X-Forwarded-For: %s | Referer: %s",
 		r.RemoteAddr, r.UserAgent(), r.Header.Get("X-Forwarded-For"), r.Header.Get("Referer"))
 	defer log.Printf("stream: client disconnected from %s", r.RemoteAddr)
 
+	firstWrite := true
 	for {
 		select {
 		case <-r.Context().Done():
@@ -261,6 +271,11 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		case chunk, ok := <-ch:
 			if !ok {
 				return
+			}
+			if firstWrite {
+				firstWrite = false
+				log.Printf("stream: first bytes to client %dms after connect (%d bytes)",
+					time.Since(connectTime).Milliseconds(), len(chunk))
 			}
 			if _, err := w.Write(chunk); err != nil {
 				if errors.Is(err, io.ErrClosedPipe) || r.Context().Err() != nil {
