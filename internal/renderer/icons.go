@@ -200,18 +200,18 @@ func drawMoonPhase(dc *gg.Context, cx, cy, size, phase float64) {
 			}
 		}
 		if phase < 0.75 {
-			// Before last quarter: terminator bulges left (shadow is narrow).
+			// Before last quarter: terminator bulges right (shadow is narrow).
 			for i := 0; i <= steps; i++ {
 				a := -math.Pi/2 + math.Pi*float64(i)/float64(steps)
-				x := cx - terminatorX*math.Cos(a)
+				x := cx + terminatorX*math.Cos(a)
 				y := cy - r*math.Sin(a)
 				dc.LineTo(x, y)
 			}
 		} else {
-			// After last quarter: terminator bulges right (shadow is wide).
+			// After last quarter: terminator bulges left (shadow is wide).
 			for i := 0; i <= steps; i++ {
 				a := -math.Pi/2 + math.Pi*float64(i)/float64(steps)
-				x := cx + terminatorX*math.Cos(a)
+				x := cx - terminatorX*math.Cos(a)
 				y := cy - r*math.Sin(a)
 				dc.LineTo(x, y)
 			}
