@@ -424,11 +424,12 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string) (*Pipeline,
 			// Drain stale audio from the OS pipe kernel buffer while
 			// ffmpeg is still frozen so it starts with fresh audio.
 			curRelay.DrainPipe(curPipe)
-			// Pump MP3 silence into the pipe so FFmpeg produces output
-			// immediately without waiting for the music relay to connect.
+			// Pre-fill the audio pipe with silence frames so FFmpeg has
+			// audio data the instant it resumes — no muxer stall.
 			silenceStop := make(chan struct{})
 			pw := curRelay.WritePipe(curPipe)
 			if pw != nil {
+				stream.PrefillSilence(pw, 20) // ~520ms of audio in pipe buffer
 				go stream.PumpSilence(pw, silenceStop)
 			}
 			// Wait for relay connection in the background, then stop the

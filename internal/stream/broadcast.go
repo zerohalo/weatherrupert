@@ -46,11 +46,11 @@ type Hub struct {
 	OnIdle   func()
 }
 
-// maxFlushWindow caps the post-resume discard window.  Since the renderer
-// stops writing while there are no clients, FFmpeg's encoder drains and
-// stdout has minimal stale data by resume time.  500ms is enough for the
-// encoder to settle without making the client wait.
-const maxFlushWindow = 500 * time.Millisecond
+// maxFlushWindow caps the post-resume discard window.  The renderer stops
+// writing while there are no clients, so FFmpeg's encoder fully drains and
+// stdout has effectively no stale data by resume time.  Any leftover frame
+// shows valid content (last weather/loading slide) and is harmless to send.
+const maxFlushWindow = 0
 
 // ResetFlushWindow restarts the flush window from now.  Called right before
 // ff.Resume() so the window starts from the actual resume moment, not the

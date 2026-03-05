@@ -522,6 +522,17 @@ var mp3SilenceFrame = func() []byte {
 	return frame
 }()
 
+// PrefillSilence writes n MP3 silence frames to pw synchronously.
+// Call this before ff.Resume() so FFmpeg has audio data in its pipe
+// buffer the instant it wakes up.
+func PrefillSilence(pw *os.File, n int) {
+	for i := 0; i < n; i++ {
+		if _, err := pw.Write(mp3SilenceFrame); err != nil {
+			return
+		}
+	}
+}
+
 // PumpSilence writes MP3 silence frames to pw at ~26ms intervals until
 // stop is closed or a write error occurs.  This keeps FFmpeg's pipe:3
 // audio input fed so it produces MPEG-TS output immediately while the
