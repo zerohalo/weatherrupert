@@ -200,7 +200,7 @@ Request: /stream?zip=90210
     │                           • Hourly forecast          │
     │                           • Precipitation            │
     │                           • 7-day forecast           │
-    │                           • Moon & tides             │
+    │                           • Moon & tides / phase     │
     │                           • Night sky planets        │
     │                           • Solar weather            │
     │                           • Satellite imagery        │
@@ -423,6 +423,8 @@ Running `docker compose up` without the overlay works exactly as before — no R
 ## Notes
 
 - **Not for public hosting** — WeatherRupert has no authentication, no TLS, and no rate limiting. It is designed to run on a trusted home or internal network behind a firewall. Do not expose it directly to the internet.
+
+- **Moon & Tides vs. Moon Phase** — At startup, WeatherRupert looks for the nearest NOAA tide station within 100 miles of the location. If one is found, the slide shows "Moon & Tides" with a tide prediction chart alongside the moon phase. For inland locations with no nearby tide station, the slide shows "Moon Phase" only with a larger moon display.
 
 - **City name in guide vs. slides** — The XMLTV guide (`/guide.xml`) and M3U playlist (`/playlist.m3u`) always use the city and state from the embedded ZIP code database (e.g. "Beverly Hills, CA"). The on-screen weather slides may show a slightly different locality resolved from the NWS API during bootstrap — for example, NWS might return "Los Angeles" for the same ZIP because that's the nearest observation station. This is intentional: the guide stays consistent and instantly available, while the slides reflect what NWS considers the local forecast area.
 
