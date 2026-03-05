@@ -466,7 +466,11 @@ Running `docker compose up` without the overlay works exactly as before — no R
 
 ## Acknowledgments
 
-Architecture and design by me. Implementation built with heavy assistance from [Claude Code](https://claude.ai/claude-code) — Anthropic's AI coding tool. From rapid iteration and bug hunting to the bulk of the heavy lifting, it made a project of this scope genuinely feasible as a solo effort in a short amount of time.
+Inspired by [WS4KP](https://github.com/netbymatt/ws4kp) and [ws4channels](https://github.com/rice9797/ws4channels) — WS4KP for its faithful WeatherStar 4000 recreation, and ws4channels for the idea of serving it as an IPTV channel.
+
+Architecture and design by me. A good majority of the code was written with [Claude Code](https://claude.ai/claude-code) from Anthropic, which handled the bulk of the implementation, iteration, and bug hunting — making a project of this scope practical as a solo effort.
+
+The default music streams ship with [SomaFM](https://somafm.com/) stations. I've been listening to SomaFM for years — they're listener-supported independent radio with no ads. If you enjoy the music, consider [supporting them](https://somafm.com/support/).
 
 ---
 
