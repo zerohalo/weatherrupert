@@ -10,7 +10,7 @@ import (
 // and reads via Location() (simulating the admin dashboard) to verify the
 // locationMu fix prevents data races. Run with -race.
 func TestLocationRace(t *testing.T) {
-	c := NewClient("http://localhost", 40.0, -105.0, "Initial, CO", 4, 120, nil, nil)
+	c := NewClient("http://localhost", 40.0, -105.0, "Initial, CO", 4, 120, nil, nil, nil)
 
 	var wg sync.WaitGroup
 	// Goroutine 1: simulate bootstrap writing location.

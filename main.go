@@ -152,6 +152,19 @@ func main() {
 		return store.UnitSystem()
 	}
 
+	// tzParam returns the IANA timezone name from a request's ?tz= parameter,
+	// falling back to "" (which the manager resolves to time.Local).
+	tzParam := func(r *http.Request) string {
+		tz := r.URL.Query().Get("tz")
+		if tz == "" {
+			return ""
+		}
+		if _, err := time.LoadLocation(tz); err != nil {
+			return ""
+		}
+		return tz
+	}
+
 	// GET /playlist.m3u?zip=90210[&clock=12|24]
 	mux.HandleFunc("GET /playlist.m3u", func(w http.ResponseWriter, r *http.Request) {
 		zip := r.URL.Query().Get("zip")
@@ -166,6 +179,7 @@ func main() {
 		}
 		clock := clockParam(r)
 		units := unitsParam(r)
+		tz := tzParam(r)
 
 		location := fmt.Sprintf("%s, %s", loc.City, loc.State)
 
@@ -178,11 +192,15 @@ func main() {
 			host = fmt.Sprintf("localhost:%d", cfg.Port)
 		}
 		channelID := "weather-" + loc.ZipCode
+		tzQuery := ""
+		if tz != "" {
+			tzQuery = "&tz=" + url.QueryEscape(tz)
+		}
 		var streamURL string
 		if r.URL.Query().Get("format") == "hls" {
-			streamURL = fmt.Sprintf("%s://%s/live.m3u8?zip=%s&clock=%s&units=%s", scheme, host, loc.ZipCode, clock, units)
+			streamURL = fmt.Sprintf("%s://%s/live.m3u8?zip=%s&clock=%s&units=%s%s", scheme, host, loc.ZipCode, clock, units, tzQuery)
 		} else {
-			streamURL = fmt.Sprintf("%s://%s/stream?zip=%s&clock=%s&units=%s", scheme, host, loc.ZipCode, clock, units)
+			streamURL = fmt.Sprintf("%s://%s/stream?zip=%s&clock=%s&units=%s%s", scheme, host, loc.ZipCode, clock, units, tzQuery)
 		}
 		baseURL := fmt.Sprintf("%s://%s", scheme, host)
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
@@ -221,7 +239,8 @@ func main() {
 		}
 		clock := clockParam(r)
 		units := unitsParam(r)
-		p, err := mgr.Get(zip, clock, units)
+		tz := tzParam(r)
+		p, err := mgr.Get(zip, clock, units, tz)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -238,7 +257,8 @@ func main() {
 		}
 		clock := clockParam(r)
 		units := unitsParam(r)
-		p, err := mgr.Get(zip, clock, units)
+		tz := tzParam(r)
+		p, err := mgr.Get(zip, clock, units, tz)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -255,7 +275,8 @@ func main() {
 		}
 		clock := clockParam(r)
 		units := unitsParam(r)
-		p, err := mgr.Get(zip, clock, units)
+		tz := tzParam(r)
+		p, err := mgr.Get(zip, clock, units, tz)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -272,10 +293,11 @@ func main() {
 		}
 		clock := clockParam(r)
 		units := unitsParam(r)
+		tz := tzParam(r)
 
 		// Try existing pipeline first (no side effects).
 		var pngData []byte
-		if p := mgr.Peek(zip, clock, units); p != nil {
+		if p := mgr.Peek(zip, clock, units, tz); p != nil {
 			var err error
 			pngData, err = p.rnd.RenderPreview()
 			if err != nil {
@@ -289,7 +311,7 @@ func main() {
 			pngData = cached
 		} else {
 			// No pipeline and no cache — spin one up to get a preview.
-			p, err := mgr.Get(zip, clock, units)
+			p, err := mgr.Get(zip, clock, units, tz)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return

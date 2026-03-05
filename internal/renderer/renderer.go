@@ -99,7 +99,11 @@ func New(w, h, frameRate int, label string,
 	getTriviaItems func() []trivia.TriviaItem, getTriviaDuration func() time.Duration, getTriviaInterval func() int, getTriviaRandomize func() bool,
 	getPlanetLiveAlways func() bool,
 	use24h bool, useMetric bool,
+	loc *time.Location,
 ) *Renderer {
+	if loc == nil {
+		loc = time.Local
+	}
 	fonts := newFontSet()
 	return &Renderer{
 		w:                w,
@@ -111,10 +115,10 @@ func New(w, h, frameRate int, label string,
 		out:              out,
 		fonts:            fonts,
 		weatherSlides: []weatherSlideEntry{
-			{name: "alerts", fn: NewSlideAlerts(use24h, fonts), skip: func(d *weather.WeatherData) bool { return len(d.Alerts) == 0 }},
-			{name: "current-conditions", fn: NewSlideCurrentConditions(use24h, useMetric, fonts)},
-			{name: "hourly-forecast", fn: NewSlideHourlyForecast(use24h, useMetric, fonts)},
-			{name: "precipitation", fn: NewSlidePrecipitation(use24h, useMetric, fonts), skip: func() func(*weather.WeatherData) bool {
+			{name: "alerts", fn: NewSlideAlerts(use24h, loc, fonts), skip: func(d *weather.WeatherData) bool { return len(d.Alerts) == 0 }},
+			{name: "current-conditions", fn: NewSlideCurrentConditions(use24h, useMetric, loc, fonts)},
+			{name: "hourly-forecast", fn: NewSlideHourlyForecast(use24h, useMetric, loc, fonts)},
+			{name: "precipitation", fn: NewSlidePrecipitation(use24h, useMetric, loc, fonts), skip: func() func(*weather.WeatherData) bool {
 				noPrecipCount := 0
 				return func(d *weather.WeatherData) bool {
 					// Check if any hourly period has precipitation probability > 0.
@@ -134,19 +138,19 @@ func New(w, h, frameRate int, label string,
 					return noPrecipCount%2 == 0
 				}
 			}()},
-			{name: "extended-forecast", fn: NewSlideExtendedForecast(use24h, useMetric, fonts)},
-			{name: "moon-tides", fn: NewSlideMoonTides(use24h, useMetric, fonts)},
-			{name: "night-sky", fn: NewSlideNightSky(use24h, useMetric, getPlanetLiveAlways, fonts)},
-			{name: "solar-weather", fn: NewSlideSolarWeather(use24h, useMetric, fonts), skip: func(d *weather.WeatherData) bool {
+			{name: "extended-forecast", fn: NewSlideExtendedForecast(use24h, useMetric, loc, fonts)},
+			{name: "moon-tides", fn: NewSlideMoonTides(use24h, useMetric, loc, fonts)},
+			{name: "night-sky", fn: NewSlideNightSky(use24h, useMetric, loc, getPlanetLiveAlways, fonts)},
+			{name: "solar-weather", fn: NewSlideSolarWeather(use24h, useMetric, loc, fonts), skip: func(d *weather.WeatherData) bool {
 				return d.Solar == nil || (d.Solar.SunspotImage == nil && d.Solar.CoronaImage == nil)
 			}},
-			{name: "satellite", fn: NewSlideSatellite(use24h, fonts), skip: func(d *weather.WeatherData) bool { return len(d.SatelliteFrames) == 0 }},
-			{name: "radar", fn: NewSlideRadar(use24h, fonts)},
+			{name: "satellite", fn: NewSlideSatellite(use24h, loc, fonts), skip: func(d *weather.WeatherData) bool { return len(d.SatelliteFrames) == 0 }},
+			{name: "radar", fn: NewSlideRadar(use24h, loc, fonts)},
 		},
 		specialSlides: []specialSlideEntry{
 			{
 				name:        "announcements",
-				fn:          NewSlideAnnouncements(getAnnouncements, getAnnDuration, use24h, fonts),
+				fn:          NewSlideAnnouncements(getAnnouncements, getAnnDuration, use24h, loc, fonts),
 				getInterval: getAnnInterval,
 				skip: func() bool {
 					today := time.Now().Format("01-02")
@@ -158,7 +162,7 @@ func New(w, h, frameRate int, label string,
 					return true
 				},
 			},
-			{name: "trivia", fn: NewSlideTrivia(getTriviaItems, getTriviaDuration, getTriviaRandomize, use24h, fonts), getInterval: getTriviaInterval},
+			{name: "trivia", fn: NewSlideTrivia(getTriviaItems, getTriviaDuration, getTriviaRandomize, use24h, loc, fonts), getInterval: getTriviaInterval},
 		},
 		hasClients: hasClients,
 		slideStart: time.Now(),

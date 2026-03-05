@@ -54,6 +54,9 @@ type Client struct {
 	// Satellite settings.
 	getSatelliteProduct func() string // "IR" or "VIS"; called on each fetch
 
+	// Timezone for this pipeline's time display.
+	loc *time.Location
+
 	// Solar weather state (fetched independently on a long interval).
 	solarData atomic.Pointer[SolarData]
 
@@ -62,7 +65,7 @@ type Client struct {
 }
 
 // NewClient creates a new weather client. Bootstrap must be called before Run or Current.
-func NewClient(baseURL string, lat, lon float64, location string, frames int, radius float64, getSatelliteProduct func() string, httpClient *http.Client) *Client {
+func NewClient(baseURL string, lat, lon float64, location string, frames int, radius float64, getSatelliteProduct func() string, httpClient *http.Client, loc *time.Location) *Client {
 	if frames <= 0 {
 		frames = 4
 	}
@@ -75,6 +78,9 @@ func NewClient(baseURL string, lat, lon float64, location string, frames int, ra
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 15 * time.Second}
 	}
+	if loc == nil {
+		loc = time.Local
+	}
 	return &Client{
 		baseURL:             baseURL,
 		lat:                 lat,
@@ -84,6 +90,7 @@ func NewClient(baseURL string, lat, lon float64, location string, frames int, ra
 		radius:              radius,
 		getSatelliteProduct: getSatelliteProduct,
 		http:                httpClient,
+		loc:                 loc,
 		wake:                make(chan struct{}, 1),
 	}
 }
@@ -430,7 +437,7 @@ func (c *Client) fetch(ctx context.Context) (*WeatherData, error) {
 	// Fetch tide predictions if a nearby station was found (best-effort).
 	var tideData *TideData
 	if c.nearestTide != nil {
-		now := time.Now().Local()
+		now := time.Now().In(c.loc)
 		const tideRetries = 3
 		var preds []TidePrediction
 		var tideErr error

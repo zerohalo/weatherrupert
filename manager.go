@@ -177,18 +177,21 @@ func (m *Manager) ActivePipelines() []admin.PipelineInfo {
 
 // Lookup returns an existing pipeline for the given parameters without creating
 // one. Returns nil if no matching pipeline exists.
-func (m *Manager) Lookup(zip, clockFormat, units string) *Pipeline {
+func (m *Manager) Lookup(zip, clockFormat, units, tz string) *Pipeline {
 	if clockFormat != config.ClockFormat12h && clockFormat != config.ClockFormat24h {
 		clockFormat = config.ClockFormat24h
 	}
 	if units != config.UnitsImperial && units != config.UnitsMetric {
 		units = config.UnitsImperial
 	}
+	if tz == "" {
+		tz = time.Local.String()
+	}
 	loc, err := geo.Lookup(zip)
 	if err != nil {
 		return nil
 	}
-	key := loc.ZipCode + "#" + clockFormat + "#" + units
+	key := loc.ZipCode + "#" + clockFormat + "#" + units + "#" + tz
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -196,16 +199,27 @@ func (m *Manager) Lookup(zip, clockFormat, units string) *Pipeline {
 }
 
 // Get returns the pipeline for the given ZIP code and clock format, creating it
-// on first call. Subsequent calls for the same (ZIP, clockFormat) pair return
-// the cached pipeline immediately. clockFormat must be "12" or "24"; any other
-// value is normalised to "24". An error is returned only if the ZIP is invalid.
-func (m *Manager) Get(zip, clockFormat, units string) (*Pipeline, error) {
+// on first call. Subsequent calls for the same (ZIP, clockFormat, units, tz)
+// tuple return the cached pipeline immediately. clockFormat must be "12" or
+// "24"; any other value is normalised to "24". tz is an IANA timezone name
+// (e.g. "America/New_York"); empty or invalid values fall back to time.Local.
+// An error is returned only if the ZIP is invalid.
+func (m *Manager) Get(zip, clockFormat, units, tz string) (*Pipeline, error) {
 	if clockFormat != config.ClockFormat12h && clockFormat != config.ClockFormat24h {
 		clockFormat = config.ClockFormat24h
 	}
 	if units != config.UnitsImperial && units != config.UnitsMetric {
 		units = config.UnitsImperial
 	}
+	// Validate timezone; fall back to time.Local for empty/invalid values.
+	tzLoc := time.Local
+	if tz != "" {
+		if parsed, err := time.LoadLocation(tz); err == nil {
+			tzLoc = parsed
+		}
+	}
+	tzName := tzLoc.String()
+
 	// Validate the ZIP against the database before acquiring the lock,
 	// so bad ZIPs fail fast without holding the mutex.
 	loc, err := geo.Lookup(zip)
@@ -213,7 +227,7 @@ func (m *Manager) Get(zip, clockFormat, units string) (*Pipeline, error) {
 		return nil, fmt.Errorf("unknown ZIP code %q", zip)
 	}
 
-	key := loc.ZipCode + "#" + clockFormat + "#" + units
+	key := loc.ZipCode + "#" + clockFormat + "#" + units + "#" + tzName
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -222,7 +236,7 @@ func (m *Manager) Get(zip, clockFormat, units string) (*Pipeline, error) {
 		return p, nil
 	}
 
-	p, err := m.start(loc, clockFormat, units)
+	p, err := m.start(loc, clockFormat, units, tzLoc)
 	if err != nil {
 		return nil, err
 	}
@@ -231,20 +245,26 @@ func (m *Manager) Get(zip, clockFormat, units string) (*Pipeline, error) {
 }
 
 // Peek returns an existing pipeline for the given ZIP without creating one.
-// It first tries the exact clock/units match, then falls back to any pipeline
+// It first tries the exact clock/units/tz match, then falls back to any pipeline
 // for the same ZIP. Returns nil if no pipeline exists.
-func (m *Manager) Peek(zip, clockFormat, units string) *Pipeline {
+func (m *Manager) Peek(zip, clockFormat, units, tz string) *Pipeline {
 	if clockFormat != config.ClockFormat12h && clockFormat != config.ClockFormat24h {
 		clockFormat = config.ClockFormat24h
 	}
 	if units != config.UnitsImperial && units != config.UnitsMetric {
 		units = config.UnitsImperial
 	}
+	tzName := time.Local.String()
+	if tz != "" {
+		if parsed, err := time.LoadLocation(tz); err == nil {
+			tzName = parsed.String()
+		}
+	}
 	loc, err := geo.Lookup(zip)
 	if err != nil {
 		return nil
 	}
-	key := loc.ZipCode + "#" + clockFormat + "#" + units
+	key := loc.ZipCode + "#" + clockFormat + "#" + units + "#" + tzName
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -253,7 +273,7 @@ func (m *Manager) Peek(zip, clockFormat, units string) *Pipeline {
 	if p, ok := m.pipelines[key]; ok {
 		return p
 	}
-	// Any pipeline for this ZIP (different clock/units variant).
+	// Any pipeline for this ZIP (different clock/units/tz variant).
 	prefix := loc.ZipCode + "#"
 	for k, p := range m.pipelines {
 		if len(k) > len(prefix) && k[:len(prefix)] == prefix {
@@ -289,9 +309,9 @@ func (m *Manager) StoreCachedPreview(zip string, png []byte) {
 // start launches all goroutines for a new pipeline. The pipeline is returned
 // immediately; weather bootstrapping runs in the background so the stream
 // begins serving a "Loading..." slide right away. clockFormat is "12" or "24".
-func (m *Manager) start(loc geo.Location, clockFormat, units string) (*Pipeline, error) {
+func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time.Location) (*Pipeline, error) {
 	cityLabel := fmt.Sprintf("%s, %s", loc.City, loc.State)
-	wc := weather.NewClient(m.cfg.WeatherAPIURL, loc.Lat, loc.Lon, cityLabel, m.cfg.Frames, m.cfg.Radius, m.store.SatelliteProduct, m.httpClient)
+	wc := weather.NewClient(m.cfg.WeatherAPIURL, loc.Lat, loc.Lon, cityLabel, m.cfg.Frames, m.cfg.Radius, m.store.SatelliteProduct, m.httpClient, tzLoc)
 
 	// Resolve the music source for this pipeline:
 	//   1. MUSIC_STREAM_URL env var (single-URL pin) takes priority.
@@ -481,7 +501,8 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string) (*Pipeline,
 		m.store.Announcements, m.store.AnnouncementDuration, m.store.AnnouncementInterval,
 		m.store.TriviaItems, m.store.TriviaDuration, m.store.TriviaInterval, m.store.TriviaRandomize,
 		m.store.PlanetLiveAlways,
-		use24h, useMetric)
+		use24h, useMetric,
+		tzLoc)
 	go func() {
 		if err := p.rnd.Run(ctx); err != nil && ctx.Err() == nil {
 			log.Printf("pipeline %s: renderer: %v", loc.ZipCode, err)

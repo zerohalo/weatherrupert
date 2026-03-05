@@ -42,8 +42,8 @@ func main() {
 			VisibilityMi: fp(10),
 			UpdatedAt:    now,
 		},
-		HourlyPeriods: makeHourly(now),
-		DailyPeriods:  makeDaily(now),
+		HourlyPeriods:  makeHourly(now),
+		DailyPeriods:   makeDaily(now),
 		MoonPhase:      weather.ComputeMoonPhase(now),
 		PrecipTotal24h: 12.7,
 		SnowTotal24h:   50.8,
@@ -54,31 +54,31 @@ func main() {
 		slide renderer.SlideFunc
 		tweak func(*weather.WeatherData)
 	}{
-		{"alerts", renderer.NewSlideAlerts(false, nil), func(d *weather.WeatherData) {
+		{"alerts", renderer.NewSlideAlerts(false, nil, nil), func(d *weather.WeatherData) {
 			d.Alerts = makeAlerts(now)
 		}},
-		{"local-conditions", renderer.NewSlideCurrentConditions(false, false, nil), func(d *weather.WeatherData) {
+		{"local-conditions", renderer.NewSlideCurrentConditions(false, false, nil, nil), func(d *weather.WeatherData) {
 			d.Alerts = nil
 		}},
-		{"hourly-forecast", renderer.NewSlideHourlyForecast(false, false, nil), nil},
-		{"precipitation", renderer.NewSlidePrecipitation(false, false, nil), nil},
-		{"extended-forecast", renderer.NewSlideExtendedForecast(false, false, nil), nil},
-		{"moon-tides", renderer.NewSlideMoonTides(false, false, nil), func(d *weather.WeatherData) {
+		{"hourly-forecast", renderer.NewSlideHourlyForecast(false, false, nil, nil), nil},
+		{"precipitation", renderer.NewSlidePrecipitation(false, false, nil, nil), nil},
+		{"extended-forecast", renderer.NewSlideExtendedForecast(false, false, nil, nil), nil},
+		{"moon-tides", renderer.NewSlideMoonTides(false, false, nil, nil), func(d *weather.WeatherData) {
 			d.TideData = makeTideData(now)
 		}},
-		{"moon-phase", renderer.NewSlideMoonTides(false, false, nil), func(d *weather.WeatherData) {
+		{"moon-phase", renderer.NewSlideMoonTides(false, false, nil, nil), func(d *weather.WeatherData) {
 			d.TideData = nil
 		}},
-		{"night-sky", renderer.NewSlideNightSky(false, false, nil, nil), func(d *weather.WeatherData) {
+		{"night-sky", renderer.NewSlideNightSky(false, false, nil, nil, nil), func(d *weather.WeatherData) {
 			d.Planets = makePlanetData(now)
 		}},
-		{"solar-weather", renderer.NewSlideSolarWeather(false, false, nil), func(d *weather.WeatherData) {
+		{"solar-weather", renderer.NewSlideSolarWeather(false, false, nil, nil), func(d *weather.WeatherData) {
 			d.Solar = makeSolarData()
 		}},
-		{"satellite", renderer.NewSlideSatellite(false, nil), func(d *weather.WeatherData) {
+		{"satellite", renderer.NewSlideSatellite(false, nil, nil), func(d *weather.WeatherData) {
 			d.SatelliteFrames = makeSatelliteFrames()
 		}},
-		{"radar", renderer.NewSlideRadar(false, nil), func(d *weather.WeatherData) {
+		{"radar", renderer.NewSlideRadar(false, nil, nil), func(d *weather.WeatherData) {
 			d.RadarFrames = makeRadarFrames()
 		}},
 	}
@@ -110,7 +110,7 @@ func main() {
 	for _, ts := range triviaScreenshots {
 		item := ts.item
 		getItems := func() []trivia.TriviaItem { return []trivia.TriviaItem{item} }
-		slide := renderer.NewSlideTrivia(getItems, getTrivDur, func() bool { return false }, false, nil)
+		slide := renderer.NewSlideTrivia(getItems, getTrivDur, func() bool { return false }, false, nil, nil)
 
 		dc := gg.NewContext(1280, 720)
 		slide(dc, data, ts.elapsed, triviaDur)
@@ -178,16 +178,16 @@ func makeHourly(base time.Time) []weather.ForecastPeriod {
 		t := base.Add(time.Duration(i) * time.Hour)
 		prob := precipProbs[i]
 		periods[i] = weather.ForecastPeriod{
-			Number:        i + 1,
-			Name:          "",
-			StartTime:     t.Format(time.RFC3339),
-			EndTime:       t.Add(time.Hour).Format(time.RFC3339),
-			IsDaytime:     t.Hour() >= 6 && t.Hour() < 20,
-			Temperature:   temps[i],
+			Number:          i + 1,
+			Name:            "",
+			StartTime:       t.Format(time.RFC3339),
+			EndTime:         t.Add(time.Hour).Format(time.RFC3339),
+			IsDaytime:       t.Hour() >= 6 && t.Hour() < 20,
+			Temperature:     temps[i],
 			TemperatureUnit: "F",
-			WindSpeed:     "8 mph",
-			WindDirection: "NW",
-			ShortForecast: conditions[i],
+			WindSpeed:       "8 mph",
+			WindDirection:   "NW",
+			ShortForecast:   conditions[i],
 		}
 		periods[i].ProbabilityOfPrecipitation.Value = &prob
 	}
@@ -196,8 +196,8 @@ func makeHourly(base time.Time) []weather.ForecastPeriod {
 
 func makeDaily(base time.Time) []weather.ForecastPeriod {
 	type dayNight struct {
-		dayName, dayFc   string
-		dayTemp          int
+		dayName, dayFc     string
+		dayTemp            int
 		nightName, nightFc string
 		nightTemp          int
 	}
@@ -217,28 +217,28 @@ func makeDaily(base time.Time) []weather.ForecastPeriod {
 		nightStart := dayStart.Add(12 * time.Hour)
 
 		periods = append(periods, weather.ForecastPeriod{
-			Number:        len(periods) + 1,
-			Name:          f.dayName,
-			StartTime:     dayStart.Format(time.RFC3339),
-			EndTime:       nightStart.Format(time.RFC3339),
-			IsDaytime:     true,
-			Temperature:   f.dayTemp,
+			Number:          len(periods) + 1,
+			Name:            f.dayName,
+			StartTime:       dayStart.Format(time.RFC3339),
+			EndTime:         nightStart.Format(time.RFC3339),
+			IsDaytime:       true,
+			Temperature:     f.dayTemp,
 			TemperatureUnit: "F",
-			WindSpeed:     "10 mph",
-			WindDirection: "W",
-			ShortForecast: f.dayFc,
+			WindSpeed:       "10 mph",
+			WindDirection:   "W",
+			ShortForecast:   f.dayFc,
 		})
 		periods = append(periods, weather.ForecastPeriod{
-			Number:        len(periods) + 1,
-			Name:          f.nightName,
-			StartTime:     nightStart.Format(time.RFC3339),
-			EndTime:       nightStart.Add(12 * time.Hour).Format(time.RFC3339),
-			IsDaytime:     false,
-			Temperature:   f.nightTemp,
+			Number:          len(periods) + 1,
+			Name:            f.nightName,
+			StartTime:       nightStart.Format(time.RFC3339),
+			EndTime:         nightStart.Add(12 * time.Hour).Format(time.RFC3339),
+			IsDaytime:       false,
+			Temperature:     f.nightTemp,
 			TemperatureUnit: "F",
-			WindSpeed:     "5 mph",
-			WindDirection: "NW",
-			ShortForecast: f.nightFc,
+			WindSpeed:       "5 mph",
+			WindDirection:   "NW",
+			ShortForecast:   f.nightFc,
 		})
 	}
 	return periods

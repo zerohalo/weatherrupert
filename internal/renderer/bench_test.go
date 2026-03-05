@@ -172,7 +172,7 @@ func TestRenderPreviewRace(t *testing.T) {
 	data := mockData()
 
 	// Minimal mock weather client that returns canned data.
-	wc := weather.NewClient("http://localhost", 40.0, -105.0, "Test, CO", 4, 120, nil, nil)
+	wc := weather.NewClient("http://localhost", 40.0, -105.0, "Test, CO", 4, 120, nil, nil, nil)
 	// Store data via the exported test helper.
 	wc.StoreData(data)
 
@@ -183,6 +183,7 @@ func TestRenderPreviewRace(t *testing.T) {
 		func() []trivia.TriviaItem { return nil }, func() time.Duration { return time.Second }, func() int { return 0 }, func() bool { return false },
 		func() bool { return false },
 		false, false,
+		nil,
 	)
 
 	var wg sync.WaitGroup
@@ -220,38 +221,38 @@ func benchSlide(b *testing.B, slide SlideFunc, data *weather.WeatherData) {
 
 func BenchmarkSlideCurrentConditions(b *testing.B) {
 	data := mockData()
-	benchSlide(b, NewSlideCurrentConditions(false, false, defaultFonts), data)
+	benchSlide(b, NewSlideCurrentConditions(false, false, nil, defaultFonts), data)
 }
 
 func BenchmarkSlideHourlyForecast(b *testing.B) {
 	data := mockData()
-	benchSlide(b, NewSlideHourlyForecast(false, false, defaultFonts), data)
+	benchSlide(b, NewSlideHourlyForecast(false, false, nil, defaultFonts), data)
 }
 
 func BenchmarkSlidePrecipitation(b *testing.B) {
 	data := mockData()
-	benchSlide(b, NewSlidePrecipitation(false, false, defaultFonts), data)
+	benchSlide(b, NewSlidePrecipitation(false, false, nil, defaultFonts), data)
 }
 
 func BenchmarkSlideExtendedForecast(b *testing.B) {
 	data := mockData()
-	benchSlide(b, NewSlideExtendedForecast(false, false, defaultFonts), data)
+	benchSlide(b, NewSlideExtendedForecast(false, false, nil, defaultFonts), data)
 }
 
 func BenchmarkSlideMoonTides(b *testing.B) {
 	data := mockData()
-	benchSlide(b, NewSlideMoonTides(false, false, defaultFonts), data)
+	benchSlide(b, NewSlideMoonTides(false, false, nil, defaultFonts), data)
 }
 
 func BenchmarkSlideMoonPhase(b *testing.B) {
 	data := mockData()
 	data.TideData = nil
-	benchSlide(b, NewSlideMoonTides(false, false, defaultFonts), data)
+	benchSlide(b, NewSlideMoonTides(false, false, nil, defaultFonts), data)
 }
 
 func BenchmarkSlideAlerts(b *testing.B) {
 	data := mockData()
-	benchSlide(b, NewSlideAlerts(false, defaultFonts), data)
+	benchSlide(b, NewSlideAlerts(false, nil, defaultFonts), data)
 }
 
 func BenchmarkSlideAnnouncements(b *testing.B) {
@@ -263,6 +264,7 @@ func BenchmarkSlideAnnouncements(b *testing.B) {
 		func() []ann.Announcement { return anns },
 		func() time.Duration { return 10 * time.Second },
 		false,
+		nil,
 		defaultFonts,
 	)
 	benchSlide(b, slide, data)
@@ -278,6 +280,7 @@ func BenchmarkSlideTrivia(b *testing.B) {
 		func() time.Duration { return 20 * time.Second },
 		func() bool { return false },
 		false,
+		nil,
 		defaultFonts,
 	)
 	benchSlide(b, slide, data)
@@ -287,6 +290,6 @@ func BenchmarkDrawBackground(b *testing.B) {
 	dc := gg.NewContext(1280, 720)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		drawBackground(dc, "LOCAL CONDITIONS", "Denver, CO", false, defaultFonts)
+		drawBackground(dc, "LOCAL CONDITIONS", "Denver, CO", false, nil, defaultFonts)
 	}
 }
