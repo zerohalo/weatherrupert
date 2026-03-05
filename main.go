@@ -112,9 +112,9 @@ func main() {
 
 	cpuSampler := sysstat.NewCPUSampler()
 	defer cpuSampler.Stop()
-	store.SetSystemStatsSource(func() (loadAvg [3]float64, cpuPct float64) {
+	store.SetSystemStatsSource(func() (loadAvg [3]float64, cpuPct float64, cpuCores float64) {
 		l1, l5, l15, _ := sysstat.LoadAvg()
-		return [3]float64{l1, l5, l15}, cpuSampler.Usage()
+		return [3]float64{l1, l5, l15}, cpuSampler.Usage(), cpuSampler.Cores()
 	})
 
 	favicon, err := renderer.RenderFavicon()

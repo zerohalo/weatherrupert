@@ -6,6 +6,7 @@ package sysstat
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,10 +31,13 @@ func LoadAvg() (load1, load5, load15 float64, err error) {
 }
 
 // CPUSampler periodically reads container CPU time from cgroup v2/v1
-// and computes a usage percentage between samples.
+// and computes a usage percentage between samples. The percentage is
+// relative to the container's allocated CPU cores (e.g. cpus: "2.0"
+// fully used = 100%), falling back to host core count if no limit is set.
 type CPUSampler struct {
 	mu      sync.Mutex
 	pct     float64 // latest CPU percentage, or -1 if unavailable
+	cores   float64 // allocated CPU cores (from cgroup quota or host)
 	stop    chan struct{}
 	stopped chan struct{}
 }
@@ -50,12 +54,19 @@ func NewCPUSampler() *CPUSampler {
 	return s
 }
 
-// Usage returns the latest container CPU usage as a percentage (e.g. 45.2
-// for 45.2%). Returns -1 if cgroup files are not available.
+// Usage returns the latest container CPU usage as a percentage of allocated
+// cores (e.g. 45.2 for 45.2%). Returns -1 if cgroup files are not available.
 func (s *CPUSampler) Usage() float64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.pct
+}
+
+// Cores returns the number of CPU cores allocated to the container.
+func (s *CPUSampler) Cores() float64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.cores
 }
 
 // Stop terminates the background sampling goroutine.
@@ -73,6 +84,11 @@ func (s *CPUSampler) run() {
 	}
 	prevTime := time.Now()
 
+	cores := readCPUCores()
+	s.mu.Lock()
+	s.cores = cores
+	s.mu.Unlock()
+
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
@@ -89,7 +105,8 @@ func (s *CPUSampler) run() {
 				continue
 			}
 			deltaCPU := curUsec - prevUsec
-			pct := float64(deltaCPU) / float64(deltaWall) * 100.0
+			// Normalize to allocated cores: 100% = all allocated cores fully used.
+			pct := float64(deltaCPU) / float64(deltaWall) / cores * 100.0
 
 			s.mu.Lock()
 			s.pct = pct
@@ -129,4 +146,37 @@ func readCPUUsec() (int64, bool) {
 	}
 
 	return 0, false
+}
+
+// readCPUCores returns the number of CPU cores allocated to the container.
+// It reads the cgroup v2 quota first, then falls back to v1, then to the
+// host's total core count if no limit is configured.
+func readCPUCores() float64 {
+	// cgroup v2: /sys/fs/cgroup/cpu.max contains "quota period" (e.g. "200000 100000" = 2.0 cores)
+	// or "max 100000" if unlimited.
+	if data, err := os.ReadFile("/sys/fs/cgroup/cpu.max"); err == nil {
+		fields := strings.Fields(strings.TrimSpace(string(data)))
+		if len(fields) >= 2 && fields[0] != "max" {
+			quota, err1 := strconv.ParseFloat(fields[0], 64)
+			period, err2 := strconv.ParseFloat(fields[1], 64)
+			if err1 == nil && err2 == nil && period > 0 {
+				return quota / period
+			}
+		}
+	}
+
+	// cgroup v1: /sys/fs/cgroup/cpu/cpu.cfs_quota_us and cpu.cfs_period_us
+	// quota = -1 means unlimited.
+	if qData, err := os.ReadFile("/sys/fs/cgroup/cpu/cpu.cfs_quota_us"); err == nil {
+		if pData, err := os.ReadFile("/sys/fs/cgroup/cpu/cpu.cfs_period_us"); err == nil {
+			quota, err1 := strconv.ParseFloat(strings.TrimSpace(string(qData)), 64)
+			period, err2 := strconv.ParseFloat(strings.TrimSpace(string(pData)), 64)
+			if err1 == nil && err2 == nil && quota > 0 && period > 0 {
+				return quota / period
+			}
+		}
+	}
+
+	// No cgroup limit — fall back to host core count.
+	return float64(runtime.NumCPU())
 }

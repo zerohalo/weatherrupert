@@ -144,8 +144,9 @@ type Store struct {
 	// getAPIStats returns lifetime API byte/request counters.
 	getAPIStats func() []apistats.ServiceStat
 
-	// getSystemStats returns host load average and container CPU percentage.
-	getSystemStats func() (loadAvg [3]float64, cpuPct float64)
+	// getSystemStats returns host load average, container CPU percentage,
+	// and the number of CPU cores allocated to the container.
+	getSystemStats func() (loadAvg [3]float64, cpuPct float64, cpuCores float64)
 }
 
 // NewStore creates a Store with initial data from the given slices and defaults.
@@ -200,7 +201,7 @@ func (s *Store) SetAPIStatsSource(fn func() []apistats.ServiceStat) {
 }
 
 // SetSystemStatsSource wires the dashboard to a live system stats query function.
-func (s *Store) SetSystemStatsSource(fn func() (loadAvg [3]float64, cpuPct float64)) {
+func (s *Store) SetSystemStatsSource(fn func() (loadAvg [3]float64, cpuPct float64, cpuCores float64)) {
 	s.mu.Lock()
 	s.getSystemStats = fn
 	s.mu.Unlock()
@@ -944,12 +945,12 @@ func (s *Store) handlePipelinesJSON(w http.ResponseWriter, r *http.Request) {
 	fn := s.getSystemStats
 	s.mu.RUnlock()
 	if fn != nil {
-		loadAvg, cpuPct := fn()
+		loadAvg, cpuPct, cpuCores := fn()
 		resp["loadAvg"] = fmt.Sprintf("%.2f %.2f %.2f", loadAvg[0], loadAvg[1], loadAvg[2])
 		if cpuPct < 0 {
 			resp["cpuPct"] = "N/A"
 		} else {
-			resp["cpuPct"] = fmt.Sprintf("%.1f%%", cpuPct)
+			resp["cpuPct"] = fmt.Sprintf("%.1f%% of %.1f cores", cpuPct, cpuCores)
 		}
 	}
 	data, _ := json.Marshal(resp)
@@ -1056,12 +1057,12 @@ func (s *Store) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	sysFn := s.getSystemStats
 	s.mu.RUnlock()
 	if sysFn != nil {
-		la, cpu := sysFn()
+		la, cpu, cores := sysFn()
 		if la != [3]float64{} {
 			loadAvgStr = fmt.Sprintf("%.2f %.2f %.2f", la[0], la[1], la[2])
 		}
 		if cpu >= 0 {
-			cpuPctStr = fmt.Sprintf("%.1f%%", cpu)
+			cpuPctStr = fmt.Sprintf("%.1f%% of %.1f cores", cpu, cores)
 		}
 	}
 
