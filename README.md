@@ -1,6 +1,6 @@
 # WeatherRupert
 
-A Go application that streams a retro WeatherStar 4000-style weather channel into any IPTV application — [Channels DVR](https://getchannels.com), Plex, Emby, Jellyfin, TiviMate, or any player that supports M3U/XMLTV. It serves an M3U playlist, XMLTV guide, live MPEG-TS video stream, and HLS — all driven by a ZIP code in the request URL.
+A Go application that streams a retro WeatherStar(ish)-style weather channel into any IPTV application — [Channels DVR](https://getchannels.com), Plex, Emby, Jellyfin, TiviMate, or any player that supports M3U/XMLTV. It serves an M3U playlist, XMLTV guide, live MPEG-TS video stream, and HLS — all driven by a ZIP code in the request URL.
 
 No headless browser. No Puppeteer. No WS4KP required. No API keys needed — all data comes from free public sources (NWS, NOAA, Iowa Mesonet, NASA SDO, Open Trivia DB).
 
