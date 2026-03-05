@@ -250,25 +250,50 @@ func drawSun(dc *gg.Context, cx, cy, size float64) {
 	dc.Fill()
 }
 
-// drawMoon draws a white crescent moon using circle-subtraction.
+// drawMoon draws a white crescent moon by tracing only the crescent path,
+// leaving the background untouched where the dark side would be.
 func drawMoon(dc *gg.Context, cx, cy, size float64) {
-	r := size * 0.30
+	drawCrescent(dc, cx, cy, size*0.30, 0.95, 0.95, 0.80)
+}
 
-	// Full disc
-	dc.SetRGB(0.95, 0.95, 0.80)
-	dc.DrawCircle(cx, cy, r)
+// drawCrescent traces a crescent moon path (the area inside the moon disc
+// but outside an offset overlay disc of equal radius) and fills it.
+func drawCrescent(dc *gg.Context, cx, cy, r, cr, cg, cb float64) {
+	// Overlay offset — controls crescent thickness.
+	ox, oy := r*0.55, -r*0.15
+	d := math.Hypot(ox, oy)
+
+	// Angles where the two equal-radius circles intersect.
+	lineAngle := math.Atan2(oy, ox)
+	halfAngle := math.Acos(d / (2 * r))
+
+	moonUpper := lineAngle + halfAngle
+	moonLower := lineAngle - halfAngle
+	overUpper := lineAngle + math.Pi - halfAngle
+	overLower := lineAngle + math.Pi + halfAngle
+
+	const steps = 64
+	dc.NewSubPath()
+
+	// Outer arc: moon circle from upper intersection, counter-clockwise
+	// through the left side, to lower intersection (the long way).
+	sweep := moonLower + 2*math.Pi - moonUpper
+	for i := 0; i <= steps; i++ {
+		a := moonUpper + sweep*float64(i)/float64(steps)
+		dc.LineTo(cx+r*math.Cos(a), cy+r*math.Sin(a))
+	}
+
+	// Inner arc: overlay circle from lower intersection back to upper
+	// (the short way, clockwise).
+	sweep2 := overUpper - overLower
+	for i := 0; i <= steps; i++ {
+		a := overLower + sweep2*float64(i)/float64(steps)
+		dc.LineTo(cx+ox+r*math.Cos(a), cy+oy+r*math.Sin(a))
+	}
+
+	dc.ClosePath()
+	dc.SetRGB(cr, cg, cb)
 	dc.Fill()
-
-	// Clip to the moon disc so the overlay can't bleed into the background.
-	dc.DrawCircle(cx, cy, r)
-	dc.Clip()
-
-	// Overlay an offset disc in the background color to carve the crescent.
-	dc.SetRGB(bgR, bgG, bgB)
-	dc.DrawCircle(cx+r*0.55, cy-r*0.15, r)
-	dc.Fill()
-
-	dc.ResetClip()
 }
 
 // drawCloudShape draws a cloud made of overlapping circles with a flat base.
@@ -318,17 +343,8 @@ func drawPartlyCloudy(dc *gg.Context, cx, cy, size float64, night bool) {
 	br := size * 0.22
 
 	if night {
-		// Moon
-		dc.SetRGB(0.95, 0.95, 0.80)
-		dc.DrawCircle(bx, by, br)
-		dc.Fill()
-		// Clip to moon disc so overlay doesn't bleed into background.
-		dc.DrawCircle(bx, by, br)
-		dc.Clip()
-		dc.SetRGB(bgR, bgG, bgB)
-		dc.DrawCircle(bx+br*0.55, by-br*0.15, br)
-		dc.Fill()
-		dc.ResetClip()
+		// Moon crescent — only the lit part is drawn.
+		drawCrescent(dc, bx, by, br, 0.95, 0.95, 0.80)
 	} else {
 		// Rays
 		dc.SetRGB(hlR, hlG, 0)
@@ -435,17 +451,30 @@ func drawSnow(dc *gg.Context, cx, cy, size float64) {
 	drawCloudShape(dc, cx, cloudCY, size*0.80, 0.78, 0.84, 0.90)
 
 	dc.SetRGB(0.55, 0.78, 1.0)
-	dc.SetLineWidth(size * 0.045)
-	flakeY := cloudCY + size*0.38
-	flakeR := size * 0.07
+	dc.SetLineWidth(size * 0.035)
+	flakeR := size * 0.05
 
-	for _, fx := range []float64{cx - size*0.22, cx, cx + size*0.22} {
-		// 3-axis asterisk (0°, 60°, 120°)
+	// Top row: 3 flakes
+	row1Y := cloudCY + size*0.35
+	for _, fx := range []float64{cx - size*0.18, cx, cx + size*0.18} {
 		for i := 0; i < 3; i++ {
 			a := float64(i) * math.Pi / 3
 			dc.DrawLine(
-				fx+flakeR*math.Cos(a), flakeY+flakeR*math.Sin(a),
-				fx-flakeR*math.Cos(a), flakeY-flakeR*math.Sin(a),
+				fx+flakeR*math.Cos(a), row1Y+flakeR*math.Sin(a),
+				fx-flakeR*math.Cos(a), row1Y-flakeR*math.Sin(a),
+			)
+			dc.Stroke()
+		}
+	}
+
+	// Bottom row: 2 flakes, staggered between the top row
+	row2Y := row1Y + size*0.16
+	for _, fx := range []float64{cx - size*0.09, cx + size*0.09} {
+		for i := 0; i < 3; i++ {
+			a := float64(i) * math.Pi / 3
+			dc.DrawLine(
+				fx+flakeR*math.Cos(a), row2Y+flakeR*math.Sin(a),
+				fx-flakeR*math.Cos(a), row2Y-flakeR*math.Sin(a),
 			)
 			dc.Stroke()
 		}
@@ -477,9 +506,20 @@ func drawSleet(dc *gg.Context, cx, cy, size float64) {
 	dc.DrawLine(rx-sleetSlant, dropTopY, rx+sleetSlant, dropTopY+sleetLen)
 	dc.Stroke()
 
-	// Ice pellet dot centered between the two streaks, nudged up.
+	// Ice pellet dots angled to match the rain streaks, centered between them.
+	// The rain streaks slant from (-slant, 0) to (+slant, len), so the angle is:
+	// dx/dy = (2*slant)/len per unit of vertical distance.
+	midX := (lx + rx) / 2
+	pelletR := size * 0.04
+	slopeX := (2 * sleetSlant) / sleetLen // horizontal shift per unit of vertical
+	y1 := dropTopY + size*0.06
+	y2 := dropTopY + size*0.19
+	x1 := midX + (y1-dropTopY)*slopeX - sleetSlant
+	x2 := midX + (y2-dropTopY)*slopeX - sleetSlant
 	dc.SetRGB(0.80, 0.92, 1.0)
-	dc.DrawCircle((lx+rx)/2, dropTopY+size*0.08, size*0.075)
+	dc.DrawCircle(x1, y1, pelletR)
+	dc.Fill()
+	dc.DrawCircle(x2, y2, pelletR)
 	dc.Fill()
 }
 
@@ -504,39 +544,44 @@ func drawFog(dc *gg.Context, cx, cy, size float64) {
 func drawWindy(dc *gg.Context, cx, cy, size float64) {
 	dc.SetLineWidth(size * 0.075)
 
-	type swoosh struct {
-		sx, sy, cp1x, cp1y, cp2x, cp2y, ex, ey float64
+	// One canonical S-curve, scaled horizontally for each line.
+	// All lines share the same wave shape; shorter lines just end sooner.
+	type wind struct {
+		w     float64 // horizontal scale (1.0 = full width)
+		yOff  float64 // vertical offset from cy
+		alpha float64
+	}
+	lines := []wind{
+		{1.0, -size * 0.20, 1.0},
+		{0.78, size * 0.02, 0.80},
+		{0.56, size * 0.22, 0.60},
 	}
 
-	lines := []swoosh{
-		// Top — long, sweeping right
-		{
-			cx - size*0.44, cy - size*0.20,
-			cx - size*0.10, cy - size*0.38,
-			cx + size*0.18, cy - size*0.10,
-			cx + size*0.44, cy - size*0.22,
-		},
-		// Middle — shorter
-		{
-			cx - size*0.44, cy + size*0.02,
-			cx - size*0.12, cy - size*0.16,
-			cx + size*0.12, cy + size*0.06,
-			cx + size*0.30, cy + size*0.00,
-		},
-		// Bottom — shortest
-		{
-			cx - size*0.44, cy + size*0.22,
-			cx - size*0.18, cy + size*0.10,
-			cx + size*0.06, cy + size*0.28,
-			cx + size*0.22, cy + size*0.22,
-		},
-	}
+	// Canonical curve: starts at left edge, S-curves right.
+	// Defined as offsets from center, scaled by w.
+	// All lines start at the same left edge. The canonical S-curve is
+	// defined at full width; shorter lines trace the same curve but end sooner.
+	fullW := size * 0.88 // total width of the longest line
+	startX := cx - size*0.44
+	amp := size * 0.12 // wave amplitude
 
-	for i, l := range lines {
-		alpha := 1.0 - float64(i)*0.20
-		dc.SetRGBA(0.78, 0.90, 1.0, alpha)
-		dc.MoveTo(l.sx, l.sy)
-		dc.CubicTo(l.cp1x, l.cp1y, l.cp2x, l.cp2y, l.ex, l.ey)
+	for _, l := range lines {
+		w := fullW * l.w
+		yc := cy + l.yOff
+
+		sx := startX
+		sy := yc
+		// Control points placed at 1/3 and 2/3 of the line's width.
+		cp1x := startX + w*0.33
+		cp1y := yc - amp
+		cp2x := startX + w*0.67
+		cp2y := yc + amp
+		ex := startX + w
+		ey := yc
+
+		dc.SetRGBA(0.78, 0.90, 1.0, l.alpha)
+		dc.MoveTo(sx, sy)
+		dc.CubicTo(cp1x, cp1y, cp2x, cp2y, ex, ey)
 		dc.Stroke()
 	}
 }
