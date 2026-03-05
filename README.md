@@ -76,7 +76,6 @@ Optional query parameters:
 |---|---|---|---|
 | `clock` | all except `/health` | `12`, `24` | 12- or 24-hour time display (default: 24) |
 | `units` | all except `/health` | `imperial`, `metric` | Unit system — imperial (°F, mph, mi, inHg) or metric (°C, km/h, km, hPa) (default: imperial) |
-| `tz` | all except `/health` | IANA timezone name | Timezone for time display, e.g. `America/New_York`, `Europe/London` (default: `TZ` env var) |
 | `format` | `/playlist.m3u` only | `hls` | Generates a channel-list M3U pointing to the HLS stream instead of MPEG-TS |
 
 Defaults for `clock` and `units` can be changed in the admin settings panel. The `tz` parameter defaults to the `TZ` environment variable, allowing per-pipeline timezone overrides without changing the server-wide setting.
