@@ -37,9 +37,8 @@ type Hub struct {
 	// activatedAt / flushUntil bracket the post-resume discard window.
 	// Chunks arriving before flushUntil are discarded, draining stale
 	// data from FFmpeg's pipe buffer after a SIGCONT resume.
-	activatedAt    time.Time
-	flushUntil     time.Time
-	firstChunkSent bool // reset on activation; logs first broadcast for timing
+	activatedAt time.Time
+	flushUntil  time.Time
 
 	// OnActive is called (without lock held) when the first client connects.
 	// OnIdle is called (without lock held) when the last client disconnects.
@@ -47,11 +46,10 @@ type Hub struct {
 	OnIdle   func()
 }
 
-// maxFlushWindow caps the post-resume discard window.  The renderer stops
-// writing while there are no clients, so FFmpeg's encoder fully drains and
-// stdout has effectively no stale data by resume time.  Any leftover frame
-// shows valid content (last weather/loading slide) and is harmless to send.
-const maxFlushWindow = 0
+// maxFlushWindow caps the flush duration at the audio thread queue capacity.
+// Each MP3 packet is ~26ms; AudioThreadQueueSize packets plus 300ms margin
+// for the muxer to flush the interleaved output.
+const maxFlushWindow = time.Duration(AudioThreadQueueSize)*26*time.Millisecond + 300*time.Millisecond
 
 // ResetFlushWindow restarts the flush window from now.  Called right before
 // ff.Resume() so the window starts from the actual resume moment, not the
@@ -60,7 +58,6 @@ func (h *Hub) ResetFlushWindow() {
 	h.mu.Lock()
 	h.activatedAt = time.Now()
 	h.flushUntil = h.activatedAt.Add(maxFlushWindow)
-	h.firstChunkSent = false
 	h.mu.Unlock()
 }
 
@@ -142,12 +139,6 @@ func (h *Hub) broadcast(chunk []byte) {
 	// a flash of old frames before fresh content arrives.
 	if !h.flushUntil.IsZero() && time.Now().Before(h.flushUntil) {
 		return
-	}
-
-	if !h.firstChunkSent && !h.activatedAt.IsZero() {
-		h.firstChunkSent = true
-		log.Printf("stream: first chunk from ffmpeg %dms after resume (%d bytes)",
-			time.Since(h.activatedAt).Milliseconds(), len(chunk))
 	}
 
 	h.chunkCount.Add(1)
@@ -258,12 +249,10 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ch := h.Subscribe()
 	defer h.Unsubscribe(ch)
 
-	connectTime := time.Now()
 	log.Printf("stream: client connected from %s | User-Agent: %s | X-Forwarded-For: %s | Referer: %s",
 		r.RemoteAddr, r.UserAgent(), r.Header.Get("X-Forwarded-For"), r.Header.Get("Referer"))
 	defer log.Printf("stream: client disconnected from %s", r.RemoteAddr)
 
-	firstWrite := true
 	for {
 		select {
 		case <-r.Context().Done():
@@ -271,11 +260,6 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		case chunk, ok := <-ch:
 			if !ok {
 				return
-			}
-			if firstWrite {
-				firstWrite = false
-				log.Printf("stream: first bytes to client %dms after connect (%d bytes)",
-					time.Since(connectTime).Milliseconds(), len(chunk))
 			}
 			if _, err := w.Write(chunk); err != nil {
 				if errors.Is(err, io.ErrClosedPipe) || r.Context().Err() != nil {

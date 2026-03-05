@@ -339,16 +339,6 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string) (*Pipeline,
 		}
 	}
 
-	// Pre-fill the audio pipe with MP3 silence frames BEFORE starting FFmpeg
-	// so it can probe the MP3 format during its init window.  Without this,
-	// FFmpeg gets SIGSTOP'd before probing completes and must redo it on
-	// every SIGCONT, adding ~400ms to the first-output latency.
-	if relay != nil && relayPipe != nil {
-		if pw := relay.WritePipe(relayPipe); pw != nil {
-			stream.PrefillSilence(pw, 20) // ~520ms of audio for format probing
-		}
-	}
-
 	ff, err := stream.Start(m.cfg.Width, m.cfg.Height, m.cfg.FrameRate, music, loc.ZipCode, m.cfg.VideoMaxRate)
 	if err != nil {
 		if relayPipe != nil {
@@ -356,18 +346,6 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string) (*Pipeline,
 		}
 		return nil, fmt.Errorf("ffmpeg for ZIP %s: %w", loc.ZipCode, err)
 	}
-
-	// Prime FFmpeg by writing one black video frame so x264 fully initializes
-	// (encoder context, rate control, muxer) before we suspend.  Without this,
-	// x264 cold-starts on the first SIGCONT and adds ~200-400ms to first output.
-	// The encoded output goes to stdout where Hub.Run will discard it (no clients).
-	primerDone := make(chan struct{})
-	go func() {
-		ff.Stdin().Write(make([]byte, m.cfg.Width*m.cfg.Height*4)) // black RGBA frame
-		close(primerDone)
-	}()
-	<-primerDone                       // FFmpeg consumed the frame data
-	time.Sleep(100 * time.Millisecond) // let encoder + muxer finish processing
 
 	// Start FFmpeg suspended — it will be resumed by the hub's OnActive
 	// callback when the first viewer connects. This prevents the music stream
@@ -443,28 +421,20 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string) (*Pipeline,
 		p.relayMu.Unlock()
 		if curRelay != nil && curPipe != nil {
 			curRelay.SetActive(curPipe, true)
+			// Block until relay has an active HTTP connection so ffmpeg
+			// doesn't produce video-only output during the audio gap.
+			waitCtx, waitCancel := context.WithTimeout(ctx, 5*time.Second)
+			defer waitCancel()
+			if err := curRelay.WaitConnected(waitCtx); err != nil {
+				log.Printf("pipeline %s: music relay wait: %v (resuming without audio)", loc.ZipCode, err)
+			}
 			// Drain stale audio from the OS pipe kernel buffer while
 			// ffmpeg is still frozen so it starts with fresh audio.
 			curRelay.DrainPipe(curPipe)
-			// Pre-fill the audio pipe with silence frames so FFmpeg has
-			// audio data the instant it resumes — no muxer stall.
-			silenceStop := make(chan struct{})
-			pw := curRelay.WritePipe(curPipe)
-			if pw != nil {
-				stream.PrefillSilence(pw, 20) // ~520ms of audio in pipe buffer
-				go stream.PumpSilence(pw, silenceStop)
-			}
-			// Wait for relay connection in the background, then stop the
-			// silence pump so real music takes over seamlessly.
-			go func() {
-				waitCtx, waitCancel := context.WithTimeout(ctx, 5*time.Second)
-				defer waitCancel()
-				if err := curRelay.WaitConnected(waitCtx); err != nil {
-					log.Printf("pipeline %s: music relay wait: %v", loc.ZipCode, err)
-				}
-				close(silenceStop)
-			}()
 		}
+		// Reset the flush window so it starts from the actual resume
+		// moment, not the earlier Subscribe call which may have been
+		// seconds ago while waiting for the relay to connect.
 		hub.ResetFlushWindow()
 		if err := ff.Resume(); err != nil {
 			log.Printf("pipeline %s: ffmpeg resume: %v", loc.ZipCode, err)

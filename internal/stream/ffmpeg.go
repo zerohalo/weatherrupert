@@ -161,7 +161,7 @@ func buildArgs(width, height, frameRate int, music *MusicSource, videoMaxRate st
 		args = append(args, "-c:a", "aac", "-b:a", "128k")
 	}
 
-	args = append(args, "-flush_packets", "1", "-max_delay", "0", "-f", "mpegts", "pipe:1")
+	args = append(args, "-f", "mpegts", "pipe:1")
 
 	return args
 }
