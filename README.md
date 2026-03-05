@@ -194,20 +194,7 @@ Request: /stream?zip=90210
     │   /forecast/hourly → 12h periods    ▼                │
     │   /observations/latest    renderer.Renderer          │
     │                           (sbinet/gg 2D)             │
-    │                           10 weather slides:         │
-    │                           • Weather alerts           │
-    │                           • Current cond.            │
-    │                           • Hourly forecast          │
-    │                           • Precipitation            │
-    │                           • 7-day forecast           │
-    │                           • Moon & tides / phase     │
-    │                           • Night sky planets        │
-    │                           • Solar weather            │
-    │                           • Satellite imagery        │
-    │                           • Local radar              │
-    │                           + special slides:          │
-    │                           • Announcements            │
-    │                           • Trivia (MC & TF)         │
+    │                           weather + special slides  │
     │                                  │                   │
     │                            raw RGBA frames           │
     │                                  │                   │
@@ -342,6 +329,33 @@ go relay.writer()     → one per subscriber: reads channel → writes to OS pip
 **Procedural icons** — All weather icons (sun, moon, clouds, rain, snow, lightning, fog) are drawn algorithmically with 2D graphics primitives. No sprite sheets, no PNG assets. This keeps the binary self-contained and the icons resolution-independent.
 
 **HLS keyframe-aligned segments** — The HLS segmenter doesn't split on wall-clock time. It accumulates MPEG-TS data and splits at actual H.264 keyframe boundaries, ensuring every segment starts at a random access point. This prevents decode errors when clients join mid-stream.
+
+---
+
+## Slides
+
+The stream cycles through the following slides:
+
+| Slide | Description |
+|---|---|
+| Weather Alerts | Active NWS alerts for the area (only shown when alerts exist) |
+| Local Conditions | Current temperature, wind, humidity, and conditions |
+| Hourly Forecast | 12-hour forecast with icons and temperatures |
+| Precipitation | Chance-of-precipitation graph |
+| Extended Forecast | 7-day daily forecast |
+| Moon & Tides | Moon phase and NOAA tide predictions (coastal locations within 100 mi of a tide station) |
+| Moon Phase | Moon phase only (inland locations with no nearby tide station) |
+| Night Sky | Visible planet positions |
+| Solar Weather | SDO solar imagery and NOAA space weather metrics |
+| Satellite | Infrared or visible satellite imagery |
+| Radar | Local weather radar |
+
+Between weather cycles, optional special slides are inserted:
+
+| Slide | Description |
+|---|---|
+| Announcements | Scrolling text messages configured in the admin panel |
+| Trivia | Multiple-choice or true/false questions from Open Trivia DB or the admin panel |
 
 ---
 
