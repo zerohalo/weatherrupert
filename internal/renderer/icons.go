@@ -26,6 +26,8 @@ const (
 	iconSleet
 	iconFog
 	iconWindy
+	iconHail
+	iconTornado
 )
 
 // conditionIcon maps a free-text weather description to an iconType.
@@ -35,6 +37,8 @@ func conditionIcon(desc string, isDaytime bool) iconType {
 	switch {
 	case anyOf(s, "thunder", "lightning"):
 		return iconThunderstorm
+	case anyOf(s, "hail"):
+		return iconHail
 	case anyOf(s, "sleet", "freezing rain", "ice pellet", "wintry mix", "mixed rain", "ice"):
 		return iconSleet
 	case anyOf(s, "snow", "blizzard", "flurr"):
@@ -43,6 +47,8 @@ func conditionIcon(desc string, isDaytime bool) iconType {
 		return iconRain
 	case anyOf(s, "fog", "mist", "haze", "smoke", "dust"):
 		return iconFog
+	case anyOf(s, "tornado", "funnel"):
+		return iconTornado
 	case anyOf(s, "wind", "breezy", "blustery"):
 		return iconWindy
 	case anyOf(s, "mostly cloudy", "considerable cloud", "overcast"):
@@ -103,6 +109,10 @@ func drawIcon(dc *gg.Context, t iconType, cx, cy, size float64) {
 		drawFog(dc, cx, cy, size)
 	case iconWindy:
 		drawWindy(dc, cx, cy, size)
+	case iconHail:
+		drawHail(dc, cx, cy, size)
+	case iconTornado:
+		drawTornado(dc, cx, cy, size)
 	}
 }
 
@@ -584,6 +594,67 @@ func drawWindy(dc *gg.Context, cx, cy, size float64) {
 	}
 }
 
+// drawHail draws a gray cloud with five ice-blue hailstones below it.
+func drawHail(dc *gg.Context, cx, cy, size float64) {
+	cloudCY := cy - size*0.10
+	drawCloudShape(dc, cx, cloudCY, size*0.85, 0.65, 0.68, 0.72)
+
+	hailR := size * 0.055
+	dc.SetRGB(0.80, 0.92, 1.0)
+
+	// Top row: 3 hailstones
+	row1Y := cloudCY + size*0.35
+	for _, hx := range []float64{cx - size*0.18, cx, cx + size*0.18} {
+		dc.DrawCircle(hx, row1Y, hailR)
+		dc.Fill()
+	}
+
+	// Bottom row: 2 hailstones, staggered
+	row2Y := row1Y + size*0.18
+	for _, hx := range []float64{cx - size*0.09, cx + size*0.09} {
+		dc.DrawCircle(hx, row2Y, hailR)
+		dc.Fill()
+	}
+}
+
+// drawTornado draws a funnel shape using progressively narrower Bézier curves.
+func drawTornado(dc *gg.Context, cx, cy, size float64) {
+	dc.SetLineWidth(size * 0.07)
+
+	type funnel struct {
+		w     float64 // width scale
+		yOff  float64 // vertical offset from cy
+		alpha float64
+	}
+	lines := []funnel{
+		{1.0, -size * 0.30, 1.0},
+		{0.75, -size * 0.10, 0.90},
+		{0.50, size * 0.10, 0.75},
+		{0.30, size * 0.25, 0.60},
+		{0.15, size * 0.38, 0.45},
+	}
+
+	fullW := size * 0.70
+	amp := size * 0.08
+
+	for _, l := range lines {
+		w := fullW * l.w
+		yc := cy + l.yOff
+		sx := cx - w/2
+		ex := cx + w/2
+
+		cp1x := sx + w*0.33
+		cp1y := yc - amp
+		cp2x := sx + w*0.67
+		cp2y := yc + amp
+
+		dc.SetRGBA(0.78, 0.90, 1.0, l.alpha)
+		dc.MoveTo(sx, yc)
+		dc.CubicTo(cp1x, cp1y, cp2x, cp2y, ex, yc)
+		dc.Stroke()
+	}
+}
+
 // RenderIconSheet draws all weather condition icons in a grid and saves to path.
 func RenderIconSheet(path string) error {
 	type entry struct {
@@ -603,6 +674,8 @@ func RenderIconSheet(path string) error {
 		{iconSleet, "Sleet"},
 		{iconFog, "Fog"},
 		{iconWindy, "Windy"},
+		{iconHail, "Hail"},
+		{iconTornado, "Tornado"},
 	}
 
 	cols := 4
