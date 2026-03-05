@@ -253,7 +253,7 @@ func drawSun(dc *gg.Context, cx, cy, size float64) {
 // drawMoon draws a white crescent moon by tracing only the crescent path,
 // leaving the background untouched where the dark side would be.
 func drawMoon(dc *gg.Context, cx, cy, size float64) {
-	drawCrescent(dc, cx, cy, size*0.30, 0.95, 0.95, 0.80)
+	drawCrescent(dc, cx, cy, size*0.24, 0.95, 0.95, 0.80)
 }
 
 // drawCrescent traces a crescent moon path (the area inside the moon disc
@@ -374,19 +374,19 @@ func drawMostlyCloudy(dc *gg.Context, cx, cy, size float64) {
 	// Small sun peek
 	sunR := size * 0.15
 	sunX := cx + size*0.22
-	sunY := cy - size*0.18
+	sunY := cy - size*0.15
 	dc.SetRGB(hlR, hlG, 0)
 	dc.DrawCircle(sunX, sunY, sunR)
 	dc.Fill()
 
 	// Dominant gray cloud
-	drawCloudShape(dc, cx-size*0.04, cy+size*0.04, size*0.90, 0.78, 0.80, 0.84)
+	drawCloudShape(dc, cx-size*0.04, cy+size*0.07, size*0.90, 0.78, 0.80, 0.84)
 }
 
 // drawRain draws a cloud with three diagonal rain streaks below it.
 func drawRain(dc *gg.Context, cx, cy, size float64) {
 	cloudCY := cy - size*0.10
-	drawCloudShape(dc, cx, cloudCY, size*0.80, 0.65, 0.68, 0.78)
+	drawCloudShape(dc, cx, cloudCY, size*0.85, 0.65, 0.68, 0.78)
 
 	dc.SetRGB(divR, divG, divB)
 	dc.SetLineWidth(size * 0.06)
@@ -416,7 +416,7 @@ func drawRain(dc *gg.Context, cx, cy, size float64) {
 // drawThunderstorm draws a dark cloud, a yellow lightning bolt, and rain streaks.
 func drawThunderstorm(dc *gg.Context, cx, cy, size float64) {
 	cloudCY := cy - size*0.14
-	drawCloudShape(dc, cx, cloudCY, size*0.80, 0.45, 0.45, 0.55)
+	drawCloudShape(dc, cx, cloudCY, size*0.85, 0.45, 0.45, 0.55)
 
 	// Rain streaks — same style as drawRain (equidistant, nudged right).
 	boltY := cloudCY + size*0.27
@@ -448,7 +448,7 @@ func drawThunderstorm(dc *gg.Context, cx, cy, size float64) {
 // drawSnow draws a cloud with three snowflake asterisks beneath it.
 func drawSnow(dc *gg.Context, cx, cy, size float64) {
 	cloudCY := cy - size*0.10
-	drawCloudShape(dc, cx, cloudCY, size*0.80, 0.78, 0.84, 0.90)
+	drawCloudShape(dc, cx, cloudCY, size*0.85, 0.78, 0.84, 0.90)
 
 	dc.SetRGB(0.55, 0.78, 1.0)
 	dc.SetLineWidth(size * 0.035)
@@ -484,7 +484,7 @@ func drawSnow(dc *gg.Context, cx, cy, size float64) {
 // drawSleet draws a cloud with alternating rain streaks and ice pellet dots.
 func drawSleet(dc *gg.Context, cx, cy, size float64) {
 	cloudCY := cy - size*0.10
-	drawCloudShape(dc, cx, cloudCY, size*0.80, 0.65, 0.68, 0.72)
+	drawCloudShape(dc, cx, cloudCY, size*0.85, 0.65, 0.68, 0.72)
 
 	dropTopY := cloudCY + size*0.27
 
@@ -524,8 +524,8 @@ func drawSleet(dc *gg.Context, cx, cy, size float64) {
 // drawFog draws four rounded horizontal bars of decreasing opacity.
 func drawFog(dc *gg.Context, cx, cy, size float64) {
 	barH := size * 0.10
-	barW := size * 0.82
-	spacing := size * 0.20
+	barW := size * 0.65
+	spacing := size * 0.18
 	topY := cy - size*0.30
 
 	for i := 0; i < 4; i++ {
@@ -559,8 +559,8 @@ func drawWindy(dc *gg.Context, cx, cy, size float64) {
 	// Defined as offsets from center, scaled by w.
 	// All lines start at the same left edge. The canonical S-curve is
 	// defined at full width; shorter lines trace the same curve but end sooner.
-	fullW := size * 0.88 // total width of the longest line
-	startX := cx - size*0.44
+	fullW := size * 0.72 // total width of the longest line
+	startX := cx - size*0.36
 	amp := size * 0.12 // wave amplitude
 
 	for _, l := range lines {
