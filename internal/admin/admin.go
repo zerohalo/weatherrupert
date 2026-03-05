@@ -1067,7 +1067,7 @@ func (s *Store) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	body := fmt.Sprintf(`<p>At-a-glance status for active streams and content settings.</p>
-<p style="color:#888; margin:4px 0 16px">Uptime: <span id="uptime" style="color:#FFFF00">%s</span> | System Load: <span id="loadavg" style="color:#FFFF00">%s</span> | CPU: <span id="cpupct" style="color:#FFFF00">%s</span></p>
+<p style="color:#888; margin:4px 0 16px">Uptime: <span id="uptime" style="color:#FFFF00">%s</span> | Host Load: <span id="loadavg" style="color:#FFFF00">%s</span> | CPU: <span id="cpupct" style="color:#FFFF00">%s</span></p>
 <table style="max-width:560px">
 <tr><td colspan="2" style="color:#FFFF00; letter-spacing:1px; padding:10px 0 2px"><b>DISPLAY</b></td></tr>
 <tr><td>Clock format</td><td style="color:#FFFF00">%s</td></tr>
