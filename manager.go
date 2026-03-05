@@ -339,6 +339,16 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string) (*Pipeline,
 		}
 	}
 
+	// Pre-fill the audio pipe with MP3 silence frames BEFORE starting FFmpeg
+	// so it can probe the MP3 format during its init window.  Without this,
+	// FFmpeg gets SIGSTOP'd before probing completes and must redo it on
+	// every SIGCONT, adding ~400ms to the first-output latency.
+	if relay != nil && relayPipe != nil {
+		if pw := relay.WritePipe(relayPipe); pw != nil {
+			stream.PrefillSilence(pw, 20) // ~520ms of audio for format probing
+		}
+	}
+
 	ff, err := stream.Start(m.cfg.Width, m.cfg.Height, m.cfg.FrameRate, music, loc.ZipCode, m.cfg.VideoMaxRate)
 	if err != nil {
 		if relayPipe != nil {
@@ -346,6 +356,18 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string) (*Pipeline,
 		}
 		return nil, fmt.Errorf("ffmpeg for ZIP %s: %w", loc.ZipCode, err)
 	}
+
+	// Prime FFmpeg by writing one black video frame so x264 fully initializes
+	// (encoder context, rate control, muxer) before we suspend.  Without this,
+	// x264 cold-starts on the first SIGCONT and adds ~200-400ms to first output.
+	// The encoded output goes to stdout where Hub.Run will discard it (no clients).
+	primerDone := make(chan struct{})
+	go func() {
+		ff.Stdin().Write(make([]byte, m.cfg.Width*m.cfg.Height*4)) // black RGBA frame
+		close(primerDone)
+	}()
+	<-primerDone                       // FFmpeg consumed the frame data
+	time.Sleep(100 * time.Millisecond) // let encoder + muxer finish processing
 
 	// Start FFmpeg suspended — it will be resumed by the hub's OnActive
 	// callback when the first viewer connects. This prevents the music stream
