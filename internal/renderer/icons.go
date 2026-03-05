@@ -402,7 +402,7 @@ func drawSnow(dc *gg.Context, cx, cy, size float64) {
 	cloudCY := cy - size*0.10
 	drawCloudShape(dc, cx, cloudCY, size*0.80, 0.78, 0.84, 0.90)
 
-	dc.SetRGB(0.82, 0.94, 1.0)
+	dc.SetRGB(0.55, 0.78, 1.0)
 	dc.SetLineWidth(size * 0.055)
 	flakeY := cloudCY + size*0.32
 	flakeR := size * 0.10
