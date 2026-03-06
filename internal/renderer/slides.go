@@ -631,17 +631,22 @@ func slideExtendedForecast(dc *gg.Context, data *weather.WeatherData, use24h, us
 		dc.DrawRoundedRectangle(cardX, cardY, cardW, cardH, 4)
 		dc.Stroke()
 
-		// Day name — yellow, centered (60pt bold; keep clear of card top)
+		// Day name — yellow, centered
 		dc.SetFontFace(fonts.cardTitle)
-		drawShadowTextAnchored(dc, strings.ToUpper(c.name), cx, cardY+52, 0.5, 0.5, titleR, titleG, titleB)
+		drawShadowTextAnchored(dc, strings.ToUpper(c.name), cx, cardY+44, 0.5, 0.5, titleR, titleG, titleB)
 
-		// Condition text — white, one line, centered
+		// Condition text — white, up to 2 lines, centered
 		dc.SetFontFace(fonts.cardBody)
-		drawShadowTextAnchored(dc, truncate(strings.ToUpper(c.forecast), 22), cx, cardY+98, 0.5, 0.5, textR, textG, textB)
+		condLines := truncateLines(wrapText(strings.ToUpper(c.forecast), 22), 2)
+		condY := cardY + 80
+		for _, line := range condLines {
+			drawShadowTextAnchored(dc, line, cx, condY, 0.5, 0.5, textR, textG, textB)
+			condY += 24
+		}
 
-		// Weather icon — centered in the card's middle band, shifted down for larger header
+		// Weather icon — centered in the card's middle band
 		icon := conditionIcon(c.forecast, c.daytime)
-		drawIcon(dc, icon, cx, cardY+cardH*0.57, iconSize)
+		drawIcon(dc, icon, cx, cardY+cardH*0.60, iconSize)
 
 		// Temperature block — high and/or low
 		dc.SetFontFace(fonts.medium)

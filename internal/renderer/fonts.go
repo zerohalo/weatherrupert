@@ -26,7 +26,7 @@ type fontSet struct {
 	large      font.Face // 64pt bold    - hero temperature
 	hero       font.Face // 80pt bold    - local conditions temperature
 	title      font.Face // 33pt bold    - slide title bar
-	cardTitle  font.Face // 51pt bold    - day names in extended forecast cards
+	cardTitle  font.Face // 42pt bold    - day names in extended forecast cards
 }
 
 // newFontSet creates a fresh set of font faces from the embedded TTF bytes.
@@ -79,7 +79,7 @@ func newFontSet() *fontSet {
 		log.Fatalf("renderer: load fontTitle: %v", err)
 	}
 
-	fs.cardTitle, err = gg.LoadFontFaceFromBytes(inconsolataBoldTTF, 51)
+	fs.cardTitle, err = gg.LoadFontFaceFromBytes(inconsolataBoldTTF, 42)
 	if err != nil {
 		log.Fatalf("renderer: load fontCardTitle: %v", err)
 	}
