@@ -479,8 +479,12 @@ func slideHourlyForecast(dc *gg.Context, data *weather.WeatherData, use24h, useM
 
 		// Temperature label above the icon.
 		dc.SetFontFace(fonts.small)
+		labelY := y - iconSize/2 - 32
+		if labelY < 30 {
+			labelY = 30
+		}
 		drawShadowTextAnchored(dc, fmt.Sprintf("%.0f%s", temps[i], unit),
-			x, y-iconSize/2-32, 0.5, 1.0, hlR, hlG, hlB)
+			x, labelY, 0.5, 1.0, hlR, hlG, hlB)
 
 		// Weather icon centered on the data point (draws over the line).
 		icon := conditionIcon(p.ShortForecast, p.IsDaytime)
