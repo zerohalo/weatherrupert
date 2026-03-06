@@ -221,7 +221,7 @@ func main() {
 		}
 		location := fmt.Sprintf("%s, %s", loc.City, loc.State)
 		channelID := "weather-" + loc.ZipCode
-		data, err := guide.XMLTV(channelID, location, loc.ZipCode)
+		data, err := guide.XMLTV(channelID, location, loc.ZipCode, loc.Timezone)
 		if err != nil {
 			http.Error(w, "guide generation error", http.StatusInternalServerError)
 			return

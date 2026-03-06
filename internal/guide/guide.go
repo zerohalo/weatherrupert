@@ -62,11 +62,18 @@ type xmlLang struct {
 const xmltvTimeLayout = "20060102150405 -0700"
 
 // XMLTV generates XMLTV guide data with 24 hourly programme entries for the given channel.
-func XMLTV(channelID, location, zip string) ([]byte, error) {
+func XMLTV(channelID, location, zip, timezone string) ([]byte, error) {
 	chanName := "Local Weather"
 	city := cityOnly(location)
 	progTitle := city + " Local Weather"
 	now := time.Now().UTC().Truncate(time.Hour)
+
+	localTZ := time.UTC
+	if timezone != "" {
+		if tz, err := time.LoadLocation(timezone); err == nil {
+			localTZ = tz
+		}
+	}
 
 	var programmes []xmlProgramme
 	desc := fmt.Sprintf("Current conditions and forecast for %s %s", city, zip)
@@ -74,7 +81,7 @@ func XMLTV(channelID, location, zip string) ([]byte, error) {
 	for i := 0; i < 24; i++ {
 		start := now.Add(time.Duration(i) * time.Hour)
 		stop := start.Add(time.Hour)
-		hourDesc := fmt.Sprintf("%s (updated %s)", desc, start.Format("3 PM"))
+		hourDesc := fmt.Sprintf("%s (updated %s)", desc, start.In(localTZ).Format("3 PM"))
 		programmes = append(programmes, xmlProgramme{
 			Start:    start.Format(xmltvTimeLayout),
 			Stop:     stop.Format(xmltvTimeLayout),

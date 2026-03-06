@@ -28,7 +28,7 @@ func TestCityOnly(t *testing.T) {
 }
 
 func TestM3U(t *testing.T) {
-	result := M3U("42", "weather-90210", "Denver, CO", "http://host:9798/stream?zip=90210")
+	result := M3U("42", "weather-90210", "Denver, CO", "http://host:9798/stream?zip=90210", "http://host:9798", "90210", "12h", "imperial")
 
 	if !strings.HasPrefix(result, "#EXTM3U\n") {
 		t.Error("M3U should start with #EXTM3U header")
@@ -51,7 +51,7 @@ func TestM3U(t *testing.T) {
 }
 
 func TestXMLTVStructure(t *testing.T) {
-	data, err := XMLTV("weather-90210", "Denver, CO", "90210")
+	data, err := XMLTV("weather-90210", "Denver, CO", "90210", "America/Denver")
 	if err != nil {
 		t.Fatalf("XMLTV() error: %v", err)
 	}
@@ -67,7 +67,7 @@ func TestXMLTVStructure(t *testing.T) {
 }
 
 func TestXMLTVParsesAsValidXML(t *testing.T) {
-	data, err := XMLTV("weather-90210", "Denver, CO", "90210")
+	data, err := XMLTV("weather-90210", "Denver, CO", "90210", "America/Denver")
 	if err != nil {
 		t.Fatalf("XMLTV() error: %v", err)
 	}
@@ -94,7 +94,7 @@ func TestXMLTVParsesAsValidXML(t *testing.T) {
 }
 
 func TestXMLTV24Programmes(t *testing.T) {
-	data, err := XMLTV("weather-90210", "Denver, CO", "90210")
+	data, err := XMLTV("weather-90210", "Denver, CO", "90210", "America/Denver")
 	if err != nil {
 		t.Fatalf("XMLTV() error: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestXMLTV24Programmes(t *testing.T) {
 }
 
 func TestXMLTVProgrammeDescription(t *testing.T) {
-	data, err := XMLTV("weather-10001", "New York, NY", "10001")
+	data, err := XMLTV("weather-10001", "New York, NY", "10001", "America/New_York")
 	if err != nil {
 		t.Fatalf("XMLTV() error: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestXMLTVProgrammeDescription(t *testing.T) {
 }
 
 func TestXMLTVProgrammeTimesContiguous(t *testing.T) {
-	data, err := XMLTV("weather-90210", "Denver, CO", "90210")
+	data, err := XMLTV("weather-90210", "Denver, CO", "90210", "America/Denver")
 	if err != nil {
 		t.Fatalf("XMLTV() error: %v", err)
 	}
