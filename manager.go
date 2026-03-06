@@ -184,14 +184,17 @@ func (m *Manager) Lookup(zip, clockFormat, units, tz string) *Pipeline {
 	if units != config.UnitsImperial && units != config.UnitsMetric {
 		units = config.UnitsImperial
 	}
-	if tz == "" {
-		tz = time.Local.String()
-	}
 	loc, err := geo.Lookup(zip)
 	if err != nil {
 		return nil
 	}
-	key := loc.ZipCode + "#" + clockFormat + "#" + units + "#" + tz
+	tzName := loc.TimeLocation().String()
+	if tz != "" {
+		if parsed, err := time.LoadLocation(tz); err == nil {
+			tzName = parsed.String()
+		}
+	}
+	key := loc.ZipCode + "#" + clockFormat + "#" + units + "#" + tzName
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -211,21 +214,21 @@ func (m *Manager) Get(zip, clockFormat, units, tz string) (*Pipeline, error) {
 	if units != config.UnitsImperial && units != config.UnitsMetric {
 		units = config.UnitsImperial
 	}
-	// Validate timezone; fall back to time.Local for empty/invalid values.
-	tzLoc := time.Local
-	if tz != "" {
-		if parsed, err := time.LoadLocation(tz); err == nil {
-			tzLoc = parsed
-		}
-	}
-	tzName := tzLoc.String()
-
 	// Validate the ZIP against the database before acquiring the lock,
 	// so bad ZIPs fail fast without holding the mutex.
 	loc, err := geo.Lookup(zip)
 	if err != nil {
 		return nil, fmt.Errorf("unknown ZIP code %q", zip)
 	}
+
+	// Validate timezone; fall back to the ZIP's inferred timezone for empty/invalid values.
+	tzLoc := loc.TimeLocation()
+	if tz != "" {
+		if parsed, err := time.LoadLocation(tz); err == nil {
+			tzLoc = parsed
+		}
+	}
+	tzName := tzLoc.String()
 
 	key := loc.ZipCode + "#" + clockFormat + "#" + units + "#" + tzName
 
@@ -254,15 +257,15 @@ func (m *Manager) Peek(zip, clockFormat, units, tz string) *Pipeline {
 	if units != config.UnitsImperial && units != config.UnitsMetric {
 		units = config.UnitsImperial
 	}
-	tzName := time.Local.String()
+	loc, err := geo.Lookup(zip)
+	if err != nil {
+		return nil
+	}
+	tzName := loc.TimeLocation().String()
 	if tz != "" {
 		if parsed, err := time.LoadLocation(tz); err == nil {
 			tzName = parsed.String()
 		}
-	}
-	loc, err := geo.Lookup(zip)
-	if err != nil {
-		return nil
 	}
 	key := loc.ZipCode + "#" + clockFormat + "#" + units + "#" + tzName
 

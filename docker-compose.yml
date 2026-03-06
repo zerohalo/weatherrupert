@@ -17,7 +17,6 @@ services:
       WEATHER_REFRESH: ${WEATHER_REFRESH:-20m}
       SLIDE_DURATION: ${SLIDE_DURATION:-8s}
       MUSIC_DIR: /music
-      TZ: ${TZ:-America/New_York}
     volumes:
       - weatherrupert-data:/data
     # Uncomment to override music, announcements, or trivia with local files:

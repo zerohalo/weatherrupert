@@ -76,10 +76,10 @@ Optional query parameters:
 |---|---|---|---|
 | `clock` | all except `/health` | `12`, `24` | 12- or 24-hour time display (default: 24) |
 | `units` | all except `/health` | `imperial`, `metric` | Unit system — imperial (°F, mph, mi, inHg) or metric (°C, km/h, km, hPa) (default: imperial) |
-| `tz` | all except `/health` | IANA timezone name | Timezone for time display (default: `TZ` env var). Must be URL-encoded, e.g. `tz=America%2FNew_York` |
+| `tz` | all except `/health` | IANA timezone name | Timezone override for time display (default: inferred from ZIP code lat/lon). Must be URL-encoded, e.g. `tz=America%2FNew_York` |
 | `format` | `/playlist.m3u` only | `hls` | Generates a channel-list M3U pointing to the HLS stream instead of MPEG-TS |
 
-Defaults for `clock` and `units` can be changed in the admin settings panel. The `tz` parameter defaults to the `TZ` environment variable, allowing per-pipeline timezone overrides without changing the server-wide setting.
+Defaults for `clock` and `units` can be changed in the admin settings panel. The `tz` parameter defaults to the timezone inferred from each ZIP code's latitude and longitude, so pipelines in different timezones automatically show the correct local time.
 
 Multiple ZIP codes can run concurrently. Each ZIP gets its own independent pipeline, started on first request and cached for the life of the container.
 
@@ -100,7 +100,6 @@ All settings are environment variables. Copy `.env.example` to `.env` to overrid
 
 | Variable | Default | Description |
 |---|---|---|
-| `TZ` | `America/New_York` | Timezone for time display on slides |
 | `SLIDE_DURATION` | `8s` | How long each weather slide is shown before cycling |
 | `VIDEO_WIDTH` | `1280` | Output frame width in pixels |
 | `VIDEO_HEIGHT` | `720` | Output frame height in pixels |

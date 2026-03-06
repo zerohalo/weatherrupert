@@ -7,6 +7,9 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/ringsaturn/tzf"
 )
 
 //go:embed data/uszips.csv
@@ -14,17 +17,40 @@ var zipData embed.FS
 
 // Location holds the result of a ZIP code lookup.
 type Location struct {
-	ZipCode string
-	Lat     float64
-	Lon     float64
-	City    string
-	State   string
+	ZipCode  string
+	Lat      float64
+	Lon      float64
+	City     string
+	State    string
+	Timezone string // IANA timezone name inferred from lat/lon
+}
+
+// TimeLocation returns the *time.Location for this location's timezone.
+// Falls back to time.Local if the timezone cannot be loaded.
+func (loc Location) TimeLocation() *time.Location {
+	if loc.Timezone == "" {
+		return time.Local
+	}
+	tl, err := time.LoadLocation(loc.Timezone)
+	if err != nil {
+		return time.Local
+	}
+	return tl
 }
 
 // db is loaded once at package init.
 var db map[string]Location
 
+// tzFinder is the timezone finder, initialized once.
+var tzFinder tzf.F
+
 func init() {
+	var err error
+	tzFinder, err = tzf.NewDefaultFinder()
+	if err != nil {
+		panic(fmt.Sprintf("geo: failed to init timezone finder: %v", err))
+	}
+
 	db = make(map[string]Location, 40000)
 
 	f, err := zipData.Open("data/uszips.csv")
@@ -61,12 +87,15 @@ func init() {
 			continue
 		}
 
+		tz := tzFinder.GetTimezoneName(lon, lat)
+
 		db[zip] = Location{
-			ZipCode: zip,
-			Lat:     lat,
-			Lon:     lon,
-			City:    strings.TrimSpace(record[3]),
-			State:   strings.TrimSpace(record[4]),
+			ZipCode:  zip,
+			Lat:      lat,
+			Lon:      lon,
+			City:     strings.TrimSpace(record[3]),
+			State:    strings.TrimSpace(record[4]),
+			Timezone: tz,
 		}
 	}
 }
