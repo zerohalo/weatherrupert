@@ -79,6 +79,12 @@ Optional query parameters:
 | `tz` | all except `/health` | IANA timezone name | Timezone override for time display (default: inferred from ZIP code lat/lon). Must be URL-encoded, e.g. `tz=America%2FNew_York` |
 | `format` | `/playlist.m3u` only | `hls` | Generates a channel-list M3U pointing to the HLS stream instead of MPEG-TS |
 
+Example with all options:
+
+```
+http://<host>:9798/playlist.m3u?zip=90210&clock=12&units=metric&tz=America%2FLos_Angeles&format=hls
+```
+
 Defaults for `clock` and `units` can be changed in the admin settings panel. The `tz` parameter defaults to the timezone inferred from each ZIP code's latitude and longitude, so pipelines in different timezones automatically show the correct local time.
 
 Multiple ZIP codes can run concurrently. Each ZIP gets its own independent pipeline, started on first request and cached for the life of the container.
