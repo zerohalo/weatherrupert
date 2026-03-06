@@ -18,7 +18,7 @@ var inconsolataBoldTTF []byte
 // fontSet so that concurrent pipelines never share mutable glyph caches.
 type fontSet struct {
 	small      font.Face // 22pt regular - axis ticks, header sub-text
-	cardBody   font.Face // 23pt regular - condition text in extended forecast cards
+	cardBody   font.Face // 25pt regular - condition text in extended forecast cards
 	medium     font.Face // 32pt regular - hourly table values, announcements
 	mediumBold font.Face // 32pt bold    - right-column table labels
 	mediumXL   font.Face // 48pt regular - local conditions left-column text (wind, gusts, feels)
@@ -39,7 +39,7 @@ func newFontSet() *fontSet {
 		log.Fatalf("renderer: load fontSmall: %v", err)
 	}
 
-	fs.cardBody, err = gg.LoadFontFaceFromBytes(inconsolataRegularTTF, 23)
+	fs.cardBody, err = gg.LoadFontFaceFromBytes(inconsolataRegularTTF, 25)
 	if err != nil {
 		log.Fatalf("renderer: load fontCardBody: %v", err)
 	}
