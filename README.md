@@ -2,7 +2,7 @@
 
 A Go application that streams a retro WeatherStar(ish)-style weather channel into any IPTV application — [Channels DVR](https://getchannels.com), Plex, Emby, Jellyfin, TiviMate, or any player that supports M3U/XMLTV. It serves an M3U playlist, XMLTV guide, live MPEG-TS video stream, and HLS — all driven by a ZIP code in the request URL.
 
-No headless browser. No Puppeteer. No WS4KP required. No API keys needed — all data comes from free public sources (NWS, NOAA, Iowa Mesonet, NASA SDO, Open Trivia DB).
+**US locations only** (for now) — weather data comes from NWS (api.weather.gov), radar/satellite from Iowa Mesonet, and tides from NOAA, all of which cover the US exclusively. International location support is being considered for the future. No API keys needed — all data comes from free public sources (NWS, NOAA, Iowa Mesonet, NASA SDO, Open Trivia DB).
 
 Inspired by [WS4KP](https://github.com/netbymatt/ws4kp) and [ws4channels](https://github.com/rice9797/ws4channels). See [screenshots](#screenshots) below.
 
