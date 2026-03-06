@@ -74,12 +74,13 @@ func XMLTV(channelID, location, zip string) ([]byte, error) {
 	for i := 0; i < 24; i++ {
 		start := now.Add(time.Duration(i) * time.Hour)
 		stop := start.Add(time.Hour)
+		hourDesc := fmt.Sprintf("%s (updated %s)", desc, start.Format("3 PM"))
 		programmes = append(programmes, xmlProgramme{
 			Start:    start.Format(xmltvTimeLayout),
 			Stop:     stop.Format(xmltvTimeLayout),
 			Channel:  channelID,
 			Title:    xmlLang{Lang: "en", Value: progTitle},
-			Desc:     xmlLang{Lang: "en", Value: desc},
+			Desc:     xmlLang{Lang: "en", Value: hourDesc},
 			Category: xmlLang{Lang: "en", Value: "Weather"},
 		})
 	}
