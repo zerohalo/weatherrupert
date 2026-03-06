@@ -24,7 +24,7 @@ func M3U(channelNumber, channelID, location, streamURL, baseURL, zip, clock, uni
 	artURL := fmt.Sprintf("%s/preview?zip=%s&_=%d", baseURL, zip, time.Now().Unix())
 	return fmt.Sprintf("#EXTM3U\n#EXTINF:-1 channel-id=%q channel-number=%q tvg-id=%q tvg-name=%q"+
 		" tvg-logo=%q group-title=\"Weather\""+
-		" tvc-guide-placeholders=\"3600\" tvc-guide-genres=\"News\" tvc-guide-tags=\"HDTV,Live\""+
+		" tvc-guide-placeholders=\"3600\" tvc-guide-genres=\"News\" tvc-guide-tags=\"HDTV;Live\""+
 		" tvc-guide-art=%q tvc-stream-vcodec=\"h264\" tvc-stream-acodec=\"aac\""+
 		",%s\n%s\n",
 		channelID, channelNumber, channelID, chanName,
