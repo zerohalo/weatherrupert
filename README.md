@@ -200,7 +200,7 @@ Request: /stream?zip=90210
     │   /forecast/hourly → 12h periods    ▼                │
     │   /observations/latest    renderer.Renderer          │
     │                           (sbinet/gg 2D)             │
-    │                           weather + special slides  │
+    │                           weather + special slides   │
     │                                  │                   │
     │                            raw RGBA frames           │
     │                                  │                   │
