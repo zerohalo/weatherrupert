@@ -17,9 +17,40 @@ import (
 
 // TriviaItem is a single question/answer pair from trivia.csv.
 type TriviaItem struct {
-	Question string
-	Answer   string
-	Choices  []string // nil for Q&A-only items; 2–4 options (shuffled) for multiple choice
+	Question   string
+	Answer     string
+	Choices    []string  // nil for Q&A-only items; 2–4 options (shuffled) for multiple choice
+	CategoryID int       // 0 = unknown; 9–32 = Open Trivia DB category ID
+	Difficulty string    // "" = unknown; "easy", "medium", "hard"
+	FetchedAt  time.Time // when this item was fetched from the API (zero for non-API items)
+}
+
+// categoryNameToID maps Open Trivia DB category names to their numeric IDs.
+var categoryNameToID = map[string]int{
+	"General Knowledge":                     9,
+	"Entertainment: Books":                  10,
+	"Entertainment: Film":                   11,
+	"Entertainment: Music":                  12,
+	"Entertainment: Musicals & Theatres":    13,
+	"Entertainment: Television":             14,
+	"Entertainment: Video Games":            15,
+	"Entertainment: Board Games":            16,
+	"Science & Nature":                      17,
+	"Science: Computers":                    18,
+	"Science: Mathematics":                  19,
+	"Mythology":                             20,
+	"Sports":                                21,
+	"Geography":                             22,
+	"History":                               23,
+	"Politics":                              24,
+	"Art":                                   25,
+	"Celebrities":                           26,
+	"Animals":                               27,
+	"Vehicles":                              28,
+	"Entertainment: Comics":                 29,
+	"Science: Gadgets":                      30,
+	"Entertainment: Japanese Anime & Manga": 31,
+	"Entertainment: Cartoon & Animations":   32,
 }
 
 // defaults are 61 pre-populated trivia items shown when no trivia.csv is found.
@@ -192,6 +223,8 @@ func fetchFromURL(httpClient *http.Client, url string, batch int) ([]TriviaItem,
 	var result struct {
 		ResponseCode int `json:"response_code"`
 		Results      []struct {
+			Category         string   `json:"category"`
+			Difficulty       string   `json:"difficulty"`
 			Question         string   `json:"question"`
 			CorrectAnswer    string   `json:"correct_answer"`
 			IncorrectAnswers []string `json:"incorrect_answers"`
@@ -206,6 +239,7 @@ func fetchFromURL(httpClient *http.Client, url string, batch int) ([]TriviaItem,
 		return nil, fmt.Errorf("API returned code %d", result.ResponseCode)
 	}
 
+	now := time.Now()
 	var items []TriviaItem
 	for _, q := range result.Results {
 		choices := make([]string, 0, 4)
@@ -217,9 +251,12 @@ func fetchFromURL(httpClient *http.Client, url string, batch int) ([]TriviaItem,
 		rand.Shuffle(len(choices), func(i, j int) { choices[i], choices[j] = choices[j], choices[i] })
 
 		items = append(items, TriviaItem{
-			Question: strings.TrimSpace(html.UnescapeString(q.Question)),
-			Answer:   correct,
-			Choices:  choices,
+			Question:   strings.TrimSpace(html.UnescapeString(q.Question)),
+			Answer:     correct,
+			Choices:    choices,
+			CategoryID: categoryNameToID[q.Category],
+			Difficulty: q.Difficulty,
+			FetchedAt:  now,
 		})
 	}
 	return items, nil

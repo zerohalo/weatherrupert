@@ -82,26 +82,29 @@ type annJSON struct {
 // Announcements and Streams use json.RawMessage so loadFromDisk can handle
 // format migrations (legacy plain-string arrays vs current object arrays).
 type persistedData struct {
-	SlideDuration        string          `json:"slideDuration"`
-	AnnouncementDuration string          `json:"announcementDuration"`
-	AnnouncementInterval int             `json:"announcementInterval"`
-	TriviaDuration       string          `json:"triviaDuration"`
-	TriviaInterval       int             `json:"triviaInterval"`
-	TriviaRandomize      bool            `json:"triviaRandomize"`
-	TriviaAPI            *bool           `json:"triviaAPI,omitempty"`
-	TriviaAPIAmount      *int            `json:"triviaAPIAmount,omitempty"`
-	TriviaAPICategory    *int            `json:"triviaAPICategory,omitempty"`
-	TriviaAPIDifficulty  *string         `json:"triviaAPIDifficulty,omitempty"`
-	TriviaAPIRefresh     *string         `json:"triviaAPIRefresh,omitempty"`
-	TriviaBuiltin        *bool           `json:"triviaBuiltin,omitempty"`
-	PlanetLiveAlways     *bool           `json:"planetLiveAlways,omitempty"`
-	SatelliteProduct     string          `json:"satelliteProduct,omitempty"` // "IR" or "VIS"
-	ClockFormat          string          `json:"clockFormat,omitempty"`      // "12" or "24"
-	UnitSystem           string          `json:"unitSystem,omitempty"`       // "imperial" or "metric"
-	Streams              json.RawMessage `json:"streams,omitempty"`          // current: []StreamEntry
-	OldStreamURLs        []string        `json:"streamURLs,omitempty"`       // legacy: []string (read-only migration)
-	Announcements        json.RawMessage `json:"announcements,omitempty"`
-	Trivia               []triviaJSON    `json:"trivia"`
+	SlideDuration        string               `json:"slideDuration"`
+	AnnouncementDuration string               `json:"announcementDuration"`
+	AnnouncementInterval int                  `json:"announcementInterval"`
+	TriviaDuration       string               `json:"triviaDuration"`
+	TriviaInterval       int                  `json:"triviaInterval"`
+	TriviaRandomize      bool                 `json:"triviaRandomize"`
+	TriviaAPI            *bool                `json:"triviaAPI,omitempty"`
+	TriviaAPIAmount      *int                 `json:"triviaAPIAmount,omitempty"`
+	TriviaAPICategory    *int                 `json:"triviaAPICategory,omitempty"`
+	TriviaAPIDifficulty  *string              `json:"triviaAPIDifficulty,omitempty"`
+	TriviaAPIRefresh     *string              `json:"triviaAPIRefresh,omitempty"`
+	TriviaAPICacheMax    *int                 `json:"triviaAPICacheMax,omitempty"`
+	TriviaAPICacheExpiry *string              `json:"triviaAPICacheExpiry,omitempty"`
+	TriviaBuiltin        *bool                `json:"triviaBuiltin,omitempty"`
+	PlanetLiveAlways     *bool                `json:"planetLiveAlways,omitempty"`
+	SatelliteProduct     string               `json:"satelliteProduct,omitempty"` // "IR" or "VIS"
+	ClockFormat          string               `json:"clockFormat,omitempty"`      // "12" or "24"
+	UnitSystem           string               `json:"unitSystem,omitempty"`       // "imperial" or "metric"
+	Streams              json.RawMessage      `json:"streams,omitempty"`          // current: []StreamEntry
+	OldStreamURLs        []string             `json:"streamURLs,omitempty"`       // legacy: []string (read-only migration)
+	Announcements        json.RawMessage      `json:"announcements,omitempty"`
+	Trivia               []triviaJSON         `json:"trivia"`
+	TriviaAPICache       []triviaAPICacheJSON `json:"triviaAPICache,omitempty"`
 }
 
 type triviaJSON struct {
@@ -109,31 +112,44 @@ type triviaJSON struct {
 	Answer   string `json:"answer"`
 }
 
+// triviaAPICacheJSON is the on-disk representation of a cached API trivia item.
+type triviaAPICacheJSON struct {
+	Question   string   `json:"question"`
+	Answer     string   `json:"answer"`
+	Choices    []string `json:"choices,omitempty"`
+	CategoryID int      `json:"categoryId,omitempty"`
+	Difficulty string   `json:"difficulty,omitempty"`
+	FetchedAt  string   `json:"fetchedAt,omitempty"` // RFC 3339
+}
+
 // Store is a thread-safe store for announcements, trivia, duration settings,
 // and music stream entries.
 type Store struct {
-	mu                  sync.RWMutex
-	path                string
-	announcements       []ann.Announcement
-	triviaItems         []trivia.TriviaItem
-	slideDur            time.Duration
-	annDur              time.Duration
-	annInterval         int // weather cycles between announcement slides; 0 = disabled
-	triviaDur           time.Duration
-	triviaInterval      int                 // weather cycles between trivia slides; 0 = disabled
-	triviaRandomize     bool                // when true, questions are drawn from a shuffled deck
-	triviaAPI           bool                // when true, include API-fetched trivia in the pool
-	triviaAPIAmount     int                 // number of questions to fetch (default 50)
-	triviaAPICategory   int                 // 0 = any; 9–32 = specific category
-	triviaAPIDifficulty string              // "" = any; "easy", "medium", "hard"
-	triviaAPIRefresh    time.Duration       // how often to re-fetch from API; 0 = startup only
-	triviaBuiltin       bool                // when true, include built-in/admin trivia in the pool
-	triviaAPIItems      []trivia.TriviaItem // populated once at startup by SetAPITrivia
-	planetLiveAlways    bool                // when true, night sky always shows current positions
-	satelliteProduct    string              // "IR" (infrared) or "VIS" (visible); default: "IR"
-	clockFormat         string              // default clock format: "12" or "24"
-	unitSystem          string              // default unit system: "imperial" or "metric"
-	streams             []StreamEntry       // music streams; one is chosen at random per pipeline
+	mu                   sync.RWMutex
+	path                 string
+	announcements        []ann.Announcement
+	triviaItems          []trivia.TriviaItem
+	slideDur             time.Duration
+	annDur               time.Duration
+	annInterval          int // weather cycles between announcement slides; 0 = disabled
+	triviaDur            time.Duration
+	triviaInterval       int                 // weather cycles between trivia slides; 0 = disabled
+	triviaRandomize      bool                // when true, questions are drawn from a shuffled deck
+	triviaAPI            bool                // when true, include API-fetched trivia in the pool
+	triviaAPIAmount      int                 // number of questions to fetch (default 50)
+	triviaAPICategory    int                 // 0 = any; 9–32 = specific category
+	triviaAPIDifficulty  string              // "" = any; "easy", "medium", "hard"
+	triviaAPIRefresh     time.Duration       // how often to re-fetch from API; 0 = startup only
+	triviaAPICacheMax    int                 // max cached API items; 0 = unlimited
+	triviaAPICacheExpiry time.Duration       // evict items older than this; 0 = never expire
+	triviaBuiltin        bool                // when true, include built-in/admin trivia in the pool
+	triviaAPIItems       []trivia.TriviaItem // filtered view of cache for current category
+	triviaAPICache       []trivia.TriviaItem // all cached API items across all categories
+	planetLiveAlways     bool                // when true, night sky always shows current positions
+	satelliteProduct     string              // "IR" (infrared) or "VIS" (visible); default: "IR"
+	clockFormat          string              // default clock format: "12" or "24"
+	unitSystem           string              // default unit system: "imperial" or "metric"
+	streams              []StreamEntry       // music streams; one is chosen at random per pipeline
 
 	startedAt time.Time // container start time for uptime display
 
@@ -175,6 +191,7 @@ func NewStore(path string, anns []ann.Announcement, triviaItems []trivia.TriviaI
 		triviaAPICategory:   defaultTriviaAPICategory,
 		triviaAPIDifficulty: defaultTriviaAPIDifficulty,
 		triviaAPIRefresh:    defaultTriviaAPIRefresh,
+		triviaAPICacheMax:   500,
 		triviaBuiltin:       defaultTriviaBuiltin,
 		satelliteProduct:    config.SatelliteIR,
 		clockFormat:         config.ClockFormat24h,
@@ -258,6 +275,35 @@ func (s *Store) loadFromDisk() {
 		if d, err := time.ParseDuration(*pd.TriviaAPIRefresh); err == nil && d >= 0 {
 			s.triviaAPIRefresh = d
 		}
+	}
+	if pd.TriviaAPICacheMax != nil {
+		s.triviaAPICacheMax = *pd.TriviaAPICacheMax
+	}
+	if pd.TriviaAPICacheExpiry != nil {
+		if d, err := time.ParseDuration(*pd.TriviaAPICacheExpiry); err == nil && d >= 0 {
+			s.triviaAPICacheExpiry = d
+		}
+	}
+	// Restore cached API trivia items from disk.
+	if len(pd.TriviaAPICache) > 0 {
+		s.triviaAPICache = make([]trivia.TriviaItem, 0, len(pd.TriviaAPICache))
+		for _, c := range pd.TriviaAPICache {
+			var fetchedAt time.Time
+			if c.FetchedAt != "" {
+				fetchedAt, _ = time.Parse(time.RFC3339, c.FetchedAt)
+			}
+			s.triviaAPICache = append(s.triviaAPICache, trivia.TriviaItem{
+				Question:   c.Question,
+				Answer:     c.Answer,
+				Choices:    c.Choices,
+				CategoryID: c.CategoryID,
+				Difficulty: c.Difficulty,
+				FetchedAt:  fetchedAt,
+			})
+		}
+		s.evictCache()
+		s.refreshTriviaAPIItems()
+		log.Printf("trivia: restored %d cached API items from disk (%d match current filters)", len(s.triviaAPICache), len(s.triviaAPIItems))
 	}
 	if pd.PlanetLiveAlways != nil {
 		s.planetLiveAlways = *pd.PlanetLiveAlways
@@ -344,6 +390,22 @@ func (s *Store) saveToDisk() error {
 	copy(streamsSnap, s.streams)
 	streamsBytes, _ := json.Marshal(streamsSnap)
 
+	var cacheObjs []triviaAPICacheJSON
+	for _, t := range s.triviaAPICache {
+		var fetchedStr string
+		if !t.FetchedAt.IsZero() {
+			fetchedStr = t.FetchedAt.Format(time.RFC3339)
+		}
+		cacheObjs = append(cacheObjs, triviaAPICacheJSON{
+			Question:   t.Question,
+			Answer:     t.Answer,
+			Choices:    t.Choices,
+			CategoryID: t.CategoryID,
+			Difficulty: t.Difficulty,
+			FetchedAt:  fetchedStr,
+		})
+	}
+
 	pd := persistedData{
 		SlideDuration:        s.slideDur.String(),
 		AnnouncementDuration: s.annDur.String(),
@@ -356,6 +418,8 @@ func (s *Store) saveToDisk() error {
 		TriviaAPICategory:    ptrInt(s.triviaAPICategory),
 		TriviaAPIDifficulty:  ptrStr(s.triviaAPIDifficulty),
 		TriviaAPIRefresh:     ptrStr(s.triviaAPIRefresh.String()),
+		TriviaAPICacheMax:    ptrInt(s.triviaAPICacheMax),
+		TriviaAPICacheExpiry: ptrStr(s.triviaAPICacheExpiry.String()),
 		TriviaBuiltin:        ptrBool(s.triviaBuiltin),
 		PlanetLiveAlways:     ptrBool(s.planetLiveAlways),
 		SatelliteProduct:     s.satelliteProduct,
@@ -364,6 +428,7 @@ func (s *Store) saveToDisk() error {
 		Streams:              json.RawMessage(streamsBytes),
 		Announcements:        json.RawMessage(annBytes),
 		Trivia:               trivObjs,
+		TriviaAPICache:       cacheObjs,
 	}
 	s.mu.RUnlock()
 
@@ -463,11 +528,95 @@ func (s *Store) TriviaAPI() bool {
 	return s.triviaAPI
 }
 
-// SetAPITrivia stores API-fetched trivia items for merging into the pool.
+// SetAPITrivia merges API-fetched trivia items into the local cache,
+// deduplicating by question text. The cache is persisted to disk so it
+// survives container restarts.
 func (s *Store) SetAPITrivia(items []trivia.TriviaItem) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.triviaAPIItems = items
+	// Build a set of existing questions for deduplication.
+	seen := make(map[string]struct{}, len(s.triviaAPICache))
+	for _, t := range s.triviaAPICache {
+		seen[t.Question] = struct{}{}
+	}
+	added := 0
+	for _, item := range items {
+		if _, exists := seen[item.Question]; exists {
+			continue
+		}
+		seen[item.Question] = struct{}{}
+		s.triviaAPICache = append(s.triviaAPICache, item)
+		added++
+	}
+	s.evictCache()
+	s.refreshTriviaAPIItems()
+	s.mu.Unlock()
+
+	if added > 0 {
+		if err := s.saveToDisk(); err != nil {
+			log.Printf("admin: save trivia cache: %v", err)
+		}
+	}
+}
+
+// refreshTriviaAPIItems rebuilds the filtered triviaAPIItems slice from the
+// full cache based on the current category and difficulty settings.
+// Must be called with s.mu held (read or write).
+func (s *Store) refreshTriviaAPIItems() {
+	cat := s.triviaAPICategory
+	diff := s.triviaAPIDifficulty
+	if cat == 0 && diff == "" {
+		// No filtering needed — use entire cache.
+		s.triviaAPIItems = make([]trivia.TriviaItem, len(s.triviaAPICache))
+		copy(s.triviaAPIItems, s.triviaAPICache)
+		return
+	}
+	s.triviaAPIItems = nil
+	for _, t := range s.triviaAPICache {
+		if cat != 0 && t.CategoryID != cat {
+			continue
+		}
+		if diff != "" && t.Difficulty != diff {
+			continue
+		}
+		s.triviaAPIItems = append(s.triviaAPIItems, t)
+	}
+}
+
+// evictCache removes expired items and trims the cache to the max size,
+// evicting oldest items first. Must be called with s.mu held for writing.
+func (s *Store) evictCache() {
+	// Phase 1: remove expired items.
+	if s.triviaAPICacheExpiry > 0 {
+		cutoff := time.Now().Add(-s.triviaAPICacheExpiry)
+		n := 0
+		for _, t := range s.triviaAPICache {
+			if !t.FetchedAt.IsZero() && t.FetchedAt.Before(cutoff) {
+				continue
+			}
+			s.triviaAPICache[n] = t
+			n++
+		}
+		if evicted := len(s.triviaAPICache) - n; evicted > 0 {
+			// Clear trailing references for GC.
+			for i := n; i < len(s.triviaAPICache); i++ {
+				s.triviaAPICache[i] = trivia.TriviaItem{}
+			}
+			s.triviaAPICache = s.triviaAPICache[:n]
+			log.Printf("trivia: expired %d cached items older than %s", evicted, s.triviaAPICacheExpiry)
+		}
+	}
+
+	// Phase 2: trim to max size, evicting oldest first.
+	max := s.triviaAPICacheMax
+	if max > 0 && len(s.triviaAPICache) > max {
+		// Sort by FetchedAt ascending so oldest are first.
+		sort.Slice(s.triviaAPICache, func(i, j int) bool {
+			return s.triviaAPICache[i].FetchedAt.Before(s.triviaAPICache[j].FetchedAt)
+		})
+		evicted := len(s.triviaAPICache) - max
+		s.triviaAPICache = s.triviaAPICache[evicted:]
+		log.Printf("trivia: evicted %d oldest cached items (cache capped at %d)", evicted, max)
+	}
 }
 
 // TriviaAPIRefresh returns how often to re-fetch trivia from the API.
@@ -1225,6 +1374,7 @@ func (s *Store) handleTriviaGet(w http.ResponseWriter, r *http.Request) {
 	copy(items, s.triviaItems)
 	apiItems := make([]trivia.TriviaItem, len(s.triviaAPIItems))
 	copy(apiItems, s.triviaAPIItems)
+	cacheTotal := len(s.triviaAPICache)
 	s.mu.RUnlock()
 
 	flash := ""
@@ -1266,9 +1416,17 @@ function addRow() {
 	var apiSection strings.Builder
 	apiSection.WriteString(`<hr><h3 style="color:#ee0;letter-spacing:2px">API TRIVIA</h3>`)
 	if len(apiItems) == 0 {
-		apiSection.WriteString(`<p style="color:#aab">API trivia is disabled or hasn&#39;t been fetched yet.</p>`)
+		if cacheTotal > 0 {
+			apiSection.WriteString(fmt.Sprintf(`<p style="color:#aab">No questions match current filters (%d cached total).</p>`, cacheTotal))
+		} else {
+			apiSection.WriteString(`<p style="color:#aab">API trivia is disabled or hasn&#39;t been fetched yet.</p>`)
+		}
 	} else {
-		apiSection.WriteString(fmt.Sprintf(`<p style="color:#aab">%d questions from Open Trivia Database</p>`, len(apiItems)))
+		cacheNote := ""
+		if cacheTotal > len(apiItems) {
+			cacheNote = fmt.Sprintf(" (%d cached total)", cacheTotal)
+		}
+		apiSection.WriteString(fmt.Sprintf(`<p style="color:#aab">%d questions from Open Trivia Database%s</p>`, len(apiItems), cacheNote))
 		apiSection.WriteString(`<table style="color:#aab"><thead><tr><th style="width:40%%">Question</th><th style="width:18%%">Answer</th><th style="width:30%%">Choices</th><th style="width:12%%">Type</th></tr></thead><tbody>`)
 		for _, item := range apiItems {
 			choices := strings.Join(item.Choices, " / ")
@@ -1329,6 +1487,9 @@ func (s *Store) handleSettingsGet(w http.ResponseWriter, r *http.Request) {
 	trivAPICategory := s.triviaAPICategory
 	trivAPIDifficulty := s.triviaAPIDifficulty
 	trivAPIRefresh := s.triviaAPIRefresh.String()
+	trivAPICacheMax := s.triviaAPICacheMax
+	trivAPICacheExpiry := s.triviaAPICacheExpiry.String()
+	trivAPICacheCount := len(s.triviaAPICache)
 	trivBuiltin := s.triviaBuiltin
 	planetLive := s.planetLiveAlways
 	satProd := s.satelliteProduct
@@ -1541,6 +1702,14 @@ func (s *Store) handleSettingsGet(w http.ResponseWriter, r *http.Request) {
 <label>API Refresh Interval</label>
 <input type="text" name="triviaAPIRefresh" value="%s" style="width:120px">
 <p class="hint">How often to fetch new questions. 0s = startup only. Example: 24h, 12h. Changes take effect on next server restart.</p>
+
+<label>Cache Size Limit</label>
+<input type="number" name="triviaAPICacheMax" value="%d" min="0" style="width:120px">
+<p class="hint">Maximum number of questions to keep in the local cache. 0 = unlimited. Currently %d cached.</p>
+
+<label>Cache Expiry</label>
+<input type="text" name="triviaAPICacheExpiry" value="%s" style="width:120px">
+<p class="hint">Remove cached questions older than this. 0s = never expire. Example: 720h (30 days), 2160h (90 days).</p>
 </div>
 
 <hr style="border:none; border-top:1px solid #224; margin:28px 0">
@@ -1569,7 +1738,7 @@ function addStreamRow() {
   tbody.appendChild(tr);
   tr.querySelector('input').focus();
 }
-</script>`, flash, clock24Checked, clock12Checked, unitsImperialChecked, unitsMetricChecked, planetLiveChecked, satIRChecked, satVISChecked, slide, annD, annInt, trivD, trivInt, trivRandChecked, trivBuiltinChecked, trivAPIChecked, trivAPIAmount, categoryOptions.String(), difficultyOptions.String(), trivAPIRefresh, streamRows.String())
+</script>`, flash, clock24Checked, clock12Checked, unitsImperialChecked, unitsMetricChecked, planetLiveChecked, satIRChecked, satVISChecked, slide, annD, annInt, trivD, trivInt, trivRandChecked, trivBuiltinChecked, trivAPIChecked, trivAPIAmount, categoryOptions.String(), difficultyOptions.String(), trivAPIRefresh, trivAPICacheMax, trivAPICacheCount, trivAPICacheExpiry, streamRows.String())
 	writePage(w, "SETTINGS", body)
 }
 
@@ -1659,6 +1828,24 @@ func (s *Store) handleSettingsPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var trivAPICacheMax int
+	if v := strings.TrimSpace(r.FormValue("triviaAPICacheMax")); v != "" {
+		fmt.Sscanf(v, "%d", &trivAPICacheMax)
+	}
+	if trivAPICacheMax < 0 {
+		trivAPICacheMax = 0
+	}
+
+	trivAPICacheExpiryStr := strings.TrimSpace(r.FormValue("triviaAPICacheExpiry"))
+	if trivAPICacheExpiryStr == "" {
+		trivAPICacheExpiryStr = "0s"
+	}
+	trivAPICacheExpiryD, errExpiry := time.ParseDuration(trivAPICacheExpiryStr)
+	if errExpiry != nil || trivAPICacheExpiryD < 0 {
+		warnings = append(warnings, "Cache expiry reset to 0s (invalid value)")
+		trivAPICacheExpiryD = 0
+	}
+
 	satProd := r.FormValue("satelliteProduct")
 	if satProd != config.SatelliteIR && satProd != config.SatelliteVIS {
 		warnings = append(warnings, "Satellite reset to Infrared (invalid value)")
@@ -1690,6 +1877,10 @@ func (s *Store) handleSettingsPost(w http.ResponseWriter, r *http.Request) {
 	s.triviaAPICategory = trivAPICategory
 	s.triviaAPIDifficulty = trivAPIDifficulty
 	s.triviaAPIRefresh = trivAPIRefreshD
+	s.triviaAPICacheMax = trivAPICacheMax
+	s.triviaAPICacheExpiry = trivAPICacheExpiryD
+	s.evictCache()
+	s.refreshTriviaAPIItems()
 	s.planetLiveAlways = planetLive
 	s.satelliteProduct = satProd
 	s.clockFormat = clockFmt
