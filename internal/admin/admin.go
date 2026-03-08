@@ -1372,9 +1372,9 @@ func (s *Store) handleTriviaGet(w http.ResponseWriter, r *http.Request) {
 	s.mu.RLock()
 	items := make([]trivia.TriviaItem, len(s.triviaItems))
 	copy(items, s.triviaItems)
-	apiItems := make([]trivia.TriviaItem, len(s.triviaAPIItems))
-	copy(apiItems, s.triviaAPIItems)
-	cacheTotal := len(s.triviaAPICache)
+	apiItems := make([]trivia.TriviaItem, len(s.triviaAPICache))
+	copy(apiItems, s.triviaAPICache)
+	filteredCount := len(s.triviaAPIItems)
 	s.mu.RUnlock()
 
 	flash := ""
@@ -1416,17 +1416,13 @@ function addRow() {
 	var apiSection strings.Builder
 	apiSection.WriteString(`<hr><h3 style="color:#ee0;letter-spacing:2px">API TRIVIA</h3>`)
 	if len(apiItems) == 0 {
-		if cacheTotal > 0 {
-			apiSection.WriteString(fmt.Sprintf(`<p style="color:#aab">No questions match current filters (%d cached total).</p>`, cacheTotal))
-		} else {
-			apiSection.WriteString(`<p style="color:#aab">API trivia is disabled or hasn&#39;t been fetched yet.</p>`)
-		}
+		apiSection.WriteString(`<p style="color:#aab">API trivia is disabled or hasn&#39;t been fetched yet.</p>`)
 	} else {
-		cacheNote := ""
-		if cacheTotal > len(apiItems) {
-			cacheNote = fmt.Sprintf(" (%d cached total)", cacheTotal)
+		filterNote := ""
+		if filteredCount != len(apiItems) {
+			filterNote = fmt.Sprintf(" (%d match current category/difficulty filters)", filteredCount)
 		}
-		apiSection.WriteString(fmt.Sprintf(`<p style="color:#aab">%d questions from Open Trivia Database%s</p>`, len(apiItems), cacheNote))
+		apiSection.WriteString(fmt.Sprintf(`<p style="color:#aab">%d cached questions from Open Trivia Database%s</p>`, len(apiItems), filterNote))
 		apiSection.WriteString(`<table style="color:#aab"><thead><tr><th style="width:40%%">Question</th><th style="width:18%%">Answer</th><th style="width:30%%">Choices</th><th style="width:12%%">Type</th></tr></thead><tbody>`)
 		for _, item := range apiItems {
 			choices := strings.Join(item.Choices, " / ")
