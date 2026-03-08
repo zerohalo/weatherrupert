@@ -476,7 +476,7 @@ Inspired by [WS4KP](https://github.com/netbymatt/ws4kp) and [ws4channels](https:
 
 Architecture and design by me. A good majority of the code was written with [Claude Code](https://claude.ai/claude-code) from Anthropic, which handled the bulk of the implementation, iteration, and bug hunting — making a project of this scope practical as a solo effort.
 
-The default music streams ship with a couple of [SomaFM](https://somafm.com/) stations I like for background music. I've been listening to SomaFM for years — they're listener-supported independent radio with no ads. If you enjoy the music, consider [supporting them](https://somafm.com/support/).
+The default music streams are a couple of [SomaFM](https://somafm.com/) stations I like for background music. I've been listening to SomaFM for years — they're listener-supported independent radio with no ads. If you enjoy the music, consider [supporting them](https://somafm.com/support/).
 
 ---
 
