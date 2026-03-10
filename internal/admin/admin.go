@@ -153,6 +153,11 @@ type Store struct {
 
 	startedAt time.Time // container start time for uptime display
 
+	// onNeedsFetch is called (in a new goroutine) when category/difficulty
+	// filters change and the cache has no matching items, so the caller
+	// can trigger an immediate API fetch. May be nil.
+	onNeedsFetch func()
+
 	// getPipelines is set by the manager after startup so the dashboard can
 	// display active streams. May be nil if not wired up yet.
 	getPipelines func() []PipelineInfo
@@ -214,6 +219,15 @@ func (s *Store) SetPipelineSource(fn func() []PipelineInfo) {
 func (s *Store) SetAPIStatsSource(fn func() []apistats.ServiceStat) {
 	s.mu.Lock()
 	s.getAPIStats = fn
+	s.mu.Unlock()
+}
+
+// SetNeedsFetchCallback registers a function to be called (in a new goroutine)
+// when the trivia category/difficulty filters change and no cached items match,
+// so the caller can trigger an immediate API fetch.
+func (s *Store) SetNeedsFetchCallback(fn func()) {
+	s.mu.Lock()
+	s.onNeedsFetch = fn
 	s.mu.Unlock()
 }
 
@@ -1877,12 +1891,18 @@ func (s *Store) handleSettingsPost(w http.ResponseWriter, r *http.Request) {
 	s.triviaAPICacheExpiry = trivAPICacheExpiryD
 	s.evictCache()
 	s.refreshTriviaAPIItems()
+	needsFetch := s.triviaAPI && (s.triviaAPICategory != 0 || s.triviaAPIDifficulty != "") && len(s.triviaAPIItems) == 0
+	fetchFn := s.onNeedsFetch
 	s.planetLiveAlways = planetLive
 	s.satelliteProduct = satProd
 	s.clockFormat = clockFmt
 	s.unitSystem = unitSys
 	s.streams = newStreams
 	s.mu.Unlock()
+
+	if needsFetch && fetchFn != nil {
+		go fetchFn()
+	}
 
 	if err := s.saveToDisk(); err != nil {
 		log.Printf("admin: save: %v", err)

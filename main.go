@@ -107,6 +107,9 @@ func main() {
 			}
 		}()
 	}
+	store.SetNeedsFetchCallback(func() {
+		fetchTrivia(store, trackedClient)
+	})
 	store.SetPipelineSource(mgr.ActivePipelines)
 	store.SetAPIStatsSource(apiTracker.Stats)
 
