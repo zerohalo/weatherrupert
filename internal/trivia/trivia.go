@@ -254,7 +254,7 @@ func fetchFromURL(httpClient *http.Client, url string, batch int) ([]TriviaItem,
 			Question:   strings.TrimSpace(html.UnescapeString(q.Question)),
 			Answer:     correct,
 			Choices:    choices,
-			CategoryID: categoryNameToID[q.Category],
+			CategoryID: categoryNameToID[html.UnescapeString(q.Category)],
 			Difficulty: q.Difficulty,
 			FetchedAt:  now,
 		})
