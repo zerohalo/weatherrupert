@@ -2010,6 +2010,19 @@ func slideNightSky(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *
 	drawShadowTextAnchored(dc, "W", domeCX+labelOff, domeCY, 0.0, 0.5, subR, subG, subB)
 
 	// Plot planets above horizon on the dome.
+	// First pass: compute positions, draw icons, and collect label rects.
+	type planetLabel struct {
+		text       string
+		x, y       float64 // label baseline-left position
+		w, h       float64 // measured text size
+		col        [3]float64
+		planetX    float64 // icon center
+		planetY    float64
+		dotR       float64
+		labelRight bool // true = label to right of icon; false = left
+	}
+	dc.SetFontFace(fonts.small)
+	var labels []planetLabel
 	for _, p := range planets {
 		if !p.IsUp {
 			continue
@@ -2038,9 +2051,54 @@ func slideNightSky(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *
 		dc.DrawCircle(px, py, dotR)
 		dc.Fill()
 
-		// Label.
-		dc.SetFontFace(fonts.small)
-		drawShadowText(dc, p.Name[:3], px+dotR+4, py+5, col[0], col[1], col[2])
+		// Measure label and store for overlap resolution.
+		text := p.Name[:3]
+		tw, th := dc.MeasureString(text)
+		labels = append(labels, planetLabel{
+			text: text, col: col,
+			x: px + dotR + 4, y: py + 5,
+			w: tw + 4, h: th, // +4 for shadow
+			planetX: px, planetY: py, dotR: dotR,
+			labelRight: true,
+		})
+	}
+
+	// Second pass: resolve label overlaps by nudging vertically.
+	const labelPad = 3.0 // minimum vertical gap between labels
+	for i := range labels {
+		for j := range labels {
+			if i == j {
+				continue
+			}
+			a, b := &labels[i], &labels[j]
+			// Check horizontal overlap.
+			aLeft, aRight := a.x, a.x+a.w
+			bLeft, bRight := b.x, b.x+b.w
+			if aRight < bLeft || bRight < aLeft {
+				continue
+			}
+			// Check vertical overlap (baseline-based: top ≈ y-h, bottom ≈ y).
+			aTop, aBot := a.y-a.h, a.y+labelPad
+			bTop, bBot := b.y-b.h, b.y+labelPad
+			if aBot < bTop || bBot < aTop {
+				continue
+			}
+			// Overlapping — push the lower one down (or upper one up).
+			overlap := aBot - bTop
+			if a.y <= b.y {
+				b.y += overlap/2 + labelPad
+				a.y -= overlap/2 + labelPad
+			} else {
+				a.y += overlap/2 + labelPad
+				b.y -= overlap/2 + labelPad
+			}
+		}
+	}
+
+	// Third pass: draw labels at resolved positions.
+	dc.SetFontFace(fonts.small)
+	for _, l := range labels {
+		drawShadowText(dc, l.text, l.x, l.y, l.col[0], l.col[1], l.col[2])
 	}
 
 	// ── Vertical divider ──
