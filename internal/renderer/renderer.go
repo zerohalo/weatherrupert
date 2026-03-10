@@ -507,6 +507,27 @@ func (r *Renderer) updateCachedPreview(pix []byte) {
 	r.cachedPreview.Store(&b)
 }
 
+// RenderPlaceholderPreview generates a standalone preview PNG without needing
+// a running pipeline. Used when no pipeline exists and no cached preview is
+// available (e.g. guide art fetches that should not spin up a pipeline).
+func RenderPlaceholderPreview(w, h int) ([]byte, error) {
+	fonts := newFontSet()
+	dc := gg.NewContext(w, h)
+	DrawGradientBackground(dc)
+	dc.SetRGBA(1, 1, 1, 0.25)
+	dc.DrawRectangle(0, headerH, float64(w), 2)
+	dc.Fill()
+
+	// Header: title + logo sun
+	dc.SetFontFace(fonts.title)
+	drawShadowText(dc, "LOCAL WEATHER", 60, 54, titleR, titleG, titleB)
+	DrawLogoSun(dc, float64(w)/2-100, headerH/2, 30)
+	dc.SetFontFace(fonts.small)
+	drawShadowText(dc, "WEATHER RUPERT", float64(w)/2-62, headerH/2+7, textR, textG, textB)
+
+	return encodePNG(dc)
+}
+
 // RenderFavicon generates a 32x32 PNG favicon using the sun logo.
 func RenderFavicon() ([]byte, error) {
 	dc := gg.NewContext(32, 32)

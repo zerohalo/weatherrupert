@@ -313,13 +313,10 @@ func main() {
 			// No pipeline running but we have a cached preview from a previous session.
 			pngData = cached
 		} else {
-			// No pipeline and no cache — spin one up to get a preview.
-			p, err := mgr.Get(zip, clock, units, tz)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			pngData, err = p.rnd.RenderPreview()
+			// No pipeline and no cache — return a static placeholder so
+			// guide art fetches don't spin up a full pipeline.
+			var err error
+			pngData, err = renderer.RenderPlaceholderPreview(cfg.Width, cfg.Height)
 			if err != nil {
 				http.Error(w, "preview render error", http.StatusInternalServerError)
 				return
