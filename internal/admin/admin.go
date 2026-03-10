@@ -1901,7 +1901,7 @@ func (s *Store) handleSettingsPost(w http.ResponseWriter, r *http.Request) {
 	s.mu.Unlock()
 
 	if needsFetch && fetchFn != nil {
-		go fetchFn()
+		fetchFn()
 	}
 
 	if err := s.saveToDisk(); err != nil {
