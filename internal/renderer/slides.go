@@ -1408,10 +1408,33 @@ func slideMoonTides(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 		drawShadowTextAnchored(dc, fmt.Sprintf("DAY %.1f OF %.1f", moon.AgeDays, 29.53), moonCX, infoY+76, 0.5, 0.5, subR, subG, subB)
 
 		// High/low tide times below moon info.
-		// Show only events from the past 3 hours onward.
+		// Show the last past tide event plus the next 3 upcoming.
 		now := time.Now()
-		tideCutoff := now.Add(-3 * time.Hour)
 		if len(data.TideData.HiLo) > 0 {
+			var displayEvents []weather.TideHiLo
+			// Find the last tide event that already occurred.
+			lastPastIdx := -1
+			for i, e := range data.TideData.HiLo {
+				if e.Time.Before(now) {
+					lastPastIdx = i
+				}
+			}
+			if lastPastIdx >= 0 {
+				// Last past event + up to 3 upcoming = 4 total.
+				end := lastPastIdx + 4
+				if end > len(data.TideData.HiLo) {
+					end = len(data.TideData.HiLo)
+				}
+				displayEvents = data.TideData.HiLo[lastPastIdx:end]
+			} else {
+				// All events are in the future; show the first 4.
+				end := 4
+				if end > len(data.TideData.HiLo) {
+					end = len(data.TideData.HiLo)
+				}
+				displayEvents = data.TideData.HiLo[:end]
+			}
+
 			tideY := infoY + 120.0
 			dc.SetFontFace(fonts.small)
 			drawShadowTextAnchored(dc, "— TIDES —", moonCX, tideY, 0.5, 0.5, subR, subG, subB)
@@ -1420,10 +1443,7 @@ func slideMoonTides(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 			if use24h {
 				timeFmt = "15:04"
 			}
-			for _, e := range data.TideData.HiLo {
-				if e.Time.Before(tideCutoff) {
-					continue
-				}
+			for _, e := range displayEvents {
 				kind := "HIGH"
 				r, g, b := textR, textG, textB
 				if e.Type == "L" {
@@ -1445,6 +1465,7 @@ func slideMoonTides(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 		// Right column: tide chart
 		td := data.TideData
 		// Filter predictions to past 3 hours + future.
+		tideCutoff := now.Add(-3 * time.Hour)
 		var preds []weather.TidePrediction
 		for _, p := range td.Predictions {
 			if !p.Time.Before(tideCutoff) {
