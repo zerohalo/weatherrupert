@@ -1408,6 +1408,9 @@ func slideMoonTides(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 		drawShadowTextAnchored(dc, fmt.Sprintf("DAY %.1f OF %.1f", moon.AgeDays, 29.53), moonCX, infoY+76, 0.5, 0.5, subR, subG, subB)
 
 		// High/low tide times below moon info.
+		// Show only events from the past 3 hours onward.
+		now := time.Now()
+		tideCutoff := now.Add(-3 * time.Hour)
 		if len(data.TideData.HiLo) > 0 {
 			tideY := infoY + 120.0
 			dc.SetFontFace(fonts.small)
@@ -1417,8 +1420,10 @@ func slideMoonTides(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 			if use24h {
 				timeFmt = "15:04"
 			}
-			now := time.Now()
 			for _, e := range data.TideData.HiLo {
+				if e.Time.Before(tideCutoff) {
+					continue
+				}
 				kind := "HIGH"
 				r, g, b := textR, textG, textB
 				if e.Type == "L" {
@@ -1439,112 +1444,120 @@ func slideMoonTides(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 
 		// Right column: tide chart
 		td := data.TideData
-		preds := td.Predictions
+		// Filter predictions to past 3 hours + future.
+		var preds []weather.TidePrediction
+		for _, p := range td.Predictions {
+			if !p.Time.Before(tideCutoff) {
+				preds = append(preds, p)
+			}
+		}
 
 		// Station name
 		dc.SetFontFace(fonts.small)
 		stationLabel := truncate(strings.ToUpper(td.Station.Name), 30)
 		drawShadowTextAnchored(dc, stationLabel, midX+(w-midX)/2, contentTop+28, 0.5, 0.5, subR, subG, subB)
 
-		// Chart bounds
-		plotLeft := midX + 70.0
-		plotRight := w - 30.0
-		plotTop := contentTop + 60.0
-		plotBottom := h - 60.0
-		plotW := plotRight - plotLeft
-		plotH := plotBottom - plotTop
+		if len(preds) > 0 {
+			// Chart bounds
+			plotLeft := midX + 70.0
+			plotRight := w - 30.0
+			plotTop := contentTop + 60.0
+			plotBottom := h - 60.0
+			plotW := plotRight - plotLeft
+			plotH := plotBottom - plotTop
 
-		// Find level range
-		minL, maxL := preds[0].Level, preds[0].Level
-		for _, p := range preds {
-			if p.Level < minL {
-				minL = p.Level
+			// Find level range
+			minL, maxL := preds[0].Level, preds[0].Level
+			for _, p := range preds {
+				if p.Level < minL {
+					minL = p.Level
+				}
+				if p.Level > maxL {
+					maxL = p.Level
+				}
 			}
-			if p.Level > maxL {
-				maxL = p.Level
+			// Add padding
+			pad := (maxL - minL) * 0.15
+			if pad < 0.3 {
+				pad = 0.3
 			}
-		}
-		// Add padding
-		pad := (maxL - minL) * 0.15
-		if pad < 0.3 {
-			pad = 0.3
-		}
-		minL -= pad
-		maxL += pad
+			minL -= pad
+			maxL += pad
 
-		levelToY := func(l float64) float64 {
-			return plotBottom - (l-minL)/(maxL-minL)*plotH
-		}
-		n := len(preds)
-		idxToX := func(i int) float64 {
-			if n <= 1 {
-				return plotLeft + plotW/2
+			levelToY := func(l float64) float64 {
+				return plotBottom - (l-minL)/(maxL-minL)*plotH
 			}
-			return plotLeft + float64(i)*plotW/float64(n-1)
-		}
-
-		// Y-axis grid lines
-		const gridLines = 4
-		unitLabel := "FT"
-		for g := 0; g <= gridLines; g++ {
-			gLevel := minL + float64(g)*(maxL-minL)/float64(gridLines)
-			gY := levelToY(gLevel)
-			dc.SetRGBA(1, 1, 1, 0.07)
-			dc.SetLineWidth(1)
-			dc.DrawLine(plotLeft, gY, plotRight, gY)
-			dc.Stroke()
-
-			displayLevel := gLevel
-			if useMetric {
-				displayLevel = gLevel * 0.3048
-				unitLabel = "M"
+			n := len(preds)
+			idxToX := func(i int) float64 {
+				if n <= 1 {
+					return plotLeft + plotW/2
+				}
+				return plotLeft + float64(i)*plotW/float64(n-1)
 			}
+
+			// Y-axis grid lines
+			const gridLines = 4
+			unitLabel := "FT"
+			for g := 0; g <= gridLines; g++ {
+				gLevel := minL + float64(g)*(maxL-minL)/float64(gridLines)
+				gY := levelToY(gLevel)
+				dc.SetRGBA(1, 1, 1, 0.07)
+				dc.SetLineWidth(1)
+				dc.DrawLine(plotLeft, gY, plotRight, gY)
+				dc.Stroke()
+
+				displayLevel := gLevel
+				if useMetric {
+					displayLevel = gLevel * 0.3048
+					unitLabel = "M"
+				}
+				dc.SetFontFace(fonts.small)
+				drawShadowTextAnchored(dc, fmt.Sprintf("%.1f", displayLevel), plotLeft-6, gY, 1.0, 0.5, subR, subG, subB)
+			}
+
+			// Unit label at top of Y-axis
 			dc.SetFontFace(fonts.small)
-			drawShadowTextAnchored(dc, fmt.Sprintf("%.1f", displayLevel), plotLeft-6, gY, 1.0, 0.5, subR, subG, subB)
-		}
+			drawShadowTextAnchored(dc, unitLabel, plotLeft-6, plotTop-14, 1.0, 0.5, subR, subG, subB)
 
-		// Unit label at top of Y-axis
-		dc.SetFontFace(fonts.small)
-		drawShadowTextAnchored(dc, unitLabel, plotLeft-6, plotTop-14, 1.0, 0.5, subR, subG, subB)
-
-		// Area fill under curve
-		xs := make([]float64, n)
-		ys := make([]float64, n)
-		for i := range preds {
-			xs[i] = idxToX(i)
-			ys[i] = levelToY(preds[i].Level)
-		}
-
-		if n > 1 {
-			dc.SetRGBA(divR, divG, divB, 0.12)
-			dc.MoveTo(xs[0], plotBottom)
-			dc.LineTo(xs[0], ys[0])
-			for i := 1; i < n; i++ {
-				dc.LineTo(xs[i], ys[i])
+			// Area fill under curve
+			xs := make([]float64, n)
+			ys := make([]float64, n)
+			for i := range preds {
+				xs[i] = idxToX(i)
+				ys[i] = levelToY(preds[i].Level)
 			}
-			dc.LineTo(xs[n-1], plotBottom)
-			dc.ClosePath()
-			dc.Fill()
 
-			// Line
-			dc.SetRGB(divR, divG, divB)
-			dc.SetLineWidth(2.5)
-			dc.MoveTo(xs[0], ys[0])
-			for i := 1; i < n; i++ {
-				dc.LineTo(xs[i], ys[i])
-			}
-			dc.Stroke()
-		}
+			if n > 1 {
+				dc.SetRGBA(divR, divG, divB, 0.12)
+				dc.MoveTo(xs[0], plotBottom)
+				dc.LineTo(xs[0], ys[0])
+				for i := 1; i < n; i++ {
+					dc.LineTo(xs[i], ys[i])
+				}
+				dc.LineTo(xs[n-1], plotBottom)
+				dc.ClosePath()
+				dc.Fill()
 
-		// Time labels on X axis
-		dc.SetFontFace(fonts.small)
-		for i, p := range preds {
-			// Show every 4th label to avoid crowding
-			if i%4 != 0 && i != n-1 {
-				continue
+				// Line
+				dc.SetRGB(divR, divG, divB)
+				dc.SetLineWidth(2.5)
+				dc.MoveTo(xs[0], ys[0])
+				for i := 1; i < n; i++ {
+					dc.LineTo(xs[i], ys[i])
+				}
+				dc.Stroke()
 			}
-			label := formatTideTime(p.Time, use24h)
-			drawShadowTextAnchored(dc, label, xs[i], plotBottom+20, 0.5, 0.5, textR, textG, textB)
+
+			// Time labels on X axis
+			dc.SetFontFace(fonts.small)
+			for i, p := range preds {
+				// Show every 4th label to avoid crowding
+				if i%4 != 0 && i != n-1 {
+					continue
+				}
+				label := formatTideTime(p.Time, use24h)
+				drawShadowTextAnchored(dc, label, xs[i], plotBottom+20, 0.5, 0.5, textR, textG, textB)
+			}
 		}
 
 	} else {
