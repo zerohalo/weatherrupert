@@ -640,8 +640,8 @@ func slideExtendedForecast(dc *gg.Context, data *weather.WeatherData, use24h, us
 		drawShadowTextAnchored(dc, strings.ToUpper(c.name), cx, cardY+44, 0.5, 0.5, titleR, titleG, titleB)
 
 		// Condition text — white, up to 2 lines, centered
-		dc.SetFontFace(fonts.cardBody)
-		condLines := truncateLines(wrapText(strings.ToUpper(c.forecast), 22), 2)
+		dc.SetFontFace(fonts.small)
+		condLines := truncateLines(wrapText(strings.ToUpper(c.forecast), 26), 2)
 		condY := cardY + 80
 		for _, line := range condLines {
 			drawShadowTextAnchored(dc, line, cx, condY, 0.5, 0.5, textR, textG, textB)

@@ -202,13 +202,13 @@ func makeDaily(base time.Time) []weather.ForecastPeriod {
 		nightTemp          int
 	}
 	forecasts := []dayNight{
-		{"Today", "Partly Cloudy", 78, "Tonight", "Mostly Clear", 55},
-		{"Monday", "Sunny", 82, "Monday Night", "Clear", 58},
-		{"Tuesday", "Mostly Sunny", 80, "Tuesday Night", "Partly Cloudy", 56},
-		{"Wednesday", "Chance Rain", 71, "Wednesday Night", "Showers Likely", 50},
-		{"Thursday", "Mostly Cloudy", 68, "Thursday Night", "Partly Cloudy", 48},
-		{"Friday", "Sunny", 75, "Friday Night", "Mostly Clear", 52},
-		{"Saturday", "Partly Cloudy", 77, "Saturday Night", "Mostly Cloudy", 54},
+		{"Today", "Slight Chance Light Rain", 48, "Tonight", "Chance Light Rain", 38},
+		{"Thursday", "Light Rain Likely", 45, "Thursday Night", "Slight Chance Light Snow then Partly Cloudy", 30},
+		{"Friday", "Mostly Sunny", 52, "Friday Night", "Chance Rain And Snow", 34},
+		{"Saturday", "Chance Rain And Snow then Partly Sunny", 44, "Saturday Night", "Partly Cloudy", 32},
+		{"Sunday", "Chance Light Snow", 40, "Sunday Night", "Rain", 35},
+		{"Monday", "Rain", 42, "Monday Night", "Chance Rain And Snow", 30},
+		{"Tuesday", "Slight Chance Light Snow then Mostly Sunny", 50, "Tuesday Night", "Mostly Cloudy", 36},
 	}
 
 	periods := make([]weather.ForecastPeriod, 0, 14)
