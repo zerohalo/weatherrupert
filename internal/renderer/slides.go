@@ -1462,16 +1462,9 @@ func slideMoonTides(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 		dc.DrawRectangle(midX, contentTop, 2, h-contentTop-20)
 		dc.Fill()
 
-		// Right column: tide chart
+		// Right column: tide chart (full 24-hour prediction)
 		td := data.TideData
-		// Filter predictions to past 3 hours + future.
-		tideCutoff := now.Add(-3 * time.Hour)
-		var preds []weather.TidePrediction
-		for _, p := range td.Predictions {
-			if !p.Time.Before(tideCutoff) {
-				preds = append(preds, p)
-			}
-		}
+		preds := td.Predictions
 
 		// Station name
 		dc.SetFontFace(fonts.small)
