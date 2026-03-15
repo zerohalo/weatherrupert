@@ -149,56 +149,57 @@ func DrawLogoSun(dc *gg.Context, cx, cy, size float64) {
 
 // drawMoonPhase draws a phase-accurate moon disc centred at (cx, cy).
 // phase is 0–1 where 0 = new moon, 0.5 = full moon.
-// The lit portion is pale yellow-white; the shadow uses the background colour.
+// The dark side is drawn as a subtle disc first, then the lit portion
+// is drawn on top so there is no anti-aliasing outline around the edge.
 func drawMoonPhase(dc *gg.Context, cx, cy, size, phase float64) {
 	r := size / 2
 
 	illumination := 0.5 * (1 - math.Cos(2*math.Pi*phase))
 
 	if illumination < 0.02 {
-		// New moon — draw a dim outline so something is visible.
-		dc.SetRGBA(0.95, 0.95, 0.80, 0.15)
+		// New moon — draw a dim disc so something is visible.
+		dc.SetRGBA(0.15, 0.15, 0.20, 0.6)
 		dc.DrawCircle(cx, cy, r)
-		dc.Stroke()
+		dc.Fill()
 		return
 	}
 
-	// Draw the fully lit disc.
-	dc.SetRGB(0.95, 0.95, 0.80)
+	// Draw the dark side disc first — a subtle dark grey so the
+	// unlit portion is visible against the background.
+	dc.SetRGBA(0.12, 0.12, 0.18, 0.7)
 	dc.DrawCircle(cx, cy, r)
 	dc.Fill()
 
 	if illumination > 0.98 {
-		// Full moon — no shadow needed.
+		// Full moon — draw fully lit disc over the dark base.
+		dc.SetRGB(0.95, 0.95, 0.80)
+		dc.DrawCircle(cx, cy, r)
+		dc.Fill()
 		return
 	}
 
-	// Draw shadow overlay. The terminator is an ellipse whose X-radius
-	// varies with the phase. We combine a half-disc with this ellipse to
-	// produce the correct shadow shape.
+	// Draw the lit portion on top. The terminator is an ellipse whose
+	// X-radius varies with the phase. We combine a half-disc arc with
+	// this ellipse to produce the lit crescent/gibbous shape.
 	//
-	// phase 0–0.5: waxing (shadow on left, receding rightward)
-	// phase 0.5–1: waning (shadow on right, growing leftward)
+	// phase 0–0.5: waxing (lit on the right)
+	// phase 0.5–1: waning (lit on the left)
 
 	// terminatorX: the x-radius of the elliptical terminator.
 	// At quarter phases (0.25, 0.75) it's 0; at new/full it's r.
-	// cos(2π·phase) maps: 0→1, 0.25→0, 0.5→−1, 0.75→0, 1→1
 	terminatorX := r * math.Abs(math.Cos(2*math.Pi*phase))
 
-	// Shadow overlay — dark enough to be visible against both the
-	// lit disc and the background gradient.
-	dc.SetRGBA(0, 0, 0.05, 0.85)
+	dc.SetRGB(0.95, 0.95, 0.80)
 
-	// Build shadow path at fine resolution.
 	const steps = 64
 	if phase < 0.5 {
-		// Waxing: shadow on the left half.
-		// Left edge of shadow is the left half-disc arc (from top to bottom, going left).
-		// Right edge is the terminator ellipse.
+		// Waxing: lit on the right half.
+		// Right edge is the right half-disc arc (top to bottom).
+		// Left edge is the terminator ellipse.
 		dc.NewSubPath()
 		for i := 0; i <= steps; i++ {
 			a := math.Pi/2 - math.Pi*float64(i)/float64(steps) // π/2 → −π/2
-			x := cx - r*math.Cos(a)
+			x := cx + r*math.Cos(a)
 			y := cy - r*math.Sin(a)
 			if i == 0 {
 				dc.MoveTo(x, y)
@@ -206,9 +207,9 @@ func drawMoonPhase(dc *gg.Context, cx, cy, size, phase float64) {
 				dc.LineTo(x, y)
 			}
 		}
-		// Terminator: bottom to top on the left side.
+		// Terminator: bottom to top.
 		if phase < 0.25 {
-			// Before first quarter: terminator bulges right (shadow is wide).
+			// Before first quarter: terminator bulges left (lit area is narrow).
 			for i := 0; i <= steps; i++ {
 				a := -math.Pi/2 + math.Pi*float64(i)/float64(steps)
 				x := cx + terminatorX*math.Cos(a)
@@ -216,7 +217,7 @@ func drawMoonPhase(dc *gg.Context, cx, cy, size, phase float64) {
 				dc.LineTo(x, y)
 			}
 		} else {
-			// After first quarter: terminator bulges left (shadow is narrow).
+			// After first quarter: terminator bulges right (lit area is wide).
 			for i := 0; i <= steps; i++ {
 				a := -math.Pi/2 + math.Pi*float64(i)/float64(steps)
 				x := cx - terminatorX*math.Cos(a)
@@ -227,11 +228,13 @@ func drawMoonPhase(dc *gg.Context, cx, cy, size, phase float64) {
 		dc.ClosePath()
 		dc.Fill()
 	} else {
-		// Waning: shadow on the right half.
+		// Waning: lit on the left half.
+		// Left edge is the left half-disc arc (top to bottom).
+		// Right edge is the terminator ellipse.
 		dc.NewSubPath()
 		for i := 0; i <= steps; i++ {
 			a := math.Pi/2 - math.Pi*float64(i)/float64(steps)
-			x := cx + r*math.Cos(a)
+			x := cx - r*math.Cos(a)
 			y := cy - r*math.Sin(a)
 			if i == 0 {
 				dc.MoveTo(x, y)
@@ -240,7 +243,7 @@ func drawMoonPhase(dc *gg.Context, cx, cy, size, phase float64) {
 			}
 		}
 		if phase < 0.75 {
-			// Before last quarter: terminator bulges right (shadow is narrow).
+			// Before last quarter: terminator bulges right (lit area is wide).
 			for i := 0; i <= steps; i++ {
 				a := -math.Pi/2 + math.Pi*float64(i)/float64(steps)
 				x := cx + terminatorX*math.Cos(a)
@@ -248,7 +251,7 @@ func drawMoonPhase(dc *gg.Context, cx, cy, size, phase float64) {
 				dc.LineTo(x, y)
 			}
 		} else {
-			// After last quarter: terminator bulges left (shadow is wide).
+			// After last quarter: terminator bulges left (lit area is narrow).
 			for i := 0; i <= steps; i++ {
 				a := -math.Pi/2 + math.Pi*float64(i)/float64(steps)
 				x := cx - terminatorX*math.Cos(a)
