@@ -370,10 +370,9 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 		return nil, fmt.Errorf("ffmpeg for ZIP %s: %w", loc.ZipCode, err)
 	}
 
-	// Start FFmpeg suspended — it will be resumed by the hub's OnActive
-	// callback when the first viewer connects. This prevents the music stream
-	// from consuming bandwidth while nobody is watching.
-	ff.Suspend()
+	// Let FFmpeg run immediately so it can produce HLS segments from
+	// loading frames before the first viewer connects. OnIdle will
+	// suspend it once the initial warmup completes.
 
 	hub := stream.NewHub()
 
@@ -439,26 +438,24 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 		}
 
 		// Tell the relay this pipeline has viewers so it stays connected.
+		// Audio connects in the background — video is already flowing
+		// from the warmup phase so we don't block waiting for the relay.
 		p.relayMu.Lock()
 		curRelay, curPipe := p.relay, p.relayPipe
 		p.relayMu.Unlock()
 		if curRelay != nil && curPipe != nil {
 			curRelay.SetActive(curPipe, true)
-			// Block until relay has an active HTTP connection so ffmpeg
-			// doesn't produce video-only output during the audio gap.
-			waitCtx, waitCancel := context.WithTimeout(ctx, 5*time.Second)
-			defer waitCancel()
-			if err := curRelay.WaitConnected(waitCtx); err != nil {
-				log.Printf("pipeline %s: music relay wait: %v (resuming without audio)", loc.ZipCode, err)
-			}
-			// Drain stale audio from the OS pipe kernel buffer while
-			// ffmpeg is still frozen so it starts with fresh audio.
-			curRelay.DrainPipe(curPipe)
+			go func() {
+				waitCtx, waitCancel := context.WithTimeout(ctx, 5*time.Second)
+				defer waitCancel()
+				if err := curRelay.WaitConnected(waitCtx); err != nil {
+					log.Printf("pipeline %s: music relay wait: %v (audio may be delayed)", loc.ZipCode, err)
+				}
+				curRelay.DrainPipe(curPipe)
+			}()
 		}
-		// Reset the flush window so it starts from the actual resume
-		// moment, not the earlier Subscribe call which may have been
-		// seconds ago while waiting for the relay to connect.
 		hub.ResetFlushWindow()
+		// Resume FFmpeg if it was suspended by OnIdle.
 		if err := ff.Resume(); err != nil {
 			log.Printf("pipeline %s: ffmpeg resume: %v", loc.ZipCode, err)
 		} else {
@@ -493,14 +490,16 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 	go hub.Run(ff.Stdout())
 
 	// Renderer writes frames to FFmpeg stdin.
-	// Pass hub.ClientCount so the renderer can skip frames when nobody is watching.
-	// Store methods are passed as closures so that admin changes take effect live.
+	// During the initial warmup window, always write frames so FFmpeg
+	// can produce HLS segments before any viewer connects. After the
+	// warmup, only write when someone is watching.
 	use24h := clockFormat != config.ClockFormat12h
 	useMetric := units == config.UnitsMetric
+	warmupDeadline := time.Now().Add(2 * m.cfg.HLSSegmentDuration)
 	p.rnd = renderer.New(m.cfg.Width, m.cfg.Height, m.cfg.FrameRate, loc.ZipCode,
 		m.store.SlideDuration,
 		wc, ff.Stdin(),
-		func() bool { return hub.ClientCount() > 0 },
+		func() bool { return time.Now().Before(warmupDeadline) || hub.ClientCount() > 0 },
 		m.store.Announcements, m.store.AnnouncementDuration, m.store.AnnouncementInterval,
 		m.store.TriviaItems, m.store.TriviaDuration, m.store.TriviaInterval, m.store.TriviaRandomize,
 		m.store.PlanetLiveAlways,
