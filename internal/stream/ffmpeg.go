@@ -148,7 +148,7 @@ func buildArgs(width, height, frameRate int, music *MusicSource, videoMaxRate st
 
 	args = append(args,
 		"-threads", "1",
-		"-g", strconv.Itoa(frameRate*3), // keyframe every 3 seconds
+		"-g", strconv.Itoa(frameRate), // keyframe every 1 second (enables fast first segment)
 		"-pix_fmt", "yuv420p",
 	)
 

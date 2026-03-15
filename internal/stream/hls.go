@@ -201,7 +201,13 @@ func (s *HLSSegmenter) ingestChunk(chunk []byte) {
 	s.accumBuf = append(s.accumBuf, chunk...)
 
 	elapsed := now.Sub(s.accumT)
-	if elapsed < s.segmentDuration || len(s.accumBuf) == 0 {
+	// Use a shorter minimum for the first segment so HLS playback can
+	// start quickly (~1s instead of waiting for the full segment duration).
+	minDur := s.segmentDuration
+	if s.segCount == 0 && s.segmentDuration > time.Second {
+		minDur = 1 * time.Second
+	}
+	if elapsed < minDur || len(s.accumBuf) == 0 {
 		return
 	}
 
