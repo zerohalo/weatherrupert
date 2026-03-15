@@ -381,6 +381,7 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 	ctx, cancel := context.WithCancel(m.rootCtx)
 
 	seg := stream.NewHLSSegmenter(hub, loc.ZipCode, clockFormat, units, m.cfg.HLSSegmentDuration, m.cfg.HLSPlaylistSize, m.cfg.HLSRingSize)
+	seg.SubscribeNow() // Pre-subscribe so warmup frames produce HLS segments immediately.
 	go seg.Run(ctx)
 
 	// Build the canonical stream URL for the admin dashboard.

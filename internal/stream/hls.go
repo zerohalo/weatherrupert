@@ -134,6 +134,12 @@ func NewHLSSegmenter(hub *Hub, zip, clock, units string, segDuration time.Durati
 	}
 }
 
+// SubscribeNow subscribes to the Hub immediately so segments start
+// accumulating before any HLS client connects (warmup).
+func (s *HLSSegmenter) SubscribeNow() {
+	s.subscribe()
+}
+
 // Run is the main loop. It must be run in a goroutine. It blocks until ctx is cancelled.
 func (s *HLSSegmenter) Run(ctx context.Context) {
 	defer s.stopped.Store(true)
