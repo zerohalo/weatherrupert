@@ -371,8 +371,12 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 	}
 
 	// Let FFmpeg run immediately so it can produce HLS segments from
-	// loading frames before the first viewer connects. OnIdle will
-	// suspend it once the initial warmup completes.
+	// loading frames before the first viewer connects. Activate the
+	// music relay so FFmpeg gets audio input (it can't mux without both
+	// streams). OnIdle will deactivate and suspend when viewers leave.
+	if relay != nil && relayPipe != nil {
+		relay.SetActive(relayPipe, true)
+	}
 
 	hub := stream.NewHub()
 
@@ -526,7 +530,7 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 		}
 	}()
 
-	log.Printf("pipeline %s: started (%dx%d @ %dfps)", loc.ZipCode, m.cfg.Width, m.cfg.Height, m.cfg.FrameRate)
+	log.Printf("pipeline %s: started (%dx%d @ %dfps, warmup %s)", loc.ZipCode, m.cfg.Width, m.cfg.Height, m.cfg.FrameRate, 2*m.cfg.HLSSegmentDuration)
 	return p, nil
 }
 

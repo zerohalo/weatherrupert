@@ -265,6 +265,7 @@ func (s *HLSSegmenter) finalizeSegmentData(now time.Time, segData []byte) {
 	if !s.readyClosed {
 		s.readyOnce.Do(func() { close(s.ready) })
 		s.readyClosed = true
+		log.Printf("hls: first segment ready (zip %s, seq %d, %d bytes)", s.zip, seg.SeqNum, size)
 	}
 }
 
