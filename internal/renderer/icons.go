@@ -185,9 +185,9 @@ func drawMoonPhase(dc *gg.Context, cx, cy, size, phase float64) {
 	// cos(2π·phase) maps: 0→1, 0.25→0, 0.5→−1, 0.75→0, 1→1
 	terminatorX := r * math.Abs(math.Cos(2*math.Pi*phase))
 
-	// Darken shadow slightly from the background so the unlit side is
-	// visible against the blue sky.
-	dc.SetRGB(bgR*0.5, bgG*0.5, bgB*0.5)
+	// Shadow overlay — dark enough to be visible against both the
+	// lit disc and the background gradient.
+	dc.SetRGBA(0, 0, 0.05, 0.85)
 
 	// Build shadow path at fine resolution.
 	const steps = 64

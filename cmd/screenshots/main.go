@@ -49,6 +49,7 @@ func main() {
 		SnowTotal24h:   50.8,
 	}
 
+	realisticMoon := func() bool { return true }
 	slides := []struct {
 		name  string
 		slide renderer.SlideFunc
@@ -57,12 +58,12 @@ func main() {
 		{"alerts", renderer.NewSlideAlerts(false, nil, nil), func(d *weather.WeatherData) {
 			d.Alerts = makeAlerts(now)
 		}},
-		{"local-conditions", renderer.NewSlideCurrentConditions(false, false, nil, nil, nil), func(d *weather.WeatherData) {
+		{"local-conditions", renderer.NewSlideCurrentConditions(false, false, nil, realisticMoon, nil), func(d *weather.WeatherData) {
 			d.Alerts = nil
 		}},
-		{"hourly-forecast", renderer.NewSlideHourlyForecast(false, false, nil, nil, nil), nil},
-		{"precipitation", renderer.NewSlidePrecipitation(false, false, nil, nil, nil), nil},
-		{"extended-forecast", renderer.NewSlideExtendedForecast(false, false, nil, nil, nil), nil},
+		{"hourly-forecast", renderer.NewSlideHourlyForecast(false, false, nil, realisticMoon, nil), nil},
+		{"precipitation", renderer.NewSlidePrecipitation(false, false, nil, realisticMoon, nil), nil},
+		{"extended-forecast", renderer.NewSlideExtendedForecast(false, false, nil, realisticMoon, nil), nil},
 		{"moon-tides", renderer.NewSlideMoonTides(false, false, nil, nil), func(d *weather.WeatherData) {
 			d.TideData = makeTideData(now)
 		}},
