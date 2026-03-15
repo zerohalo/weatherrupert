@@ -116,6 +116,31 @@ func drawIcon(dc *gg.Context, t iconType, cx, cy, size float64) {
 	}
 }
 
+// drawIconWithMoon is like drawIcon but uses a phase-accurate moon disc
+// for night icons when realistic is true.
+func drawIconWithMoon(dc *gg.Context, t iconType, cx, cy, size, moonPhase float64, realistic bool) {
+	if !realistic || (t != iconNightClear && t != iconNightPartlyCloudy) {
+		drawIcon(dc, t, cx, cy, size)
+		return
+	}
+	switch t {
+	case iconNightClear:
+		drawMoonPhase(dc, cx, cy, size*0.48, moonPhase)
+	case iconNightPartlyCloudy:
+		drawPartlyCloudyMoon(dc, cx, cy, size, moonPhase)
+	}
+}
+
+// drawPartlyCloudyMoon is like drawPartlyCloudy for nighttime but uses
+// a phase-accurate moon disc instead of a crescent.
+func drawPartlyCloudyMoon(dc *gg.Context, cx, cy, size, moonPhase float64) {
+	bx := cx + size*0.12
+	by := cy - size*0.12
+	br := size * 0.22
+	drawMoonPhase(dc, bx, by, br*2, moonPhase)
+	drawCloudShape(dc, cx, cy, size, 1.0, 1.0, 1.0)
+}
+
 // DrawLogoSun draws a small sun icon suitable for the logo/header.
 // It reuses the same visual pattern as drawSun (yellow disc + 8 rays).
 func DrawLogoSun(dc *gg.Context, cx, cy, size float64) {

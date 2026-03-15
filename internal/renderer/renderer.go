@@ -98,6 +98,7 @@ func New(w, h, frameRate int, label string,
 	getAnnouncements func() []ann.Announcement, getAnnDuration func() time.Duration, getAnnInterval func() int,
 	getTriviaItems func() []trivia.TriviaItem, getTriviaDuration func() time.Duration, getTriviaInterval func() int, getTriviaRandomize func() bool,
 	getPlanetLiveAlways func() bool,
+	getRealisticMoon func() bool,
 	use24h bool, useMetric bool,
 	loc *time.Location,
 ) *Renderer {
@@ -116,9 +117,9 @@ func New(w, h, frameRate int, label string,
 		fonts:            fonts,
 		weatherSlides: []weatherSlideEntry{
 			{name: "alerts", fn: NewSlideAlerts(use24h, loc, fonts), skip: func(d *weather.WeatherData) bool { return len(d.Alerts) == 0 }},
-			{name: "current-conditions", fn: NewSlideCurrentConditions(use24h, useMetric, loc, fonts)},
-			{name: "hourly-forecast", fn: NewSlideHourlyForecast(use24h, useMetric, loc, fonts)},
-			{name: "precipitation", fn: NewSlidePrecipitation(use24h, useMetric, loc, fonts), skip: func() func(*weather.WeatherData) bool {
+			{name: "current-conditions", fn: NewSlideCurrentConditions(use24h, useMetric, loc, getRealisticMoon, fonts)},
+			{name: "hourly-forecast", fn: NewSlideHourlyForecast(use24h, useMetric, loc, getRealisticMoon, fonts)},
+			{name: "precipitation", fn: NewSlidePrecipitation(use24h, useMetric, loc, getRealisticMoon, fonts), skip: func() func(*weather.WeatherData) bool {
 				noPrecipCount := 0
 				return func(d *weather.WeatherData) bool {
 					// Check if any hourly period has precipitation probability > 0.
@@ -138,7 +139,7 @@ func New(w, h, frameRate int, label string,
 					return noPrecipCount%2 == 0
 				}
 			}()},
-			{name: "extended-forecast", fn: NewSlideExtendedForecast(use24h, useMetric, loc, fonts)},
+			{name: "extended-forecast", fn: NewSlideExtendedForecast(use24h, useMetric, loc, getRealisticMoon, fonts)},
 			{name: "moon-tides", fn: NewSlideMoonTides(use24h, useMetric, loc, fonts)},
 			{name: "night-sky", fn: NewSlideNightSky(use24h, useMetric, loc, getPlanetLiveAlways, fonts)},
 			{name: "solar-weather", fn: NewSlideSolarWeather(use24h, useMetric, loc, fonts), skip: func(d *weather.WeatherData) bool {

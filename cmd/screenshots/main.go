@@ -57,12 +57,12 @@ func main() {
 		{"alerts", renderer.NewSlideAlerts(false, nil, nil), func(d *weather.WeatherData) {
 			d.Alerts = makeAlerts(now)
 		}},
-		{"local-conditions", renderer.NewSlideCurrentConditions(false, false, nil, nil), func(d *weather.WeatherData) {
+		{"local-conditions", renderer.NewSlideCurrentConditions(false, false, nil, nil, nil), func(d *weather.WeatherData) {
 			d.Alerts = nil
 		}},
-		{"hourly-forecast", renderer.NewSlideHourlyForecast(false, false, nil, nil), nil},
-		{"precipitation", renderer.NewSlidePrecipitation(false, false, nil, nil), nil},
-		{"extended-forecast", renderer.NewSlideExtendedForecast(false, false, nil, nil), nil},
+		{"hourly-forecast", renderer.NewSlideHourlyForecast(false, false, nil, nil, nil), nil},
+		{"precipitation", renderer.NewSlidePrecipitation(false, false, nil, nil, nil), nil},
+		{"extended-forecast", renderer.NewSlideExtendedForecast(false, false, nil, nil, nil), nil},
 		{"moon-tides", renderer.NewSlideMoonTides(false, false, nil, nil), func(d *weather.WeatherData) {
 			d.TideData = makeTideData(now)
 		}},

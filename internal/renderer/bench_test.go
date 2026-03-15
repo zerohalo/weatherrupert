@@ -182,6 +182,7 @@ func TestRenderPreviewRace(t *testing.T) {
 		func() []ann.Announcement { return nil }, func() time.Duration { return time.Second }, func() int { return 0 },
 		func() []trivia.TriviaItem { return nil }, func() time.Duration { return time.Second }, func() int { return 0 }, func() bool { return false },
 		func() bool { return false },
+		func() bool { return false },
 		false, false,
 		nil,
 	)
@@ -221,22 +222,22 @@ func benchSlide(b *testing.B, slide SlideFunc, data *weather.WeatherData) {
 
 func BenchmarkSlideCurrentConditions(b *testing.B) {
 	data := mockData()
-	benchSlide(b, NewSlideCurrentConditions(false, false, nil, defaultFonts), data)
+	benchSlide(b, NewSlideCurrentConditions(false, false, nil, nil, defaultFonts), data)
 }
 
 func BenchmarkSlideHourlyForecast(b *testing.B) {
 	data := mockData()
-	benchSlide(b, NewSlideHourlyForecast(false, false, nil, defaultFonts), data)
+	benchSlide(b, NewSlideHourlyForecast(false, false, nil, nil, defaultFonts), data)
 }
 
 func BenchmarkSlidePrecipitation(b *testing.B) {
 	data := mockData()
-	benchSlide(b, NewSlidePrecipitation(false, false, nil, defaultFonts), data)
+	benchSlide(b, NewSlidePrecipitation(false, false, nil, nil, defaultFonts), data)
 }
 
 func BenchmarkSlideExtendedForecast(b *testing.B) {
 	data := mockData()
-	benchSlide(b, NewSlideExtendedForecast(false, false, nil, defaultFonts), data)
+	benchSlide(b, NewSlideExtendedForecast(false, false, nil, nil, defaultFonts), data)
 }
 
 func BenchmarkSlideMoonTides(b *testing.B) {

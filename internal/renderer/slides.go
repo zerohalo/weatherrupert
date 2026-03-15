@@ -226,16 +226,19 @@ func fmtConvOr(v *float64, conv func(float64) float64, format, fallback string) 
 
 // NewSlideCurrentConditions returns a SlideFunc that renders current temperature,
 // conditions, and atmospheric data. use24h controls the clock format in the header.
-func NewSlideCurrentConditions(use24h, useMetric bool, loc *time.Location, fonts *fontSet) SlideFunc {
+func NewSlideCurrentConditions(use24h, useMetric bool, loc *time.Location, getRealisticMoon func() bool, fonts *fontSet) SlideFunc {
 	if fonts == nil {
 		fonts = defaultFonts
 	}
+	if getRealisticMoon == nil {
+		getRealisticMoon = func() bool { return false }
+	}
 	return func(dc *gg.Context, data *weather.WeatherData, _, _ time.Duration) time.Duration {
-		return slideCurrentConditions(dc, data, use24h, useMetric, loc, fonts)
+		return slideCurrentConditions(dc, data, use24h, useMetric, loc, getRealisticMoon, fonts)
 	}
 }
 
-func slideCurrentConditions(dc *gg.Context, data *weather.WeatherData, use24h, useMetric bool, loc *time.Location, fonts *fontSet) time.Duration {
+func slideCurrentConditions(dc *gg.Context, data *weather.WeatherData, use24h, useMetric bool, loc *time.Location, getRealisticMoon func() bool, fonts *fontSet) time.Duration {
 	drawBackground(dc, "LOCAL CONDITIONS", data.Location, use24h, loc, fonts)
 
 	w := float64(dc.Width())
@@ -249,7 +252,7 @@ func slideCurrentConditions(dc *gg.Context, data *weather.WeatherData, use24h, u
 	iconCX := midX / 2
 	iconCY := (contentY+h)/2 - 30
 	icon := conditionIcon(cur.Description, currentIsDaytime(data, loc))
-	drawIcon(dc, icon, iconCX, iconCY, iconSize)
+	drawIconWithMoon(dc, icon, iconCX, iconCY, iconSize, data.MoonPhase.Phase, getRealisticMoon())
 
 	// Condition description — centred below the icon
 	dc.SetFontFace(fonts.mediumBold)
@@ -347,16 +350,19 @@ func slideCurrentConditions(dc *gg.Context, data *weather.WeatherData, use24h, u
 
 // NewSlideHourlyForecast returns a SlideFunc that renders the next 12 hours as a
 // temperature line graph. use24h controls the clock format for axis labels and the header.
-func NewSlideHourlyForecast(use24h, useMetric bool, loc *time.Location, fonts *fontSet) SlideFunc {
+func NewSlideHourlyForecast(use24h, useMetric bool, loc *time.Location, getRealisticMoon func() bool, fonts *fontSet) SlideFunc {
 	if fonts == nil {
 		fonts = defaultFonts
 	}
+	if getRealisticMoon == nil {
+		getRealisticMoon = func() bool { return false }
+	}
 	return func(dc *gg.Context, data *weather.WeatherData, _, _ time.Duration) time.Duration {
-		return slideHourlyForecast(dc, data, use24h, useMetric, loc, fonts)
+		return slideHourlyForecast(dc, data, use24h, useMetric, loc, getRealisticMoon, fonts)
 	}
 }
 
-func slideHourlyForecast(dc *gg.Context, data *weather.WeatherData, use24h, useMetric bool, loc *time.Location, fonts *fontSet) time.Duration {
+func slideHourlyForecast(dc *gg.Context, data *weather.WeatherData, use24h, useMetric bool, loc *time.Location, getRealisticMoon func() bool, fonts *fontSet) time.Duration {
 	drawBackground(dc, "HOURLY FORECAST", data.Location, use24h, loc, fonts)
 
 	w := float64(dc.Width())
@@ -488,7 +494,7 @@ func slideHourlyForecast(dc *gg.Context, data *weather.WeatherData, use24h, useM
 
 		// Weather icon centered on the data point (draws over the line).
 		icon := conditionIcon(p.ShortForecast, p.IsDaytime)
-		drawIcon(dc, icon, x, y, iconSize)
+		drawIconWithMoon(dc, icon, x, y, iconSize, data.MoonPhase.Phase, getRealisticMoon())
 
 		// Time label below the X axis.
 		drawShadowTextAnchored(dc, hourLabel(p.StartTime, use24h, loc, i),
@@ -578,16 +584,19 @@ func buildDayCards(periods []weather.ForecastPeriod) []dayCard {
 
 // NewSlideExtendedForecast returns a SlideFunc that renders a 3×2 grid of day cards.
 // use24h controls the clock format in the header.
-func NewSlideExtendedForecast(use24h, useMetric bool, loc *time.Location, fonts *fontSet) SlideFunc {
+func NewSlideExtendedForecast(use24h, useMetric bool, loc *time.Location, getRealisticMoon func() bool, fonts *fontSet) SlideFunc {
 	if fonts == nil {
 		fonts = defaultFonts
 	}
+	if getRealisticMoon == nil {
+		getRealisticMoon = func() bool { return false }
+	}
 	return func(dc *gg.Context, data *weather.WeatherData, _, _ time.Duration) time.Duration {
-		return slideExtendedForecast(dc, data, use24h, useMetric, loc, fonts)
+		return slideExtendedForecast(dc, data, use24h, useMetric, loc, getRealisticMoon, fonts)
 	}
 }
 
-func slideExtendedForecast(dc *gg.Context, data *weather.WeatherData, use24h, useMetric bool, loc *time.Location, fonts *fontSet) time.Duration {
+func slideExtendedForecast(dc *gg.Context, data *weather.WeatherData, use24h, useMetric bool, loc *time.Location, getRealisticMoon func() bool, fonts *fontSet) time.Duration {
 	drawBackground(dc, "EXTENDED FORECAST", data.Location, use24h, loc, fonts)
 
 	if len(data.DailyPeriods) == 0 {
@@ -650,7 +659,7 @@ func slideExtendedForecast(dc *gg.Context, data *weather.WeatherData, use24h, us
 
 		// Weather icon — centered in the card's middle band
 		icon := conditionIcon(c.forecast, c.daytime)
-		drawIcon(dc, icon, cx, cardY+cardH*0.60, iconSize)
+		drawIconWithMoon(dc, icon, cx, cardY+cardH*0.60, iconSize, data.MoonPhase.Phase, getRealisticMoon())
 
 		// Temperature block — high and/or low
 		dc.SetFontFace(fonts.medium)
@@ -1641,16 +1650,19 @@ func formatTideTime(t time.Time, use24h bool) string {
 
 // NewSlidePrecipitation returns a SlideFunc that renders a 12-hour precipitation
 // probability bar chart.
-func NewSlidePrecipitation(use24h, useMetric bool, loc *time.Location, fonts *fontSet) SlideFunc {
+func NewSlidePrecipitation(use24h, useMetric bool, loc *time.Location, getRealisticMoon func() bool, fonts *fontSet) SlideFunc {
 	if fonts == nil {
 		fonts = defaultFonts
 	}
+	if getRealisticMoon == nil {
+		getRealisticMoon = func() bool { return false }
+	}
 	return func(dc *gg.Context, data *weather.WeatherData, _, _ time.Duration) time.Duration {
-		return slidePrecipitation(dc, data, use24h, useMetric, loc, fonts)
+		return slidePrecipitation(dc, data, use24h, useMetric, loc, getRealisticMoon, fonts)
 	}
 }
 
-func slidePrecipitation(dc *gg.Context, data *weather.WeatherData, use24h, useMetric bool, loc *time.Location, fonts *fontSet) time.Duration {
+func slidePrecipitation(dc *gg.Context, data *weather.WeatherData, use24h, useMetric bool, loc *time.Location, getRealisticMoon func() bool, fonts *fontSet) time.Duration {
 	drawBackground(dc, "CHANCE OF PRECIPITATION", data.Location, use24h, loc, fonts)
 
 	w := float64(dc.Width())
@@ -1731,7 +1743,7 @@ func slidePrecipitation(dc *gg.Context, data *weather.WeatherData, use24h, useMe
 
 		// Weather icon above value label
 		icon := conditionIcon(p.ShortForecast, p.IsDaytime)
-		drawIcon(dc, icon, cx, (headerH+plotTop)/2, iconSize)
+		drawIconWithMoon(dc, icon, cx, (headerH+plotTop)/2, iconSize, data.MoonPhase.Phase, getRealisticMoon())
 
 		// Time label below X axis
 		dc.SetFontFace(fonts.small)
