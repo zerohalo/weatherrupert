@@ -294,9 +294,13 @@ func slideCurrentConditions(dc *gg.Context, data *weather.WeatherData, use24h, u
 	icon := conditionIcon(cur.Description, currentIsDaytime(data, loc))
 	drawIconWithMoon(dc, icon, iconCX, iconCY, iconSize, data.MoonPhase.Phase, getRealisticMoon())
 
-	// Condition description — centred below the icon
+	// Condition description — centred below the icon, wrapped if needed
 	dc.SetFontFace(fonts.mediumBold)
-	drawShadowTextAnchored(dc, strings.ToUpper(truncate(cur.Description, 20)), iconCX, iconCY+iconSize/2+30, 0.5, 0.5, subR, subG, subB)
+	condLines := truncateLines(wrapText(strings.ToUpper(cur.Description), 20), 2)
+	condBaseY := iconCY + iconSize/2 + 30
+	for j, line := range condLines {
+		drawShadowTextAnchored(dc, line, iconCX, condBaseY+float64(j)*32, 0.5, 0.5, subR, subG, subB)
+	}
 
 	// ── Vertical divider ──
 	dc.SetRGBA(1, 1, 1, 0.20)
