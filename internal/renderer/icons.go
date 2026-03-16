@@ -165,10 +165,15 @@ func drawMoonPhase(dc *gg.Context, cx, cy, size, phase float64) {
 	illumination := 0.5 * (1 - math.Cos(2*math.Pi*phase))
 
 	if illumination < 0.02 {
-		// New moon — draw a dim disc so something is visible.
+		// New moon — draw a dim disc with a faint light ring so the
+		// outline is visible against the dark gradient background.
 		dc.SetRGBA(0.18, 0.20, 0.30, 0.65)
 		dc.DrawCircle(cx, cy, r)
 		dc.Fill()
+		dc.SetRGBA(0.5, 0.5, 0.55, 0.35)
+		dc.SetLineWidth(1.5)
+		dc.DrawCircle(cx, cy, r)
+		dc.Stroke()
 		return
 	}
 
@@ -762,6 +767,147 @@ func RenderIconSheet(path string) error {
 		dc.SetRGB(textR, textG, textB)
 		dc.SetFontFace(defaultFonts.small)
 		dc.DrawStringAnchored(e.label, cx, cy+iconSize/2+20, 0.5, 0.5)
+	}
+
+	f, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("create %s: %w", path, err)
+	}
+	defer f.Close()
+	if err := png.Encode(f, dc.Image()); err != nil {
+		return fmt.Errorf("encode: %w", err)
+	}
+	fmt.Printf("wrote %s (%dx%d)\n", path, int(w), int(h))
+	return nil
+}
+
+// RenderRealisticIconSheet draws all weather icons using phase-accurate moon
+// rendering for night icons and saves to path.
+func RenderRealisticIconSheet(path string) error {
+	type entry struct {
+		icon  iconType
+		label string
+	}
+	icons := []entry{
+		{iconSunny, "Sunny"},
+		{iconNightClear, "Night Clear"},
+		{iconPartlyCloudy, "Partly Cloudy"},
+		{iconNightPartlyCloudy, "Night Partly Cloudy"},
+		{iconMostlyCloudy, "Mostly Cloudy"},
+		{iconNightMostlyCloudy, "Night Mostly Cloudy"},
+		{iconCloudy, "Cloudy"},
+		{iconRain, "Rain"},
+		{iconThunderstorm, "Thunderstorm"},
+		{iconSnow, "Snow"},
+		{iconSleet, "Sleet"},
+		{iconFog, "Fog"},
+		{iconWindy, "Windy"},
+		{iconHail, "Hail"},
+		{iconTornado, "Tornado"},
+	}
+
+	cols := 4
+	rows := (len(icons) + cols - 1) / cols
+	cellW, cellH := 320.0, 280.0
+	w := float64(cols) * cellW
+	h := float64(rows) * cellH
+
+	dc := gg.NewContext(int(w), int(h))
+
+	for y := 0; y < int(h); y++ {
+		t := float64(y) / h
+		r := 0.063*(1-t) + 0.0*t
+		g := 0.125*(1-t) + 0.063*t
+		b := 0.502*(1-t) + 0.251*t
+		dc.SetRGB(r, g, b)
+		dc.DrawRectangle(0, float64(y), w, 1)
+		dc.Fill()
+	}
+
+	iconSize := 160.0
+	moonPhase := 0.15 // waxing crescent for a visible phase shape
+	for i, e := range icons {
+		col := i % cols
+		row := i / cols
+		cx := float64(col)*cellW + cellW/2
+		cy := float64(row)*cellH + cellH/2 - 20
+
+		drawIconWithMoon(dc, e.icon, cx, cy, iconSize, moonPhase, true)
+
+		dc.SetRGB(textR, textG, textB)
+		dc.SetFontFace(defaultFonts.small)
+		dc.DrawStringAnchored(e.label, cx, cy+iconSize/2+20, 0.5, 0.5)
+	}
+
+	f, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("create %s: %w", path, err)
+	}
+	defer f.Close()
+	if err := png.Encode(f, dc.Image()); err != nil {
+		return fmt.Errorf("encode: %w", err)
+	}
+	fmt.Printf("wrote %s (%dx%d)\n", path, int(w), int(h))
+	return nil
+}
+
+// RenderMoonPhaseSheet draws moon phases in a grid and saves to path.
+// Shows 16 phases from new moon (0) through full moon (0.5) and back.
+func RenderMoonPhaseSheet(path string) error {
+	type entry struct {
+		phase float64
+		label string
+	}
+	phases := []entry{
+		{0.0, "New Moon"},
+		{0.0625, "Waxing Crescent 1"},
+		{0.125, "Waxing Crescent 2"},
+		{0.1875, "Waxing Crescent 3"},
+		{0.25, "First Quarter"},
+		{0.3125, "Waxing Gibbous 1"},
+		{0.375, "Waxing Gibbous 2"},
+		{0.4375, "Waxing Gibbous 3"},
+		{0.5, "Full Moon"},
+		{0.5625, "Waning Gibbous 1"},
+		{0.625, "Waning Gibbous 2"},
+		{0.6875, "Waning Gibbous 3"},
+		{0.75, "Last Quarter"},
+		{0.8125, "Waning Crescent 1"},
+		{0.875, "Waning Crescent 2"},
+		{0.9375, "Waning Crescent 3"},
+	}
+
+	cols := 4
+	rows := (len(phases) + cols - 1) / cols
+	cellW, cellH := 320.0, 280.0
+	w := float64(cols) * cellW
+	h := float64(rows) * cellH
+
+	dc := gg.NewContext(int(w), int(h))
+
+	// Draw gradient background matching the slide style.
+	for y := 0; y < int(h); y++ {
+		t := float64(y) / h
+		r := 0.063*(1-t) + 0.0*t
+		g := 0.125*(1-t) + 0.063*t
+		b := 0.502*(1-t) + 0.251*t
+		dc.SetRGB(r, g, b)
+		dc.DrawRectangle(0, float64(y), w, 1)
+		dc.Fill()
+	}
+
+	moonSize := 160.0
+	for i, e := range phases {
+		col := i % cols
+		row := i / cols
+		cx := float64(col)*cellW + cellW/2
+		cy := float64(row)*cellH + cellH/2 - 20
+
+		drawMoonPhase(dc, cx, cy, moonSize, e.phase)
+
+		dc.SetRGB(textR, textG, textB)
+		dc.SetFontFace(defaultFonts.small)
+		dc.DrawStringAnchored(e.label, cx, cy+moonSize/2+20, 0.5, 0.5)
 	}
 
 	f, err := os.Create(path)
