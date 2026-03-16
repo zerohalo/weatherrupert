@@ -448,6 +448,9 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 		curRelay, curPipe := p.relay, p.relayPipe
 		p.relayMu.Unlock()
 		if curRelay != nil && curPipe != nil {
+			// Drain stale audio from the OS pipe buffer while FFmpeg is
+			// still frozen (SIGSTOP) so it doesn't play old data on resume.
+			curRelay.DrainPipe(curPipe)
 			curRelay.SetActive(curPipe, true)
 			go func() {
 				waitCtx, waitCancel := context.WithTimeout(ctx, 5*time.Second)
@@ -455,7 +458,6 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 				if err := curRelay.WaitConnected(waitCtx); err != nil {
 					log.Printf("pipeline %s: music relay wait: %v (audio may be delayed)", loc.ZipCode, err)
 				}
-				curRelay.DrainPipe(curPipe)
 			}()
 		}
 		hub.ResetFlushWindow()
