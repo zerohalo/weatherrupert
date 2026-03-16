@@ -1851,9 +1851,12 @@ func slideAlerts(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *ti
 	h := float64(dc.Height())
 	contentTop := headerH + 8.0
 
+	// Filter out expired alerts.
+	alerts := activeAlerts(data.Alerts)
+
 	// Page through alerts: 2 per page.
 	const alertsPerPage = 2
-	nAlerts := len(data.Alerts)
+	nAlerts := len(alerts)
 	if nAlerts == 0 {
 		return 0
 	}
@@ -1876,11 +1879,11 @@ func slideAlerts(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *ti
 	if endIdx > nAlerts {
 		endIdx = nAlerts
 	}
-	pageAlerts := data.Alerts[startIdx:endIdx]
+	pageAlerts := alerts[startIdx:endIdx]
 
 	// Severity color band at top.
 	maxSeverity := "Minor"
-	for _, a := range data.Alerts {
+	for _, a := range alerts {
 		if severityRank(a.Severity) > severityRank(maxSeverity) {
 			maxSeverity = a.Severity
 		}
@@ -1942,6 +1945,19 @@ func slideAlerts(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *ti
 		return pageDur * time.Duration(totalPages)
 	}
 	return 0
+}
+
+// activeAlerts filters out expired alerts based on current time.
+func activeAlerts(alerts []weather.Alert) []weather.Alert {
+	now := time.Now()
+	var active []weather.Alert
+	for _, a := range alerts {
+		if !a.Expires.IsZero() && now.After(a.Expires) {
+			continue
+		}
+		active = append(active, a)
+	}
+	return active
 }
 
 func severityRank(s string) int {
