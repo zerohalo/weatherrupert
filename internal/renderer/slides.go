@@ -2046,7 +2046,7 @@ func slideNightSky(dc *gg.Context, data *weather.WeatherData, use24h, useMetric 
 	if loc == nil {
 		loc = time.Local
 	}
-	drawBackgroundWithData(dc, "Night Sky", data, use24h, useMetric, loc, fonts)
+	drawBackgroundWithData(dc, "NIGHT SKY", data, use24h, useMetric, loc, fonts)
 
 	w := float64(dc.Width())
 	h := float64(dc.Height())
@@ -2318,7 +2318,7 @@ func NewSlideSolarWeather(use24h, useMetric bool, loc *time.Location, fonts *fon
 }
 
 func drawSolarSlide(dc *gg.Context, data *weather.WeatherData, cache *solarImageCache, use24h, useMetric bool, loc *time.Location, fonts *fontSet) {
-	drawBackgroundWithData(dc, "Solar Weather", data, use24h, useMetric, loc, fonts)
+	drawBackgroundWithData(dc, "SOLAR WEATHER", data, use24h, useMetric, loc, fonts)
 
 	w := float64(dc.Width())
 	h := float64(dc.Height())
