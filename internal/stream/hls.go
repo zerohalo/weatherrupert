@@ -330,6 +330,7 @@ func (s *HLSSegmenter) unsubscribe() {
 func (s *HLSSegmenter) checkIdle() {
 	s.mu.RLock()
 	subscribed := s.subscribed
+	subscribedAt := s.subscribedAt
 	s.mu.RUnlock()
 
 	if !subscribed {
@@ -338,19 +339,25 @@ func (s *HLSSegmenter) checkIdle() {
 
 	last := s.lastPoll.Load()
 	if last == 0 {
+		// No HLS client has ever polled. Unsubscribe once the warmup
+		// window has elapsed so we don't keep the hub (and music relay)
+		// active indefinitely when only direct-stream clients connect.
+		if time.Since(subscribedAt) <= 2*s.segmentDuration {
+			return
+		}
+	} else if time.Since(time.UnixMilli(last)) <= 2*s.segmentDuration {
 		return
 	}
-	if time.Since(time.UnixMilli(last)) > 2*s.segmentDuration {
-		s.unsubscribe()
-		// Clean up view tracking for any stale viewers.
-		s.viewMu.Lock()
-		now := time.Now()
-		for addr, t := range s.activeViewers {
-			s.viewTotal += now.Sub(t)
-			delete(s.activeViewers, addr)
-		}
-		s.viewMu.Unlock()
+
+	s.unsubscribe()
+	// Clean up view tracking for any stale viewers.
+	s.viewMu.Lock()
+	now := time.Now()
+	for addr, t := range s.activeViewers {
+		s.viewTotal += now.Sub(t)
+		delete(s.activeViewers, addr)
 	}
+	s.viewMu.Unlock()
 }
 
 // touchPoll records a poll, subscribes if needed, and returns the ready channel.
