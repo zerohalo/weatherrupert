@@ -313,7 +313,6 @@ func TestSaveToDiskRace(t *testing.T) {
 			s.triviaAPI = !s.triviaAPI
 			s.triviaAPIAmount = i
 			s.triviaAPICategory = i % 32
-			s.planetLiveAlways = !s.planetLiveAlways
 			s.mu.Unlock()
 		}
 	}()

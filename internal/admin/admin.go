@@ -96,7 +96,6 @@ type persistedData struct {
 	TriviaAPICacheMax    *int                 `json:"triviaAPICacheMax,omitempty"`
 	TriviaAPICacheExpiry *string              `json:"triviaAPICacheExpiry,omitempty"`
 	TriviaBuiltin        *bool                `json:"triviaBuiltin,omitempty"`
-	PlanetLiveAlways     *bool                `json:"planetLiveAlways,omitempty"`
 	RealisticMoonIcons   *bool                `json:"realisticMoonIcons,omitempty"`
 	SatelliteProduct     string               `json:"satelliteProduct,omitempty"` // "IR" or "VIS"
 	ClockFormat          string               `json:"clockFormat,omitempty"`      // "12" or "24"
@@ -146,7 +145,6 @@ type Store struct {
 	triviaBuiltin        bool                // when true, include built-in/admin trivia in the pool
 	triviaAPIItems       []trivia.TriviaItem // filtered view of cache for current category
 	triviaAPICache       []trivia.TriviaItem // all cached API items across all categories
-	planetLiveAlways     bool                // when true, night sky always shows current positions
 	realisticMoonIcons   bool                // when true, night icons use phase-accurate moon instead of crescent
 	satelliteProduct     string              // "IR" (infrared) or "VIS" (visible); default: "IR"
 	clockFormat          string              // default clock format: "12" or "24"
@@ -321,9 +319,6 @@ func (s *Store) loadFromDisk() {
 		s.refreshTriviaAPIItems()
 		log.Printf("trivia: restored %d cached API items from disk (%d match current filters)", len(s.triviaAPICache), len(s.triviaAPIItems))
 	}
-	if pd.PlanetLiveAlways != nil {
-		s.planetLiveAlways = *pd.PlanetLiveAlways
-	}
 	if pd.RealisticMoonIcons != nil {
 		s.realisticMoonIcons = *pd.RealisticMoonIcons
 	}
@@ -440,7 +435,6 @@ func (s *Store) saveToDisk() error {
 		TriviaAPICacheMax:    ptrInt(s.triviaAPICacheMax),
 		TriviaAPICacheExpiry: ptrStr(s.triviaAPICacheExpiry.String()),
 		TriviaBuiltin:        ptrBool(s.triviaBuiltin),
-		PlanetLiveAlways:     ptrBool(s.planetLiveAlways),
 		RealisticMoonIcons:   ptrBool(s.realisticMoonIcons),
 		SatelliteProduct:     s.satelliteProduct,
 		ClockFormat:          s.clockFormat,
@@ -656,13 +650,6 @@ func (s *Store) TriviaAPIOptions() trivia.APIOptions {
 		Category:   s.triviaAPICategory,
 		Difficulty: s.triviaAPIDifficulty,
 	}
-}
-
-// PlanetLiveAlways reports whether the night sky slide always shows live positions.
-func (s *Store) PlanetLiveAlways() bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.planetLiveAlways
 }
 
 // RealisticMoonIcons reports whether night icons use a phase-accurate moon.
@@ -1153,7 +1140,6 @@ func (s *Store) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	trivAPIRefresh := s.triviaAPIRefresh
 	clockFmt := s.clockFormat
 	unitSys := s.unitSystem
-	planetLive := s.planetLiveAlways
 	realisticMoon := s.realisticMoonIcons
 	satProd := s.satelliteProduct
 	s.mu.RUnlock()
@@ -1252,7 +1238,6 @@ func (s *Store) handleDashboard(w http.ResponseWriter, r *http.Request) {
 <tr><td>Clock format</td><td style="color:#FFFF00">%s</td></tr>
 <tr><td>Unit system</td><td style="color:#FFFF00">%s</td></tr>
 <tr><td>Satellite</td><td style="color:#FFFF00">%s</td></tr>
-<tr><td>Night sky always live</td><td style="color:#FFFF00">%s</td></tr>
 <tr><td>Realistic moon icons</td><td style="color:#FFFF00">%s</td></tr>
 <tr><td>Slide duration</td><td style="color:#FFFF00">%s</td></tr>
 <tr><td colspan="2" style="color:#FFFF00; letter-spacing:1px; padding:10px 0 2px"><b>ANNOUNCEMENTS</b></td></tr>
@@ -1293,7 +1278,7 @@ setInterval(function() {
 }, 5000);
 </script>`,
 		fmtUptime(time.Since(s.startedAt)), loadAvgStr, cpuPctStr,
-		clockDisplay, unitDisplay, satDisplay, yn(planetLive), yn(realisticMoon), slide,
+		clockDisplay, unitDisplay, satDisplay, yn(realisticMoon), slide,
 		na, annD, fmtInterval(annInt),
 		nt, trivD, fmtInterval(trivInt), yn(trivRand), yn(trivBuiltin), trivAPIDetail,
 		musicCell,
@@ -1516,7 +1501,6 @@ func (s *Store) handleSettingsGet(w http.ResponseWriter, r *http.Request) {
 	trivAPICacheExpiry := s.triviaAPICacheExpiry.String()
 	trivAPICacheCount := len(s.triviaAPICache)
 	trivBuiltin := s.triviaBuiltin
-	planetLive := s.planetLiveAlways
 	realisticMoon := s.realisticMoonIcons
 	satProd := s.satelliteProduct
 	clockFmt := s.clockFormat
@@ -1536,10 +1520,6 @@ func (s *Store) handleSettingsGet(w http.ResponseWriter, r *http.Request) {
 	trivBuiltinChecked := ""
 	if trivBuiltin {
 		trivBuiltinChecked = " checked"
-	}
-	planetLiveChecked := ""
-	if planetLive {
-		planetLiveChecked = " checked"
 	}
 	realisticMoonChecked := ""
 	if realisticMoon {
@@ -1655,11 +1635,6 @@ func (s *Store) handleSettingsGet(w http.ResponseWriter, r *http.Request) {
 </div>
 <p class="hint">Default for new streams. Override per-request with ?units=imperial or ?units=metric in the URL.</p>
 
-<label style="display:flex; align-items:center; gap:10px; cursor:pointer; margin-top:14px">
-  <input type="checkbox" name="planetLiveAlways" value="1"%s style="width:auto; accent-color:#FFFF00">
-  Night sky always live
-</label>
-<p class="hint">When enabled, the night sky slide always shows current planet positions. When disabled (default), it shows positions at sunset until the sun sets, then switches to live.</p>
 
 <label style="display:flex; align-items:center; gap:10px; cursor:pointer; margin-top:14px">
   <input type="checkbox" name="realisticMoonIcons" value="1"%s style="width:auto; accent-color:#FFFF00">
@@ -1774,7 +1749,7 @@ function addStreamRow() {
   tbody.appendChild(tr);
   tr.querySelector('input').focus();
 }
-</script>`, flash, clock24Checked, clock12Checked, unitsImperialChecked, unitsMetricChecked, planetLiveChecked, realisticMoonChecked, satIRChecked, satVISChecked, slide, annD, annInt, trivD, trivInt, trivRandChecked, trivBuiltinChecked, trivAPIChecked, trivAPIAmount, categoryOptions.String(), difficultyOptions.String(), trivAPIRefresh, trivAPICacheMax, trivAPICacheCount, trivAPICacheExpiry, streamRows.String())
+</script>`, flash, clock24Checked, clock12Checked, unitsImperialChecked, unitsMetricChecked, realisticMoonChecked, satIRChecked, satVISChecked, slide, annD, annInt, trivD, trivInt, trivRandChecked, trivBuiltinChecked, trivAPIChecked, trivAPIAmount, categoryOptions.String(), difficultyOptions.String(), trivAPIRefresh, trivAPICacheMax, trivAPICacheCount, trivAPICacheExpiry, streamRows.String())
 	writePage(w, "SETTINGS", body)
 }
 
@@ -1823,7 +1798,6 @@ func (s *Store) handleSettingsPost(w http.ResponseWriter, r *http.Request) {
 	trivRand := r.FormValue("triviaRandomize") == "1"
 	trivBuiltin := r.FormValue("triviaBuiltin") == "1"
 	trivAPI := r.FormValue("triviaAPI") == "1"
-	planetLive := r.FormValue("planetLiveAlways") == "1"
 	realisticMoon := r.FormValue("realisticMoonIcons") == "1"
 
 	var warnings []string
@@ -1920,7 +1894,6 @@ func (s *Store) handleSettingsPost(w http.ResponseWriter, r *http.Request) {
 	s.refreshTriviaAPIItems()
 	needsFetch := s.triviaAPI && (s.triviaAPICategory != 0 || s.triviaAPIDifficulty != "") && len(s.triviaAPIItems) == 0
 	fetchFn := s.onNeedsFetch
-	s.planetLiveAlways = planetLive
 	s.realisticMoonIcons = realisticMoon
 	s.satelliteProduct = satProd
 	s.clockFormat = clockFmt

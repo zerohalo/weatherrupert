@@ -70,7 +70,7 @@ func main() {
 		{"moon-phase", renderer.NewSlideMoonTides(false, false, nil, nil), func(d *weather.WeatherData) {
 			d.TideData = nil
 		}},
-		{"night-sky", renderer.NewSlideNightSky(false, false, nil, nil, nil), func(d *weather.WeatherData) {
+		{"night-sky", renderer.NewSlideNightSky(false, false, nil, nil), func(d *weather.WeatherData) {
 			d.Planets = makePlanetData(now)
 		}},
 		{"solar-weather", renderer.NewSlideSolarWeather(false, false, nil, nil), func(d *weather.WeatherData) {

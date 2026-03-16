@@ -1967,15 +1967,12 @@ func wrapText(s string, maxLen int) []string {
 
 // NewSlideNightSky returns a SlideFunc that renders a planisphere-style sky
 // dome with planet positions and a stats table.
-func NewSlideNightSky(use24h, useMetric bool, loc *time.Location, getPlanetLiveAlways func() bool, fonts *fontSet) SlideFunc {
+func NewSlideNightSky(use24h, useMetric bool, loc *time.Location, fonts *fontSet) SlideFunc {
 	if fonts == nil {
 		fonts = defaultFonts
 	}
-	if getPlanetLiveAlways == nil {
-		getPlanetLiveAlways = func() bool { return false }
-	}
 	return func(dc *gg.Context, data *weather.WeatherData, _, _ time.Duration) time.Duration {
-		return slideNightSky(dc, data, use24h, loc, getPlanetLiveAlways, fonts)
+		return slideNightSky(dc, data, use24h, loc, fonts)
 	}
 }
 
@@ -1988,7 +1985,7 @@ var planetColors = map[string][3]float64{
 	"Saturn":  {0.95, 0.90, 0.70}, // pale gold
 }
 
-func slideNightSky(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *time.Location, getPlanetLiveAlways func() bool, fonts *fontSet) time.Duration {
+func slideNightSky(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *time.Location, fonts *fontSet) time.Duration {
 	if loc == nil {
 		loc = time.Local
 	}
@@ -2006,14 +2003,7 @@ func slideNightSky(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *
 		return 0
 	}
 
-	// Pick which set of positions to display.
-	// Use sunset positions when: before sunset AND not live-always AND sunset data exists.
-	liveAlways := getPlanetLiveAlways()
-	useSunset := !liveAlways && data.Planets.BeforeSunset && len(data.Planets.SunsetPlanets) > 0
 	planets := data.Planets.LivePlanets
-	if useSunset {
-		planets = data.Planets.SunsetPlanets
-	}
 	sorted := weather.SortPlanetsByAltitude(planets)
 
 	// ── Left half: Sky dome ──
@@ -2250,20 +2240,11 @@ func slideNightSky(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *
 		}
 	}
 
-	// ── "AT SUNSET" / "LIVE" label — centered at bottom of left (dome) panel ──
+	// ── "LIVE" label — centered at bottom of left (dome) panel ──
 	panelCenterX := midX / 2
 	labelY := h - 25.0
 	dc.SetFontFace(fonts.small)
-	if useSunset {
-		sunsetFmt := "3:04 PM"
-		if use24h {
-			sunsetFmt = "15:04"
-		}
-		label := fmt.Sprintf("AT SUNSET %s", data.Planets.SunsetTime.In(loc).Format(sunsetFmt))
-		drawShadowTextAnchored(dc, label, panelCenterX, labelY, 0.5, 0.5, subR, subG, subB)
-	} else {
-		drawShadowTextAnchored(dc, "LIVE", panelCenterX, labelY, 0.5, 0.5, 0.3, 1.0, 0.3)
-	}
+	drawShadowTextAnchored(dc, "LIVE", panelCenterX, labelY, 0.5, 0.5, 0.3, 1.0, 0.3)
 
 	return 0
 }

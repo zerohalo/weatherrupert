@@ -182,7 +182,6 @@ func TestRenderPreviewRace(t *testing.T) {
 		func() []ann.Announcement { return nil }, func() time.Duration { return time.Second }, func() int { return 0 },
 		func() []trivia.TriviaItem { return nil }, func() time.Duration { return time.Second }, func() int { return 0 }, func() bool { return false },
 		func() bool { return false },
-		func() bool { return false },
 		false, false,
 		nil,
 	)
