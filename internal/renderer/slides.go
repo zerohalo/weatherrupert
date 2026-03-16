@@ -527,79 +527,29 @@ func slideHourlyForecast(dc *gg.Context, data *weather.WeatherData, use24h, useM
 	minT -= 10
 	maxT += 10
 
-	// Plot area bounds — shifted right so the chart is visually centred
-	// when the Y-axis labels (~55 px wide) are taken into account.
-	const (
-		plotLeft   = 150.0
-		plotRight  = 1230.0
-		plotBottom = 638.0
-		iconSize   = 79.0
-		// xPad insets data-point positions from the plot edges so that icons
-		// (±iconSize/2 = ±39.5 px wide) never overlap the Y-axis labels which
-		// are right-anchored at plotLeft-6.  A 50 px inset leaves ~16 px of
-		// clearance between the first/last icon edge and the nearest label.
-		xPad = 50.0
-	)
-	plotTop := headerH + 120.0 // headroom above topmost icon + temp label
-	plotW := plotRight - plotLeft
-	plotH := plotBottom - plotTop
+	const iconSize = 79.0
 
-	// Map a temperature value to a Y pixel coordinate.
-	tempToY := func(t float64) float64 {
-		return plotBottom - (t-minT)/(maxT-minT)*plotH
-	}
-	// Map a period index to an X pixel coordinate.
-	// Data points are inset by xPad on each side so icons don't overlap
-	// the Y-axis labels; the gridlines and area-fill base still span the
-	// full plotLeft–plotRight width.
-	idxToX := func(i int) float64 {
-		if n <= 1 {
-			return plotLeft + plotW/2
-		}
-		return plotLeft + xPad + float64(i)*(plotW-2*xPad)/float64(n-1)
-	}
+	cl := newChartLayout(n, temps, minT, maxT, 150, 1230, headerH+120, 638, 50)
+	cl.DrawGridLines(dc, 4, "°", fonts)
 
-	// Pre-compute all data-point positions.
-	xs := make([]float64, n)
-	ys := make([]float64, n)
-	for i := range periods {
-		xs[i] = idxToX(i)
-		ys[i] = tempToY(temps[i])
-	}
-
-	// ── Y-axis grid lines ──
-	const gridLines = 4
-	for g := 0; g <= gridLines; g++ {
-		gTemp := minT + float64(g)*(maxT-minT)/float64(gridLines)
-		gY := tempToY(gTemp)
-		dc.SetRGBA(1, 1, 1, 0.07)
-		dc.SetLineWidth(1)
-		dc.DrawLine(plotLeft, gY, plotRight, gY)
-		dc.Stroke()
-		dc.SetFontFace(fonts.small)
-		drawShadowTextAnchored(dc, fmt.Sprintf("%.0f°", gTemp), plotLeft-6, gY, 1.0, 0.5, subR, subG, subB)
-	}
-
-	// ── Area fill under the curve ──
-	// The base extends to the full plotLeft/plotRight so the fill doesn't
-	// appear clipped even though data points are inset by xPad.
+	// Area fill extends to full plot edges (not just data points).
 	if n > 1 {
 		dc.SetRGBA(hlR, hlG, 0, 0.07)
-		dc.MoveTo(plotLeft, plotBottom)
-		dc.LineTo(xs[0], ys[0])
+		dc.MoveTo(cl.PlotLeft, cl.PlotBottom)
+		dc.LineTo(cl.Xs[0], cl.Ys[0])
 		for i := 1; i < n; i++ {
-			dc.LineTo(xs[i], ys[i])
+			dc.LineTo(cl.Xs[i], cl.Ys[i])
 		}
-		dc.LineTo(xs[n-1], plotBottom)
-		dc.LineTo(plotRight, plotBottom)
+		dc.LineTo(cl.Xs[n-1], cl.PlotBottom)
+		dc.LineTo(cl.PlotRight, cl.PlotBottom)
 		dc.ClosePath()
 		dc.Fill()
 	}
 
-	// ── Icons, temperature labels, and time labels at each data point ──
+	// Icons, temperature labels, and time labels at each data point.
 	unit := "°"
 	for i, p := range periods {
-		x, y := xs[i], ys[i]
+		x, y := cl.Xs[i], cl.Ys[i]
 
 		// Temperature label above the icon.
 		dc.SetFontFace(fonts.small)
@@ -610,14 +560,11 @@ func slideHourlyForecast(dc *gg.Context, data *weather.WeatherData, use24h, useM
 		drawShadowTextAnchored(dc, fmt.Sprintf("%.0f%s", temps[i], unit),
 			x, labelY, 0.5, 1.0, hlR, hlG, hlB)
 
-		// Weather icon centered on the data point (draws over the line).
+		// Weather icon centered on the data point.
 		icon := conditionIcon(p.ShortForecast, p.IsDaytime)
 		drawIconWithMoon(dc, icon, x, y, iconSize, data.MoonPhase.Phase, getRealisticMoon())
-
-		// Time label below the X axis.
-		drawShadowTextAnchored(dc, hourLabel(p.StartTime, use24h, loc, i),
-			x, plotBottom+26, 0.5, 0.5, textR, textG, textB)
 	}
+	cl.DrawTimeLabels(dc, periods, use24h, loc, fonts)
 	return 0
 }
 
@@ -3159,47 +3106,16 @@ func slideFeelsLike(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 	minT -= 8
 	maxT += 8
 
-	// Plot bounds.
-	const (
-		plotLeft  = 150.0
-		plotRight = 1230.0
-		xPad      = 50.0
-	)
-	plotTop := headerH + 80.0
-	plotBottom := h - 60.0
-	plotW := plotRight - plotLeft
-	plotH := plotBottom - plotTop
+	// Use chartLayout for shared geometry (actual temps define the layout).
+	cl := newChartLayout(n, actuals, minT, maxT, 150, 1230, headerH+80, h-60, 50)
+	cl.DrawGridLines(dc, 4, "°", fonts)
 
-	tempToY := func(t float64) float64 {
-		return plotBottom - (t-minT)/(maxT-minT)*plotH
-	}
-	idxToX := func(i int) float64 {
-		if n <= 1 {
-			return plotLeft + plotW/2
-		}
-		return plotLeft + xPad + float64(i)*(plotW-2*xPad)/float64(n-1)
-	}
-
-	// Y-axis grid.
-	const gridLines = 4
-	dc.SetFontFace(fonts.small)
-	for g := 0; g <= gridLines; g++ {
-		gTemp := minT + float64(g)*(maxT-minT)/float64(gridLines)
-		gY := tempToY(gTemp)
-		dc.SetRGBA(1, 1, 1, 0.07)
-		dc.SetLineWidth(1)
-		dc.DrawLine(plotLeft, gY, plotRight, gY)
-		dc.Stroke()
-		drawShadowTextAnchored(dc, fmt.Sprintf("%.0f°", gTemp), plotLeft-6, gY, 1.0, 0.5, subR, subG, subB)
-	}
-
-	xs := make([]float64, n)
-	aYs := make([]float64, n)
+	// Compute Y positions for both series using the shared layout.
+	xs := cl.Xs
+	aYs := cl.Ys
 	fYs := make([]float64, n)
-	for i := range periods {
-		xs[i] = idxToX(i)
-		aYs[i] = tempToY(actuals[i])
-		fYs[i] = tempToY(feelsLike[i])
+	for i := range feelsLike {
+		fYs[i] = cl.ValToY(feelsLike[i])
 	}
 
 	// Shaded area between the two lines.
@@ -3297,9 +3213,8 @@ func slideFeelsLike(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 			}
 		}
 
-		drawShadowTextAnchored(dc, hourLabel(periods[i].StartTime, use24h, loc, i),
-			x, plotBottom+26, 0.5, 0.5, textR, textG, textB)
 	}
+	cl.DrawTimeLabels(dc, periods, use24h, loc, fonts)
 
 	// Legend — only show cooler/warmer if present in the data.
 	hasCooler, hasWarmer := false, false
@@ -3314,7 +3229,7 @@ func slideFeelsLike(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 
 	dc.SetFontFace(fonts.small)
 	legY := headerH + 30.0
-	legX := plotLeft
+	legX := cl.PlotLeft
 	dc.SetRGB(hlR, hlG, hlB)
 	dc.DrawRectangle(legX, legY-6, 20, 3)
 	dc.Fill()
@@ -3664,13 +3579,6 @@ func slideUVIndex(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *t
 		}
 		n := len(periods)
 
-		plotLeft := midX + 60
-		plotRight := w - 40.0
-		plotTop := contentTop + 40
-		plotBottom := h - 60.0
-		plotW := plotRight - plotLeft
-		plotH := plotBottom - plotTop
-
 		// Use precomputed hourly UV values from weather data.
 		uvVals := make([]float64, n)
 		maxUV := 1.0
@@ -3687,65 +3595,19 @@ func slideUVIndex(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *t
 			maxUV = 4
 		}
 
-		uvToY := func(v float64) float64 {
-			return plotBottom - (v/maxUV)*plotH
-		}
-		idxToX := func(i int) float64 {
-			if n <= 1 {
-				return plotLeft + plotW/2
-			}
-			return plotLeft + float64(i)*plotW/float64(n-1)
-		}
+		cl := newChartLayout(n, uvVals, 0, maxUV, midX+60, w-40, contentTop+40, h-60, 0)
+		cl.DrawGridLinesStep(dc, 2, "", fonts)
+		cl.DrawAreaFill(dc, hlR, hlG, 0, 0.1)
+		cl.DrawLine(dc, hlR, hlG, 0, 2.5)
 
-		// Grid lines.
-		dc.SetFontFace(fonts.small)
-		for g := 0.0; g <= maxUV; g += 2 {
-			gY := uvToY(g)
-			dc.SetRGBA(1, 1, 1, 0.07)
-			dc.SetLineWidth(1)
-			dc.DrawLine(plotLeft, gY, plotRight, gY)
-			dc.Stroke()
-			drawShadowTextAnchored(dc, fmt.Sprintf("%.0f", g), plotLeft-8, gY, 1.0, 0.5, subR, subG, subB)
-		}
-
-		// Area fill and line.
-		xs := make([]float64, n)
-		ys := make([]float64, n)
-		for i := range periods {
-			xs[i] = idxToX(i)
-			ys[i] = uvToY(uvVals[i])
-		}
-
-		if n > 1 {
-			dc.SetRGBA(hlR, hlG, 0, 0.1)
-			dc.MoveTo(xs[0], plotBottom)
-			for i := 0; i < n; i++ {
-				dc.LineTo(xs[i], ys[i])
-			}
-			dc.LineTo(xs[n-1], plotBottom)
-			dc.ClosePath()
-			dc.Fill()
-
-			dc.SetRGB(hlR, hlG, 0)
-			dc.SetLineWidth(2.5)
-			dc.MoveTo(xs[0], ys[0])
-			for i := 1; i < n; i++ {
-				dc.LineTo(xs[i], ys[i])
-			}
-			dc.Stroke()
-		}
-
-		// Dots and time labels.
+		// Color-coded dots and time labels.
 		for i := range periods {
 			cr, cg, cb := uvCategoryColor(uvVals[i])
 			dc.SetRGB(cr, cg, cb)
-			dc.DrawCircle(xs[i], ys[i], 3.5)
+			dc.DrawCircle(cl.Xs[i], cl.Ys[i], 3.5)
 			dc.Fill()
-
-			dc.SetFontFace(fonts.small)
-			drawShadowTextAnchored(dc, hourLabel(periods[i].StartTime, use24h, loc, i),
-				xs[i], plotBottom+22, 0.5, 0.5, textR, textG, textB)
 		}
+		cl.DrawTimeLabels(dc, periods, use24h, loc, fonts)
 	}
 
 	return 0
