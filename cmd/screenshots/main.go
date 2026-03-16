@@ -56,7 +56,7 @@ func main() {
 		slide renderer.SlideFunc
 		tweak func(*weather.WeatherData)
 	}{
-		{"alerts", renderer.NewSlideAlerts(false, nil, nil), nil},
+		{"alerts", renderer.NewSlideAlerts(false, false, nil, nil), nil},
 		{"local-conditions", renderer.NewSlideCurrentConditions(false, false, nil, realisticMoon, nil), nil},
 		{"hourly-forecast", renderer.NewSlideHourlyForecast(false, false, nil, realisticMoon, nil), nil},
 		{"precipitation", renderer.NewSlidePrecipitation(false, false, nil, realisticMoon, nil), nil},
@@ -90,7 +90,7 @@ func main() {
 		}},
 		{"extended-forecast", renderer.NewSlideExtendedForecast(false, false, nil, realisticMoon, nil), nil},
 		{"weekly-high-low", renderer.NewSlideWeeklyHighLow(false, false, nil, nil), nil},
-		{"sun-solar", renderer.NewSlideSunMoon(false, nil, nil), func(d *weather.WeatherData) {
+		{"sun-solar", renderer.NewSlideSunMoon(false, false, nil, nil), func(d *weather.WeatherData) {
 			d.Sun = makeSunData(now)
 			d.Solar = makeSolarData()
 		}},
@@ -100,17 +100,17 @@ func main() {
 		{"moon-phase", renderer.NewSlideMoonTides(false, false, nil, nil), func(d *weather.WeatherData) {
 			d.TideData = nil
 		}},
-		{"uv-index", renderer.NewSlideUVIndex(false, nil, nil), func(d *weather.WeatherData) {
+		{"uv-index", renderer.NewSlideUVIndex(false, false, nil, nil), func(d *weather.WeatherData) {
 			d.UVIndex = 6.5
 			d.HourlyUV = []float64{6.5, 5.8, 4.5, 3.2, 2.0, 1.0, 0.3, 0, 0, 0, 0, 0}
 		}},
 		{"night-sky", renderer.NewSlideNightSky(false, false, nil, nil), func(d *weather.WeatherData) {
 			d.Planets = makePlanetData(now)
 		}},
-		{"satellite", renderer.NewSlideSatellite(false, nil, nil), func(d *weather.WeatherData) {
+		{"satellite", renderer.NewSlideSatellite(false, false, nil, nil), func(d *weather.WeatherData) {
 			d.SatelliteFrames = makeSatelliteFrames()
 		}},
-		{"radar", renderer.NewSlideRadar(false, nil, nil), func(d *weather.WeatherData) {
+		{"radar", renderer.NewSlideRadar(false, false, nil, nil), func(d *weather.WeatherData) {
 			d.RadarFrames = makeRadarFrames()
 		}},
 	}
@@ -142,7 +142,7 @@ func main() {
 	for _, ts := range triviaScreenshots {
 		item := ts.item
 		getItems := func() []trivia.TriviaItem { return []trivia.TriviaItem{item} }
-		slide := renderer.NewSlideTrivia(getItems, getTrivDur, func() bool { return false }, false, nil, nil)
+		slide := renderer.NewSlideTrivia(getItems, getTrivDur, func() bool { return false }, false, false, nil, nil)
 
 		dc := gg.NewContext(1280, 720)
 		slide(dc, data, ts.elapsed, triviaDur)

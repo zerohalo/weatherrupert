@@ -252,7 +252,7 @@ func BenchmarkSlideMoonPhase(b *testing.B) {
 
 func BenchmarkSlideAlerts(b *testing.B) {
 	data := mockData()
-	benchSlide(b, NewSlideAlerts(false, nil, defaultFonts), data)
+	benchSlide(b, NewSlideAlerts(false, false, nil, defaultFonts), data)
 }
 
 func BenchmarkSlideAnnouncements(b *testing.B) {
@@ -263,7 +263,7 @@ func BenchmarkSlideAnnouncements(b *testing.B) {
 	slide := NewSlideAnnouncements(
 		func() []ann.Announcement { return anns },
 		func() time.Duration { return 10 * time.Second },
-		false,
+		false, false,
 		nil,
 		defaultFonts,
 	)
@@ -279,7 +279,7 @@ func BenchmarkSlideTrivia(b *testing.B) {
 		func() []trivia.TriviaItem { return items },
 		func() time.Duration { return 20 * time.Second },
 		func() bool { return false },
-		false,
+		false, false,
 		nil,
 		defaultFonts,
 	)
