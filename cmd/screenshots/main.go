@@ -75,12 +75,20 @@ func main() {
 			}
 		}},
 		{"feels-like", renderer.NewSlideFeelsLike(false, false, nil, nil), func(d *weather.WeatherData) {
-			// Create conditions where feels-like differs from actual.
+			// Mix of heat index (hot/humid) and wind chill (cold/windy) to
+			// show both label orientations.
 			for i := range d.HourlyPeriods {
-				d.HourlyPeriods[i].WindSpeed = "15 mph"
-				d.HourlyPeriods[i].Temperature = 35 + i*2
-				humidity := 70
+				humidity := 75
 				d.HourlyPeriods[i].RelativeHumidity.Value = &humidity
+				if i < 6 {
+					// Hot afternoon — heat index makes it feel hotter.
+					d.HourlyPeriods[i].Temperature = 88 - i*2
+					d.HourlyPeriods[i].WindSpeed = "5 mph"
+				} else {
+					// Cold evening — wind chill makes it feel colder.
+					d.HourlyPeriods[i].Temperature = 40 - (i-6)*2
+					d.HourlyPeriods[i].WindSpeed = "20 mph"
+				}
 			}
 		}},
 		{"extended-forecast", renderer.NewSlideExtendedForecast(false, false, nil, realisticMoon, nil), nil},

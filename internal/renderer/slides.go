@@ -3074,22 +3074,36 @@ func slideFeelsLike(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 		dc.Stroke()
 	}
 
-	// Feels-like line (cyan).
+	// Feels-like line — cyan when cooler (wind chill), red-orange when warmer (heat index).
 	if n > 1 {
-		dc.SetRGB(divR, divG, divB)
 		dc.SetLineWidth(2.5)
-		dc.MoveTo(xs[0], fYs[0])
-		for i := 1; i < n; i++ {
-			dc.LineTo(xs[i], fYs[i])
+		for i := 0; i < n-1; i++ {
+			avgDiff := (feelsLike[i] - actuals[i] + feelsLike[i+1] - actuals[i+1]) / 2
+			if avgDiff > 0 {
+				dc.SetRGB(heatR, 0.4, 0.2) // warm orange-red
+			} else {
+				dc.SetRGB(divR, divG, divB) // cool cyan
+			}
+			dc.MoveTo(xs[i], fYs[i])
+			dc.LineTo(xs[i+1], fYs[i+1])
+			dc.Stroke()
 		}
-		dc.Stroke()
 	}
 
 	// Data points and temperature labels.
+	// Feels-like color: cyan when cooler (wind chill), orange-red when warmer (heat index).
 	unit := "°"
 	for i := range periods {
 		x := xs[i]
 		dc.SetFontFace(fonts.small)
+
+		// Pick feels-like color based on whether it's warmer or cooler.
+		var flR, flG, flB float64
+		if feelsLike[i] > actuals[i]+1 {
+			flR, flG, flB = heatR, 0.4, 0.2 // warm orange-red
+		} else {
+			flR, flG, flB = divR, divG, divB // cool cyan
+		}
 
 		diff := math.Abs(actuals[i] - feelsLike[i])
 		if diff < 1 {
@@ -3105,26 +3119,22 @@ func slideFeelsLike(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 			dc.DrawCircle(x, aYs[i], 3.5)
 			dc.Fill()
 			if actuals[i] >= feelsLike[i] {
-				// Actual is higher (above) — label goes above
 				drawShadowTextAnchored(dc, fmt.Sprintf("%.0f%s", actuals[i], unit),
 					x, aYs[i]-34, 0.5, 1.0, hlR, hlG, hlB)
 			} else {
-				// Actual is lower (below) — label goes below
 				drawShadowTextAnchored(dc, fmt.Sprintf("%.0f%s", actuals[i], unit),
 					x, aYs[i]+24, 0.5, 0.0, hlR, hlG, hlB)
 			}
 
-			dc.SetRGB(divR, divG, divB)
+			dc.SetRGB(flR, flG, flB)
 			dc.DrawCircle(x, fYs[i], 3.5)
 			dc.Fill()
 			if feelsLike[i] >= actuals[i] {
-				// Feels-like is higher (above) — label goes above
 				drawShadowTextAnchored(dc, fmt.Sprintf("%.0f%s", feelsLike[i], unit),
-					x, fYs[i]-34, 0.5, 1.0, divR, divG, divB)
+					x, fYs[i]-34, 0.5, 1.0, flR, flG, flB)
 			} else {
-				// Feels-like is lower (below) — label goes below
 				drawShadowTextAnchored(dc, fmt.Sprintf("%.0f%s", feelsLike[i], unit),
-					x, fYs[i]+24, 0.5, 0.0, divR, divG, divB)
+					x, fYs[i]+24, 0.5, 0.0, flR, flG, flB)
 			}
 		}
 
@@ -3143,7 +3153,12 @@ func slideFeelsLike(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 	dc.SetRGB(divR, divG, divB)
 	dc.DrawRectangle(plotLeft+140, legY-6, 20, 3)
 	dc.Fill()
-	drawShadowText(dc, "FEELS LIKE", plotLeft+166, legY, divR, divG, divB)
+	drawShadowText(dc, "COOLER", plotLeft+166, legY, divR, divG, divB)
+
+	dc.SetRGB(heatR, 0.4, 0.2)
+	dc.DrawRectangle(plotLeft+280, legY-6, 20, 3)
+	dc.Fill()
+	drawShadowText(dc, "WARMER", plotLeft+306, legY, heatR, 0.4, 0.2)
 
 	return 0
 }
