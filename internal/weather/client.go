@@ -447,6 +447,16 @@ func (c *Client) fetch(ctx context.Context) (*WeatherData, error) {
 	}
 	uvIndex := ComputeUVIndex(now, c.lat, c.lon, cloudDesc)
 
+	// Compute hourly UV for the forecast graph.
+	hourlyUV := make([]float64, len(hourly))
+	for i, p := range hourly {
+		t, err := time.Parse(time.RFC3339, p.StartTime)
+		if err != nil {
+			t = now.Add(time.Duration(i) * time.Hour)
+		}
+		hourlyUV[i] = ComputeUVIndex(t, c.lat, c.lon, p.ShortForecast)
+	}
+
 	// Fetch tide predictions if a nearby station was found (best-effort).
 	var tideData *TideData
 	if c.nearestTide != nil {
@@ -529,6 +539,7 @@ func (c *Client) fetch(ctx context.Context) (*WeatherData, error) {
 		SnowTotal24h:    snowMM,
 		Sun:             sunData,
 		UVIndex:         uvIndex,
+		HourlyUV:        hourlyUV,
 	}, nil
 }
 

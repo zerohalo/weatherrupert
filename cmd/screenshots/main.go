@@ -96,6 +96,7 @@ func main() {
 		}},
 		{"uv-index", renderer.NewSlideUVIndex(false, nil, nil), func(d *weather.WeatherData) {
 			d.UVIndex = 6.5
+			d.HourlyUV = []float64{6.5, 5.8, 4.5, 3.2, 2.0, 1.0, 0.3, 0, 0, 0, 0, 0}
 		}},
 		{"night-sky", renderer.NewSlideNightSky(false, false, nil, nil), func(d *weather.WeatherData) {
 			d.Planets = makePlanetData(now)

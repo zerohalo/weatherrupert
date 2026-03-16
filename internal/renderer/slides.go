@@ -3352,26 +3352,16 @@ func slideUVIndex(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *t
 		plotW := plotRight - plotLeft
 		plotH := plotBottom - plotTop
 
-		// Compute UV for each hour using a simple scaling from the current value.
+		// Use precomputed hourly UV values from weather data.
 		uvVals := make([]float64, n)
 		maxUV := 1.0
-		for i, p := range periods {
-			t, _ := time.Parse(time.RFC3339, p.StartTime)
-			if t.IsZero() {
-				t = time.Now().Add(time.Duration(i) * time.Hour)
+		for i := range periods {
+			if i < len(data.HourlyUV) {
+				uvVals[i] = data.HourlyUV[i]
 			}
-			uvVals[i] = weather.ComputeUVIndex(t, 0, 0, p.ShortForecast)
 			if uvVals[i] > maxUV {
 				maxUV = uvVals[i]
 			}
-		}
-		// Scale relative to current UV if we have a non-zero baseline.
-		if data.UVIndex > 0 && uvVals[0] > 0 {
-			scale := data.UVIndex / uvVals[0]
-			for i := range uvVals {
-				uvVals[i] *= scale
-			}
-			maxUV *= scale
 		}
 		maxUV = math.Ceil(maxUV/2) * 2
 		if maxUV < 4 {

@@ -226,6 +226,7 @@ type WeatherData struct {
 	SnowTotal24h    float64     // expected snowfall next 24h, in mm
 	Sun             *SunData    // always populated (computed algorithmically)
 	UVIndex         float64     // current estimated UV index (0-11+)
+	HourlyUV        []float64   // estimated UV index for each hourly period
 }
 
 // SunData holds sunrise, sunset, and related solar times for a location.
