@@ -2872,9 +2872,9 @@ func slideWindForecast(dc *gg.Context, data *weather.WeatherData, use24h, useMet
 		dc.LineTo(tipX-headLen*math.Sin(drawAngle+headAngle), tipY+headLen*math.Cos(drawAngle+headAngle))
 		dc.Stroke()
 
-		// Speed label above dot.
+		// Speed label above the plot line.
 		dc.SetFontFace(fonts.small)
-		labelY := y - 16
+		labelY := y - 40
 		if labelY < plotTop+10 {
 			labelY = plotTop + 10
 		}
