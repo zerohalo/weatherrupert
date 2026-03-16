@@ -2494,3 +2494,966 @@ func windColor(speed float64) [3]float64 {
 		return [3]float64{1.0, 0.2, 0.2} // red
 	}
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// Weekly High/Low Summary
+// ────────────────────────────────────────────────────────────────────────────
+
+// NewSlideWeeklyHighLow returns a SlideFunc that renders a range-bar chart of
+// daily high and low temperatures.
+func NewSlideWeeklyHighLow(use24h, useMetric bool, loc *time.Location, fonts *fontSet) SlideFunc {
+	if fonts == nil {
+		fonts = defaultFonts
+	}
+	return func(dc *gg.Context, data *weather.WeatherData, _, _ time.Duration) time.Duration {
+		return slideWeeklyHighLow(dc, data, use24h, useMetric, loc, fonts)
+	}
+}
+
+func slideWeeklyHighLow(dc *gg.Context, data *weather.WeatherData, use24h, useMetric bool, loc *time.Location, fonts *fontSet) time.Duration {
+	drawBackground(dc, "WEEKLY HIGHS & LOWS", data.Location, use24h, loc, fonts)
+
+	w := float64(dc.Width())
+	h := float64(dc.Height())
+
+	if len(data.DailyPeriods) == 0 {
+		dc.SetFontFace(fonts.medium)
+		drawShadowTextAnchored(dc, "NO DATA AVAILABLE", w/2, h/2, 0.5, 0.5, subR, subG, subB)
+		return 0
+	}
+
+	cards := buildDayCards(data.DailyPeriods)
+	if len(cards) > 6 {
+		cards = cards[:6]
+	}
+
+	// Gather temperature bounds.
+	minT, maxT := 999.0, -999.0
+	for _, c := range cards {
+		if c.hasHigh {
+			t := convertTemp(float64(c.highTemp), c.highUnit, useMetric)
+			if t < minT {
+				minT = t
+			}
+			if t > maxT {
+				maxT = t
+			}
+		}
+		if c.hasLow {
+			t := convertTemp(float64(c.lowTemp), c.lowUnit, useMetric)
+			if t < minT {
+				minT = t
+			}
+			if t > maxT {
+				maxT = t
+			}
+		}
+	}
+	minT -= 5
+	maxT += 5
+	tempRange := maxT - minT
+	if tempRange < 1 {
+		tempRange = 1
+	}
+
+	contentTop := headerH + 20.0
+	contentH := h - contentTop - 20.0
+	rowH := contentH / float64(len(cards))
+	labelW := 160.0
+	barLeft := labelW + 20.0
+	barRight := w - 80.0
+	barW := barRight - barLeft
+
+	unit := "°"
+
+	for i, c := range cards {
+		y := contentTop + float64(i)*rowH
+		cy := y + rowH/2
+
+		// Day name.
+		dc.SetFontFace(fonts.medium)
+		drawShadowTextAnchored(dc, strings.ToUpper(c.name), labelW-10, cy, 1.0, 0.5, titleR, titleG, titleB)
+
+		lo := convertTemp(float64(c.lowTemp), c.lowUnit, useMetric)
+		hi := convertTemp(float64(c.highTemp), c.highUnit, useMetric)
+		if !c.hasLow {
+			lo = hi
+		}
+		if !c.hasHigh {
+			hi = lo
+		}
+
+		// Bar position.
+		x0 := barLeft + (lo-minT)/tempRange*barW
+		x1 := barLeft + (hi-minT)/tempRange*barW
+		barH := rowH * 0.4
+		if x1-x0 < 4 {
+			x1 = x0 + 4
+		}
+
+		// Draw bar with gradient from blue (low) to orange (high).
+		for px := x0; px < x1; px++ {
+			frac := (px - x0) / (x1 - x0)
+			r := lowR*(1-frac) + hlR*frac
+			g := lowG*(1-frac) + hlG*frac
+			b := lowB*(1-frac) + 0.0*frac
+			dc.SetRGB(r, g, b)
+			dc.DrawRectangle(px, cy-barH/2, 1, barH)
+			dc.Fill()
+		}
+		// Rounded caps.
+		capR := barH / 2
+		dc.SetRGB(lowR, lowG, lowB)
+		dc.DrawCircle(x0, cy, capR)
+		dc.Fill()
+		dc.SetRGB(hlR, hlG, 0)
+		dc.DrawCircle(x1, cy, capR)
+		dc.Fill()
+
+		// Temperature labels — offset by cap radius + padding so they
+		// don't overlap the rounded bar endpoints.
+		labelPad := capR + 8
+		dc.SetFontFace(fonts.small)
+		if c.hasLow {
+			drawShadowTextAnchored(dc, fmt.Sprintf("%.0f%s", lo, unit), x0-labelPad, cy, 1.0, 0.5, lowR, lowG, lowB)
+		}
+		if c.hasHigh {
+			drawShadowTextAnchored(dc, fmt.Sprintf("%.0f%s", hi, unit), x1+labelPad, cy, 0.0, 0.5, hlR, hlG, hlB)
+		}
+
+		// Subtle row divider.
+		if i < len(cards)-1 {
+			dc.SetRGBA(1, 1, 1, 0.07)
+			dc.DrawLine(barLeft, y+rowH, barRight, y+rowH)
+			dc.SetLineWidth(1)
+			dc.Stroke()
+		}
+	}
+	return 0
+}
+
+// convertTemp converts a temperature from the given unit to display units.
+func convertTemp(t float64, unit string, useMetric bool) float64 {
+	if useMetric && unit == "F" {
+		return fToC(t)
+	}
+	if !useMetric && unit == "C" {
+		return t*9/5 + 32
+	}
+	return t
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Wind Forecast
+// ────────────────────────────────────────────────────────────────────────────
+
+// NewSlideWindForecast returns a SlideFunc that renders a 12-hour wind
+// direction/speed chart.
+func NewSlideWindForecast(use24h, useMetric bool, loc *time.Location, fonts *fontSet) SlideFunc {
+	if fonts == nil {
+		fonts = defaultFonts
+	}
+	return func(dc *gg.Context, data *weather.WeatherData, _, _ time.Duration) time.Duration {
+		return slideWindForecast(dc, data, use24h, useMetric, loc, fonts)
+	}
+}
+
+// parseWindSpeedMph extracts the wind speed in mph from an NWS string like
+// "8 mph" or "10 to 15 mph". For ranges, returns the higher value.
+func parseWindSpeedMph(s string) float64 {
+	var v1, v2 float64
+	if n, _ := fmt.Sscanf(s, "%f to %f", &v1, &v2); n == 2 {
+		return v2
+	}
+	fmt.Sscanf(s, "%f", &v1)
+	return v1
+}
+
+// cardinalToDegrees maps a cardinal/intercardinal direction string to degrees.
+var cardinalToDegrees = map[string]float64{
+	"N": 0, "NNE": 22.5, "NE": 45, "ENE": 67.5,
+	"E": 90, "ESE": 112.5, "SE": 135, "SSE": 157.5,
+	"S": 180, "SSW": 202.5, "SW": 225, "WSW": 247.5,
+	"W": 270, "WNW": 292.5, "NW": 315, "NNW": 337.5,
+}
+
+func slideWindForecast(dc *gg.Context, data *weather.WeatherData, use24h, useMetric bool, loc *time.Location, fonts *fontSet) time.Duration {
+	drawBackground(dc, "WIND FORECAST", data.Location, use24h, loc, fonts)
+
+	w := float64(dc.Width())
+	h := float64(dc.Height())
+
+	if len(data.HourlyPeriods) == 0 {
+		dc.SetFontFace(fonts.medium)
+		drawShadowTextAnchored(dc, "NO DATA AVAILABLE", w/2, h/2, 0.5, 0.5, subR, subG, subB)
+		return 0
+	}
+
+	periods := data.HourlyPeriods
+	if len(periods) > 12 {
+		periods = periods[:12]
+	}
+	n := len(periods)
+
+	// Parse wind data.
+	speeds := make([]float64, n)
+	dirs := make([]float64, n)
+	maxSpeed := 0.0
+	for i, p := range periods {
+		speeds[i] = parseWindSpeedMph(p.WindSpeed)
+		if useMetric {
+			speeds[i] = mphToKmh(speeds[i])
+		}
+		if d, ok := cardinalToDegrees[p.WindDirection]; ok {
+			dirs[i] = d
+		}
+		if speeds[i] > maxSpeed {
+			maxSpeed = speeds[i]
+		}
+	}
+
+	// Plot bounds.
+	const (
+		plotLeft  = 120.0
+		plotRight = 1230.0
+		plotTop   = 160.0
+		xPad      = 50.0
+	)
+	plotBottom := h - 60.0
+	plotW := plotRight - plotLeft
+	plotH := plotBottom - plotTop
+
+	// Speed range.
+	maxY := maxSpeed + 5
+	if maxY < 15 {
+		maxY = 15
+	}
+
+	speedToY := func(s float64) float64 {
+		return plotBottom - (s/maxY)*plotH
+	}
+	idxToX := func(i int) float64 {
+		if n <= 1 {
+			return plotLeft + plotW/2
+		}
+		return plotLeft + xPad + float64(i)*(plotW-2*xPad)/float64(n-1)
+	}
+
+	// Y-axis grid.
+	gridStep := 5.0
+	if maxY > 30 {
+		gridStep = 10
+	}
+	dc.SetFontFace(fonts.small)
+	for g := 0.0; g <= maxY; g += gridStep {
+		gY := speedToY(g)
+		dc.SetRGBA(1, 1, 1, 0.07)
+		dc.SetLineWidth(1)
+		dc.DrawLine(plotLeft, gY, plotRight, gY)
+		dc.Stroke()
+
+		unitLabel := "mph"
+		if useMetric {
+			unitLabel = "km/h"
+		}
+		label := fmt.Sprintf("%.0f", g)
+		if g == 0 {
+			label += " " + unitLabel
+		}
+		drawShadowTextAnchored(dc, label, plotLeft-8, gY, 1.0, 0.5, subR, subG, subB)
+	}
+
+	// Area fill under the speed curve.
+	xs := make([]float64, n)
+	ys := make([]float64, n)
+	for i := range periods {
+		xs[i] = idxToX(i)
+		ys[i] = speedToY(speeds[i])
+	}
+
+	if n > 1 {
+		dc.SetRGBA(divR, divG, divB, 0.15)
+		dc.MoveTo(xs[0], plotBottom)
+		for i := 0; i < n; i++ {
+			dc.LineTo(xs[i], ys[i])
+		}
+		dc.LineTo(xs[n-1], plotBottom)
+		dc.ClosePath()
+		dc.Fill()
+
+		// Speed line.
+		dc.SetRGB(divR, divG, divB)
+		dc.SetLineWidth(2.5)
+		dc.MoveTo(xs[0], ys[0])
+		for i := 1; i < n; i++ {
+			dc.LineTo(xs[i], ys[i])
+		}
+		dc.Stroke()
+	}
+
+	// Wind arrows and labels at each point.
+	arrowSize := 18.0
+	for i := range periods {
+		x, y := xs[i], ys[i]
+
+		// Speed dot.
+		dc.SetRGB(divR, divG, divB)
+		dc.DrawCircle(x, y, 4)
+		dc.Fill()
+
+		// Wind direction arrow above the graph.
+		arrowY := plotTop - 30
+		angle := dirs[i] * math.Pi / 180 // direction wind comes FROM
+		// Draw arrow pointing in the direction wind is going (from + 180).
+		drawAngle := angle + math.Pi
+		dc.SetRGB(textR, textG, textB)
+		dc.SetLineWidth(2)
+		// Arrow shaft.
+		dx := arrowSize * 0.45 * math.Sin(drawAngle)
+		dy := -arrowSize * 0.45 * math.Cos(drawAngle)
+		dc.DrawLine(x-dx, arrowY-dy, x+dx, arrowY+dy)
+		dc.Stroke()
+		// Arrowhead.
+		headLen := arrowSize * 0.3
+		headAngle := 0.5
+		tipX, tipY := x+dx, arrowY+dy
+		dc.MoveTo(tipX, tipY)
+		dc.LineTo(tipX-headLen*math.Sin(drawAngle-headAngle), tipY+headLen*math.Cos(drawAngle-headAngle))
+		dc.MoveTo(tipX, tipY)
+		dc.LineTo(tipX-headLen*math.Sin(drawAngle+headAngle), tipY+headLen*math.Cos(drawAngle+headAngle))
+		dc.Stroke()
+
+		// Speed label above dot.
+		dc.SetFontFace(fonts.small)
+		labelY := y - 16
+		if labelY < plotTop+10 {
+			labelY = plotTop + 10
+		}
+
+		// Color code speed.
+		sr, sg, sb := windSpeedColor(speeds[i], useMetric)
+		drawShadowTextAnchored(dc, fmt.Sprintf("%.0f", speeds[i]), x, labelY, 0.5, 1.0, sr, sg, sb)
+
+		// Time labels.
+		drawShadowTextAnchored(dc, hourLabel(periods[i].StartTime, use24h, loc, i),
+			x, plotBottom+26, 0.5, 0.5, textR, textG, textB)
+	}
+
+	return 0
+}
+
+// windSpeedColor returns an R,G,B color for a wind speed value.
+func windSpeedColor(speed float64, metric bool) (float64, float64, float64) {
+	s := speed
+	if metric {
+		s = speed / 1.60934 // back to mph for thresholds
+	}
+	switch {
+	case s < 10:
+		return 0.3, 1.0, 0.3 // green
+	case s < 20:
+		return 1.0, 1.0, 0.0 // yellow
+	case s < 30:
+		return 1.0, 0.6, 0.0 // orange
+	default:
+		return 1.0, 0.2, 0.2 // red
+	}
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Feels Like
+// ────────────────────────────────────────────────────────────────────────────
+
+// NewSlideFeelsLike returns a SlideFunc that renders a dual-line chart
+// comparing actual vs feels-like temperature over 12 hours.
+func NewSlideFeelsLike(use24h, useMetric bool, loc *time.Location, fonts *fontSet) SlideFunc {
+	if fonts == nil {
+		fonts = defaultFonts
+	}
+	return func(dc *gg.Context, data *weather.WeatherData, _, _ time.Duration) time.Duration {
+		return slideFeelsLike(dc, data, use24h, useMetric, loc, fonts)
+	}
+}
+
+// computeFeelsLikeF returns the feels-like temperature in Fahrenheit using
+// NWS wind chill and heat index formulas.
+func computeFeelsLikeF(tempF, windMph, humidity float64) float64 {
+	// Wind chill: applies when T <= 50F and wind >= 3 mph.
+	if tempF <= 50 && windMph >= 3 {
+		return 35.74 + 0.6215*tempF - 35.75*math.Pow(windMph, 0.16) + 0.4275*tempF*math.Pow(windMph, 0.16)
+	}
+	// Heat index: applies when T >= 80F.
+	if tempF >= 80 && humidity > 0 {
+		hi := -42.379 + 2.04901523*tempF + 10.14333127*humidity -
+			0.22475541*tempF*humidity - 0.00683783*tempF*tempF -
+			0.05481717*humidity*humidity + 0.00122874*tempF*tempF*humidity +
+			0.00085282*tempF*humidity*humidity - 0.00000199*tempF*tempF*humidity*humidity
+		return hi
+	}
+	return tempF
+}
+
+func slideFeelsLike(dc *gg.Context, data *weather.WeatherData, use24h, useMetric bool, loc *time.Location, fonts *fontSet) time.Duration {
+	drawBackground(dc, "FEELS LIKE", data.Location, use24h, loc, fonts)
+
+	w := float64(dc.Width())
+	h := float64(dc.Height())
+
+	if len(data.HourlyPeriods) == 0 {
+		dc.SetFontFace(fonts.medium)
+		drawShadowTextAnchored(dc, "NO DATA AVAILABLE", w/2, h/2, 0.5, 0.5, subR, subG, subB)
+		return 0
+	}
+
+	periods := data.HourlyPeriods
+	if len(periods) > 12 {
+		periods = periods[:12]
+	}
+	n := len(periods)
+
+	// Compute actual and feels-like temperatures.
+	actuals := make([]float64, n)
+	feelsLike := make([]float64, n)
+	for i, p := range periods {
+		t := float64(p.Temperature)
+		if p.TemperatureUnit == "C" {
+			t = t*9/5 + 32 // normalize to F for computation
+		}
+		windMph := parseWindSpeedMph(p.WindSpeed)
+		humidity := 50.0 // default
+		if p.RelativeHumidity.Value != nil {
+			humidity = float64(*p.RelativeHumidity.Value)
+		}
+
+		fl := computeFeelsLikeF(t, windMph, humidity)
+
+		if useMetric {
+			actuals[i] = fToC(t)
+			feelsLike[i] = fToC(fl)
+		} else {
+			actuals[i] = t
+			feelsLike[i] = fl
+		}
+	}
+
+	// Temperature range.
+	minT, maxT := actuals[0], actuals[0]
+	for i := range actuals {
+		for _, v := range []float64{actuals[i], feelsLike[i]} {
+			if v < minT {
+				minT = v
+			}
+			if v > maxT {
+				maxT = v
+			}
+		}
+	}
+	minT -= 8
+	maxT += 8
+
+	// Plot bounds.
+	const (
+		plotLeft  = 150.0
+		plotRight = 1230.0
+		xPad      = 50.0
+	)
+	plotTop := headerH + 80.0
+	plotBottom := h - 60.0
+	plotW := plotRight - plotLeft
+	plotH := plotBottom - plotTop
+
+	tempToY := func(t float64) float64 {
+		return plotBottom - (t-minT)/(maxT-minT)*plotH
+	}
+	idxToX := func(i int) float64 {
+		if n <= 1 {
+			return plotLeft + plotW/2
+		}
+		return plotLeft + xPad + float64(i)*(plotW-2*xPad)/float64(n-1)
+	}
+
+	// Y-axis grid.
+	const gridLines = 4
+	dc.SetFontFace(fonts.small)
+	for g := 0; g <= gridLines; g++ {
+		gTemp := minT + float64(g)*(maxT-minT)/float64(gridLines)
+		gY := tempToY(gTemp)
+		dc.SetRGBA(1, 1, 1, 0.07)
+		dc.SetLineWidth(1)
+		dc.DrawLine(plotLeft, gY, plotRight, gY)
+		dc.Stroke()
+		drawShadowTextAnchored(dc, fmt.Sprintf("%.0f°", gTemp), plotLeft-6, gY, 1.0, 0.5, subR, subG, subB)
+	}
+
+	xs := make([]float64, n)
+	aYs := make([]float64, n)
+	fYs := make([]float64, n)
+	for i := range periods {
+		xs[i] = idxToX(i)
+		aYs[i] = tempToY(actuals[i])
+		fYs[i] = tempToY(feelsLike[i])
+	}
+
+	// Shaded area between the two lines.
+	if n > 1 {
+		for i := 0; i < n-1; i++ {
+			avgDiff := (feelsLike[i] - actuals[i] + feelsLike[i+1] - actuals[i+1]) / 2
+			if avgDiff < -1 {
+				dc.SetRGBA(0.3, 0.5, 1.0, 0.15) // blue - wind chill
+			} else if avgDiff > 1 {
+				dc.SetRGBA(1.0, 0.3, 0.3, 0.15) // red - heat index
+			} else {
+				continue
+			}
+			dc.MoveTo(xs[i], aYs[i])
+			dc.LineTo(xs[i+1], aYs[i+1])
+			dc.LineTo(xs[i+1], fYs[i+1])
+			dc.LineTo(xs[i], fYs[i])
+			dc.ClosePath()
+			dc.Fill()
+		}
+	}
+
+	// Actual temperature line (yellow).
+	if n > 1 {
+		dc.SetRGB(hlR, hlG, hlB)
+		dc.SetLineWidth(2.5)
+		dc.MoveTo(xs[0], aYs[0])
+		for i := 1; i < n; i++ {
+			dc.LineTo(xs[i], aYs[i])
+		}
+		dc.Stroke()
+	}
+
+	// Feels-like line (cyan).
+	if n > 1 {
+		dc.SetRGB(divR, divG, divB)
+		dc.SetLineWidth(2.5)
+		dc.MoveTo(xs[0], fYs[0])
+		for i := 1; i < n; i++ {
+			dc.LineTo(xs[i], fYs[i])
+		}
+		dc.Stroke()
+	}
+
+	// Data points.
+	for i := range periods {
+		x := xs[i]
+		dc.SetRGB(hlR, hlG, hlB)
+		dc.DrawCircle(x, aYs[i], 3.5)
+		dc.Fill()
+		dc.SetRGB(divR, divG, divB)
+		dc.DrawCircle(x, fYs[i], 3.5)
+		dc.Fill()
+		dc.SetFontFace(fonts.small)
+		drawShadowTextAnchored(dc, hourLabel(periods[i].StartTime, use24h, loc, i),
+			x, plotBottom+26, 0.5, 0.5, textR, textG, textB)
+	}
+
+	// Legend.
+	dc.SetFontFace(fonts.small)
+	legY := headerH + 30.0
+	dc.SetRGB(hlR, hlG, hlB)
+	dc.DrawRectangle(plotLeft, legY-6, 20, 3)
+	dc.Fill()
+	drawShadowText(dc, "ACTUAL", plotLeft+26, legY, hlR, hlG, hlB)
+
+	dc.SetRGB(divR, divG, divB)
+	dc.DrawRectangle(plotLeft+140, legY-6, 20, 3)
+	dc.Fill()
+	drawShadowText(dc, "FEELS LIKE", plotLeft+166, legY, divR, divG, divB)
+
+	return 0
+}
+
+// feelsLikeDiffers returns true if the feels-like temperature differs from
+// actual by more than threshold degrees in any of the first 12 hourly periods.
+func feelsLikeDiffers(data *weather.WeatherData, threshold float64) bool {
+	periods := data.HourlyPeriods
+	if len(periods) > 12 {
+		periods = periods[:12]
+	}
+	for _, p := range periods {
+		t := float64(p.Temperature)
+		if p.TemperatureUnit == "C" {
+			t = t*9/5 + 32
+		}
+		windMph := parseWindSpeedMph(p.WindSpeed)
+		humidity := 50.0
+		if p.RelativeHumidity.Value != nil {
+			humidity = float64(*p.RelativeHumidity.Value)
+		}
+		fl := computeFeelsLikeF(t, windMph, humidity)
+		if math.Abs(fl-t) > threshold {
+			return true
+		}
+	}
+	return false
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Sun & Moon
+// ────────────────────────────────────────────────────────────────────────────
+
+// NewSlideSunMoon returns a SlideFunc that shows sunrise/sunset, day length,
+// golden hour, and moon phase information.
+func NewSlideSunMoon(use24h bool, loc *time.Location, getRealisticMoon func() bool, fonts *fontSet) SlideFunc {
+	if fonts == nil {
+		fonts = defaultFonts
+	}
+	if getRealisticMoon == nil {
+		getRealisticMoon = func() bool { return false }
+	}
+	return func(dc *gg.Context, data *weather.WeatherData, _, _ time.Duration) time.Duration {
+		return slideSunMoon(dc, data, use24h, loc, getRealisticMoon, fonts)
+	}
+}
+
+func slideSunMoon(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *time.Location, getRealisticMoon func() bool, fonts *fontSet) time.Duration {
+	if loc == nil {
+		loc = time.Local
+	}
+	drawBackground(dc, "SUN & MOON", data.Location, use24h, loc, fonts)
+
+	w := float64(dc.Width())
+	h := float64(dc.Height())
+	midX := w / 2
+	contentTop := headerH + 16.0
+
+	timeFmt := "3:04 PM"
+	if use24h {
+		timeFmt = "15:04"
+	}
+
+	// ── Left panel: Sun data ──
+	panelCX := midX/2 + 20
+
+	if data.Sun == nil {
+		dc.SetFontFace(fonts.medium)
+		drawShadowTextAnchored(dc, "SUN DATA", panelCX, h/2-20, 0.5, 0.5, subR, subG, subB)
+		drawShadowTextAnchored(dc, "UNAVAILABLE", panelCX, h/2+20, 0.5, 0.5, subR, subG, subB)
+	} else {
+		sun := data.Sun
+
+		// Sun arc graphic.
+		arcCX := panelCX
+		arcCY := contentTop + 220
+		arcR := 130.0
+
+		// Draw arc (semicircle above horizon).
+		dc.SetRGBA(1, 1, 1, 0.1)
+		dc.SetLineWidth(2)
+		for i := 0; i <= 64; i++ {
+			a := math.Pi * float64(i) / 64.0
+			x := arcCX - arcR*math.Cos(a)
+			y := arcCY - arcR*math.Sin(a)
+			if i == 0 {
+				dc.MoveTo(x, y)
+			} else {
+				dc.LineTo(x, y)
+			}
+		}
+		dc.Stroke()
+
+		// Horizon line.
+		dc.SetRGBA(1, 1, 1, 0.15)
+		dc.SetLineWidth(1)
+		dc.DrawLine(arcCX-arcR-20, arcCY, arcCX+arcR+20, arcCY)
+		dc.Stroke()
+
+		// Current sun position on the arc.
+		now := time.Now().In(loc)
+		dayFrac := 0.5
+		if !sun.Sunrise.IsZero() && !sun.Sunset.IsZero() {
+			totalDay := sun.Sunset.Sub(sun.Sunrise).Seconds()
+			if totalDay > 0 {
+				elapsed := now.Sub(sun.Sunrise.In(loc)).Seconds()
+				dayFrac = elapsed / totalDay
+				if dayFrac < 0 {
+					dayFrac = 0
+				}
+				if dayFrac > 1 {
+					dayFrac = 1
+				}
+			}
+		}
+		sunAngle := math.Pi * dayFrac
+		sunX := arcCX - arcR*math.Cos(sunAngle)
+		sunY := arcCY - arcR*math.Sin(sunAngle)
+
+		// Only draw sun dot if currently daytime.
+		if dayFrac > 0 && dayFrac < 1 {
+			drawSun(dc, sunX, sunY, 36)
+		}
+
+		// Labels below the arc.
+		labelY := arcCY + 30
+		dc.SetFontFace(fonts.small)
+
+		drawShadowTextAnchored(dc, "SUNRISE", arcCX-arcR, labelY, 0.5, 0.5, subR, subG, subB)
+		drawShadowTextAnchored(dc, sun.Sunrise.In(loc).Format(timeFmt), arcCX-arcR, labelY+24, 0.5, 0.5, hlR, hlG, hlB)
+
+		drawShadowTextAnchored(dc, "SUNSET", arcCX+arcR, labelY, 0.5, 0.5, subR, subG, subB)
+		drawShadowTextAnchored(dc, sun.Sunset.In(loc).Format(timeFmt), arcCX+arcR, labelY+24, 0.5, 0.5, hlR, hlG, hlB)
+
+		// Stats below.
+		statsY := labelY + 70
+		dc.SetFontFace(fonts.small)
+
+		drawShadowTextAnchored(dc, "DAY LENGTH", panelCX, statsY, 0.5, 0.5, subR, subG, subB)
+		hours := int(sun.DayLength.Hours())
+		mins := int(sun.DayLength.Minutes()) % 60
+		drawShadowTextAnchored(dc, fmt.Sprintf("%dh %dm", hours, mins), panelCX, statsY+24, 0.5, 0.5, textR, textG, textB)
+
+		drawShadowTextAnchored(dc, "SOLAR NOON", panelCX-100, statsY+60, 0.5, 0.5, subR, subG, subB)
+		drawShadowTextAnchored(dc, sun.SolarNoon.In(loc).Format(timeFmt), panelCX-100, statsY+84, 0.5, 0.5, textR, textG, textB)
+
+		drawShadowTextAnchored(dc, "GOLDEN HOUR", panelCX+100, statsY+60, 0.5, 0.5, subR, subG, subB)
+		drawShadowTextAnchored(dc, sun.GoldenStart.In(loc).Format(timeFmt), panelCX+100, statsY+84, 0.5, 0.5, textR, textG, textB)
+	}
+
+	// ── Divider ──
+	dc.SetRGBA(1, 1, 1, 0.15)
+	dc.SetLineWidth(1)
+	dc.DrawLine(midX, contentTop+20, midX, h-30)
+	dc.Stroke()
+
+	// ── Right panel: Moon data ──
+	moonCX := midX + midX/2 - 20
+	moonR := 70.0
+	moonCY := contentTop + 180
+
+	if getRealisticMoon() {
+		drawMoonPhase(dc, moonCX, moonCY, moonR*2, data.MoonPhase.Phase)
+	} else {
+		drawMoon(dc, moonCX, moonCY, moonR*2.5)
+	}
+
+	dc.SetFontFace(fonts.medium)
+	drawShadowTextAnchored(dc, strings.ToUpper(data.MoonPhase.Name), moonCX, moonCY+moonR+40, 0.5, 0.5, textR, textG, textB)
+
+	dc.SetFontFace(fonts.small)
+	drawShadowTextAnchored(dc, fmt.Sprintf("%.0f%% ILLUMINATED", data.MoonPhase.Illumination*100), moonCX, moonCY+moonR+70, 0.5, 0.5, subR, subG, subB)
+	drawShadowTextAnchored(dc, fmt.Sprintf("DAY %.1f", data.MoonPhase.AgeDays), moonCX, moonCY+moonR+94, 0.5, 0.5, subR, subG, subB)
+
+	return 0
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// UV Index
+// ────────────────────────────────────────────────────────────────────────────
+
+// NewSlideUVIndex returns a SlideFunc that renders a UV index gauge and
+// 12-hour UV forecast curve.
+func NewSlideUVIndex(use24h bool, loc *time.Location, fonts *fontSet) SlideFunc {
+	if fonts == nil {
+		fonts = defaultFonts
+	}
+	return func(dc *gg.Context, data *weather.WeatherData, _, _ time.Duration) time.Duration {
+		return slideUVIndex(dc, data, use24h, loc, fonts)
+	}
+}
+
+func slideUVIndex(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *time.Location, fonts *fontSet) time.Duration {
+	if loc == nil {
+		loc = time.Local
+	}
+	drawBackground(dc, "UV INDEX", data.Location, use24h, loc, fonts)
+
+	w := float64(dc.Width())
+	h := float64(dc.Height())
+	contentTop := headerH + 20.0
+	midX := w / 2
+
+	// ── Left panel: UV gauge ──
+	gaugeCX := midX/2 + 20
+	gaugeCY := contentTop + 260
+	gaugeR := 140.0
+
+	// Draw gauge background arc (semicircle, green→yellow→orange→red→purple).
+	segments := []struct {
+		frac    float64
+		r, g, b float64
+	}{
+		{3.0 / 11, 0.3, 0.8, 0.3},  // green: 0-3
+		{3.0 / 11, 1.0, 0.85, 0.0}, // yellow: 3-6
+		{2.0 / 11, 1.0, 0.5, 0.0},  // orange: 6-8
+		{3.0 / 11, 1.0, 0.2, 0.2},  // red: 8-11
+	}
+	dc.SetLineWidth(16)
+	startAngle := math.Pi
+	for _, seg := range segments {
+		sweep := seg.frac * math.Pi
+		dc.SetRGB(seg.r, seg.g, seg.b)
+		steps := 32
+		for j := 0; j < steps; j++ {
+			a := startAngle + sweep*float64(j)/float64(steps)
+			x := gaugeCX + gaugeR*math.Cos(a)
+			y := gaugeCY + gaugeR*math.Sin(a)
+			if j == 0 {
+				dc.MoveTo(x, y)
+			} else {
+				dc.LineTo(x, y)
+			}
+		}
+		dc.Stroke()
+		startAngle += sweep
+	}
+
+	// Gauge needle.
+	uvi := data.UVIndex
+	if uvi > 11 {
+		uvi = 11
+	}
+	needleFrac := uvi / 11.0
+	needleAngle := math.Pi + needleFrac*math.Pi
+	needleLen := gaugeR * 0.8
+	nx := gaugeCX + needleLen*math.Cos(needleAngle)
+	ny := gaugeCY + needleLen*math.Sin(needleAngle)
+	dc.SetRGB(textR, textG, textB)
+	dc.SetLineWidth(3)
+	dc.DrawLine(gaugeCX, gaugeCY, nx, ny)
+	dc.Stroke()
+	dc.DrawCircle(gaugeCX, gaugeCY, 6)
+	dc.Fill()
+
+	// UV value and category.
+	dc.SetFontFace(fonts.hero)
+	drawShadowTextAnchored(dc, fmt.Sprintf("%.0f", data.UVIndex), gaugeCX, gaugeCY+55, 0.5, 0.5, hlR, hlG, hlB)
+
+	dc.SetFontFace(fonts.medium)
+	cat := weather.UVCategory(data.UVIndex)
+	catR, catG, catB := uvCategoryColor(data.UVIndex)
+	drawShadowTextAnchored(dc, strings.ToUpper(cat), gaugeCX, gaugeCY+115, 0.5, 0.5, catR, catG, catB)
+
+	// Scale labels.
+	dc.SetFontFace(fonts.small)
+	drawShadowTextAnchored(dc, "0", gaugeCX-gaugeR-16, gaugeCY+4, 0.5, 0.5, subR, subG, subB)
+	drawShadowTextAnchored(dc, "11+", gaugeCX+gaugeR+16, gaugeCY+4, 0.5, 0.5, subR, subG, subB)
+
+	// ── Divider ──
+	dc.SetRGBA(1, 1, 1, 0.15)
+	dc.SetLineWidth(1)
+	dc.DrawLine(midX, contentTop+20, midX, h-30)
+	dc.Stroke()
+
+	// ── Right panel: 12-hour UV curve ──
+	if len(data.HourlyPeriods) > 0 {
+		periods := data.HourlyPeriods
+		if len(periods) > 12 {
+			periods = periods[:12]
+		}
+		n := len(periods)
+
+		plotLeft := midX + 60
+		plotRight := w - 40.0
+		plotTop := contentTop + 40
+		plotBottom := h - 60.0
+		plotW := plotRight - plotLeft
+		plotH := plotBottom - plotTop
+
+		// Compute UV for each hour using a simple scaling from the current value.
+		uvVals := make([]float64, n)
+		maxUV := 1.0
+		for i, p := range periods {
+			t, _ := time.Parse(time.RFC3339, p.StartTime)
+			if t.IsZero() {
+				t = time.Now().Add(time.Duration(i) * time.Hour)
+			}
+			uvVals[i] = weather.ComputeUVIndex(t, 0, 0, p.ShortForecast)
+			if uvVals[i] > maxUV {
+				maxUV = uvVals[i]
+			}
+		}
+		// Scale relative to current UV if we have a non-zero baseline.
+		if data.UVIndex > 0 && uvVals[0] > 0 {
+			scale := data.UVIndex / uvVals[0]
+			for i := range uvVals {
+				uvVals[i] *= scale
+			}
+			maxUV *= scale
+		}
+		maxUV = math.Ceil(maxUV/2) * 2
+		if maxUV < 4 {
+			maxUV = 4
+		}
+
+		uvToY := func(v float64) float64 {
+			return plotBottom - (v/maxUV)*plotH
+		}
+		idxToX := func(i int) float64 {
+			if n <= 1 {
+				return plotLeft + plotW/2
+			}
+			return plotLeft + float64(i)*plotW/float64(n-1)
+		}
+
+		// Grid lines.
+		dc.SetFontFace(fonts.small)
+		for g := 0.0; g <= maxUV; g += 2 {
+			gY := uvToY(g)
+			dc.SetRGBA(1, 1, 1, 0.07)
+			dc.SetLineWidth(1)
+			dc.DrawLine(plotLeft, gY, plotRight, gY)
+			dc.Stroke()
+			drawShadowTextAnchored(dc, fmt.Sprintf("%.0f", g), plotLeft-8, gY, 1.0, 0.5, subR, subG, subB)
+		}
+
+		// Area fill and line.
+		xs := make([]float64, n)
+		ys := make([]float64, n)
+		for i := range periods {
+			xs[i] = idxToX(i)
+			ys[i] = uvToY(uvVals[i])
+		}
+
+		if n > 1 {
+			dc.SetRGBA(hlR, hlG, 0, 0.1)
+			dc.MoveTo(xs[0], plotBottom)
+			for i := 0; i < n; i++ {
+				dc.LineTo(xs[i], ys[i])
+			}
+			dc.LineTo(xs[n-1], plotBottom)
+			dc.ClosePath()
+			dc.Fill()
+
+			dc.SetRGB(hlR, hlG, 0)
+			dc.SetLineWidth(2.5)
+			dc.MoveTo(xs[0], ys[0])
+			for i := 1; i < n; i++ {
+				dc.LineTo(xs[i], ys[i])
+			}
+			dc.Stroke()
+		}
+
+		// Dots and time labels.
+		for i := range periods {
+			cr, cg, cb := uvCategoryColor(uvVals[i])
+			dc.SetRGB(cr, cg, cb)
+			dc.DrawCircle(xs[i], ys[i], 3.5)
+			dc.Fill()
+
+			dc.SetFontFace(fonts.small)
+			drawShadowTextAnchored(dc, hourLabel(periods[i].StartTime, use24h, loc, i),
+				xs[i], plotBottom+22, 0.5, 0.5, textR, textG, textB)
+		}
+	}
+
+	return 0
+}
+
+// uvCategoryColor returns R,G,B for a UV index value.
+func uvCategoryColor(uvi float64) (float64, float64, float64) {
+	switch {
+	case uvi < 3:
+		return 0.3, 0.8, 0.3 // green
+	case uvi < 6:
+		return 1.0, 0.85, 0.0 // yellow
+	case uvi < 8:
+		return 1.0, 0.5, 0.0 // orange
+	case uvi < 11:
+		return 1.0, 0.2, 0.2 // red
+	default:
+		return 0.6, 0.2, 0.8 // purple
+	}
+}

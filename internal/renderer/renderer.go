@@ -143,8 +143,15 @@ func New(w, h, frameRate int, label string,
 					return noPrecipCount%2 == 0
 				}
 			}()},
+			{name: "wind-forecast", fn: NewSlideWindForecast(use24h, useMetric, loc, fonts)},
+			{name: "feels-like", fn: NewSlideFeelsLike(use24h, useMetric, loc, fonts), skip: func(d *weather.WeatherData) bool {
+				return !feelsLikeDiffers(d, 3)
+			}},
 			{name: "extended-forecast", fn: NewSlideExtendedForecast(use24h, useMetric, loc, getRealisticMoon, fonts)},
+			{name: "weekly-high-low", fn: NewSlideWeeklyHighLow(use24h, useMetric, loc, fonts), skip: func(d *weather.WeatherData) bool { return len(d.DailyPeriods) == 0 }},
+			{name: "sun-moon", fn: NewSlideSunMoon(use24h, loc, getRealisticMoon, fonts)},
 			{name: "moon-tides", fn: NewSlideMoonTides(use24h, useMetric, loc, fonts)},
+			{name: "uv-index", fn: NewSlideUVIndex(use24h, loc, fonts), skip: func(d *weather.WeatherData) bool { return d.UVIndex < 1 }},
 			{name: "night-sky", fn: NewSlideNightSky(use24h, useMetric, loc, fonts)},
 			{name: "solar-weather", fn: NewSlideSolarWeather(use24h, useMetric, loc, fonts), skip: func(d *weather.WeatherData) bool {
 				return d.Solar == nil || (d.Solar.SunspotImage == nil && d.Solar.CoronaImage == nil)

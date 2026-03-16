@@ -63,12 +63,39 @@ func main() {
 		}},
 		{"hourly-forecast", renderer.NewSlideHourlyForecast(false, false, nil, realisticMoon, nil), nil},
 		{"precipitation", renderer.NewSlidePrecipitation(false, false, nil, realisticMoon, nil), nil},
+		{"wind-forecast", renderer.NewSlideWindForecast(false, false, nil, nil), func(d *weather.WeatherData) {
+			// Vary wind data for a more interesting screenshot.
+			winds := []string{"5 mph", "8 mph", "12 mph", "15 mph", "18 mph", "22 mph", "20 mph", "16 mph", "12 mph", "10 mph", "8 mph", "6 mph"}
+			windDirs := []string{"N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW"}
+			for i := range d.HourlyPeriods {
+				if i < len(winds) {
+					d.HourlyPeriods[i].WindSpeed = winds[i]
+					d.HourlyPeriods[i].WindDirection = windDirs[i]
+				}
+			}
+		}},
+		{"feels-like", renderer.NewSlideFeelsLike(false, false, nil, nil), func(d *weather.WeatherData) {
+			// Create conditions where feels-like differs from actual.
+			for i := range d.HourlyPeriods {
+				d.HourlyPeriods[i].WindSpeed = "15 mph"
+				d.HourlyPeriods[i].Temperature = 35 + i*2
+				humidity := 70
+				d.HourlyPeriods[i].RelativeHumidity.Value = &humidity
+			}
+		}},
 		{"extended-forecast", renderer.NewSlideExtendedForecast(false, false, nil, realisticMoon, nil), nil},
+		{"weekly-high-low", renderer.NewSlideWeeklyHighLow(false, false, nil, nil), nil},
+		{"sun-moon", renderer.NewSlideSunMoon(false, nil, realisticMoon, nil), func(d *weather.WeatherData) {
+			d.Sun = makeSunData(now)
+		}},
 		{"moon-tides", renderer.NewSlideMoonTides(false, false, nil, nil), func(d *weather.WeatherData) {
 			d.TideData = makeTideData(now)
 		}},
 		{"moon-phase", renderer.NewSlideMoonTides(false, false, nil, nil), func(d *weather.WeatherData) {
 			d.TideData = nil
+		}},
+		{"uv-index", renderer.NewSlideUVIndex(false, nil, nil), func(d *weather.WeatherData) {
+			d.UVIndex = 6.5
 		}},
 		{"night-sky", renderer.NewSlideNightSky(false, false, nil, nil), func(d *weather.WeatherData) {
 			d.Planets = makePlanetData(now)
@@ -403,6 +430,18 @@ func makeSolarData() *weather.SolarData {
 		sd.CoronaImage = fetchURL("https://sdo.gsfc.nasa.gov/assets/img/latest/latest_512_0304.jpg")
 	}
 	return sd
+}
+
+func makeSunData(base time.Time) *weather.SunData {
+	day := base.Truncate(24 * time.Hour)
+	return &weather.SunData{
+		Sunrise:     day.Add(6*time.Hour + 32*time.Minute),
+		Sunset:      day.Add(19*time.Hour + 14*time.Minute),
+		DayLength:   12*time.Hour + 42*time.Minute,
+		SolarNoon:   day.Add(12*time.Hour + 53*time.Minute),
+		GoldenStart: day.Add(18*time.Hour + 38*time.Minute),
+		GoldenEnd:   day.Add(19*time.Hour + 14*time.Minute),
+	}
 }
 
 func fetchURL(url string) []byte {

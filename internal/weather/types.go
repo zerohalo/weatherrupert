@@ -9,13 +9,13 @@ import (
 // PointsResponse is the NWS /api/points/{lat},{lon} response.
 type PointsResponse struct {
 	Properties struct {
-		GridID  string `json:"gridId"`
-		GridX   int    `json:"gridX"`
-		GridY   int    `json:"gridY"`
-		Forecast        string `json:"forecast"`
-		ForecastHourly  string `json:"forecastHourly"`
+		GridID              string `json:"gridId"`
+		GridX               int    `json:"gridX"`
+		GridY               int    `json:"gridY"`
+		Forecast            string `json:"forecast"`
+		ForecastHourly      string `json:"forecastHourly"`
 		ObservationStations string `json:"observationStations"`
-		RelativeLocation struct {
+		RelativeLocation    struct {
 			Properties struct {
 				City  string `json:"city"`
 				State string `json:"state"`
@@ -43,26 +43,29 @@ type ForecastResponse struct {
 
 // ForecastPeriod represents a single forecast period.
 type ForecastPeriod struct {
-	Number           int    `json:"number"`
-	Name             string `json:"name"`
-	StartTime        string `json:"startTime"`
-	EndTime          string `json:"endTime"`
-	IsDaytime        bool   `json:"isDaytime"`
-	Temperature      int    `json:"temperature"`
-	TemperatureUnit  string `json:"temperatureUnit"`
-	WindSpeed        string `json:"windSpeed"`
-	WindDirection    string `json:"windDirection"`
-	ShortForecast    string `json:"shortForecast"`
-	DetailedForecast string `json:"detailedForecast"`
+	Number                     int    `json:"number"`
+	Name                       string `json:"name"`
+	StartTime                  string `json:"startTime"`
+	EndTime                    string `json:"endTime"`
+	IsDaytime                  bool   `json:"isDaytime"`
+	Temperature                int    `json:"temperature"`
+	TemperatureUnit            string `json:"temperatureUnit"`
+	WindSpeed                  string `json:"windSpeed"`
+	WindDirection              string `json:"windDirection"`
+	ShortForecast              string `json:"shortForecast"`
+	DetailedForecast           string `json:"detailedForecast"`
 	ProbabilityOfPrecipitation struct {
 		Value *int `json:"value"`
 	} `json:"probabilityOfPrecipitation"`
+	RelativeHumidity struct {
+		Value *int `json:"value"`
+	} `json:"relativeHumidity"`
 }
 
 // Alert represents a single NWS weather alert.
 type Alert struct {
-	Event       string    // e.g. "Winter Storm Warning"
-	Severity    string    // "Extreme", "Severe", "Moderate", "Minor"
+	Event       string // e.g. "Winter Storm Warning"
+	Severity    string // "Extreme", "Severe", "Moderate", "Minor"
 	Headline    string
 	Description string
 	Onset       time.Time
@@ -192,35 +195,47 @@ type PlanetData struct {
 
 // SolarData holds solar activity metrics and images from NOAA SWPC and NASA SDO.
 type SolarData struct {
-	SunspotImage []byte    // SDO HMIIC JPEG (visible light)
-	CoronaImage  []byte    // SDO AIA 304 JPEG (chromosphere)
-	KpIndex      float64   // planetary Kp (0-9)
-	XRayFlux     string    // current X-ray class e.g. "C2.1", "M1.5", "B3.4"
-	RadioScale   int       // NOAA R-scale 0-5 (radio blackout)
-	SolarScale   int       // NOAA S-scale 0-5 (solar radiation storm)
-	GeomagScale  int       // NOAA G-scale 0-5 (geomagnetic storm)
-	WindSpeedKms float64   // solar wind speed km/s
+	SunspotImage []byte  // SDO HMIIC JPEG (visible light)
+	CoronaImage  []byte  // SDO AIA 304 JPEG (chromosphere)
+	KpIndex      float64 // planetary Kp (0-9)
+	XRayFlux     string  // current X-ray class e.g. "C2.1", "M1.5", "B3.4"
+	RadioScale   int     // NOAA R-scale 0-5 (radio blackout)
+	SolarScale   int     // NOAA S-scale 0-5 (solar radiation storm)
+	GeomagScale  int     // NOAA G-scale 0-5 (geomagnetic storm)
+	WindSpeedKms float64 // solar wind speed km/s
 	FetchedAt    time.Time
 }
 
 // WeatherData is the consolidated view of all fetched weather data.
 // It is treated as immutable once stored in the atomic pointer.
 type WeatherData struct {
-	Location      string
-	FetchedAt     time.Time
-	Current       CurrentConditions
-	HourlyPeriods []ForecastPeriod
-	DailyPeriods  []ForecastPeriod
-	RadarFrames     [][]byte   // radar animation frames, oldest→newest; nil/empty when unavailable
-	SatelliteFrames [][]byte   // GOES visible satellite frames, oldest→newest; nil/empty when unavailable
-	StaticMap       []byte     // fallback basemap PNG when radar is unavailable
-	MoonPhase     MoonPhase  // always populated (computed algorithmically)
-	Planets       *PlanetData // always populated (computed algorithmically)
-	TideData      *TideData  // nil when inland / no nearby station
-	Alerts        []Alert    // active NWS alerts; nil/empty when none
-	Solar          *SolarData // nil when fetch failed entirely
-	PrecipTotal24h float64   // expected liquid precip next 24h, in mm
-	SnowTotal24h   float64   // expected snowfall next 24h, in mm
+	Location        string
+	FetchedAt       time.Time
+	Current         CurrentConditions
+	HourlyPeriods   []ForecastPeriod
+	DailyPeriods    []ForecastPeriod
+	RadarFrames     [][]byte    // radar animation frames, oldest→newest; nil/empty when unavailable
+	SatelliteFrames [][]byte    // GOES visible satellite frames, oldest→newest; nil/empty when unavailable
+	StaticMap       []byte      // fallback basemap PNG when radar is unavailable
+	MoonPhase       MoonPhase   // always populated (computed algorithmically)
+	Planets         *PlanetData // always populated (computed algorithmically)
+	TideData        *TideData   // nil when inland / no nearby station
+	Alerts          []Alert     // active NWS alerts; nil/empty when none
+	Solar           *SolarData  // nil when fetch failed entirely
+	PrecipTotal24h  float64     // expected liquid precip next 24h, in mm
+	SnowTotal24h    float64     // expected snowfall next 24h, in mm
+	Sun             *SunData    // always populated (computed algorithmically)
+	UVIndex         float64     // current estimated UV index (0-11+)
+}
+
+// SunData holds sunrise, sunset, and related solar times for a location.
+type SunData struct {
+	Sunrise     time.Time
+	Sunset      time.Time
+	DayLength   time.Duration
+	SolarNoon   time.Time
+	GoldenStart time.Time // evening golden hour start (~6° above horizon)
+	GoldenEnd   time.Time // = sunset
 }
 
 // Unit conversion helpers.

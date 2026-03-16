@@ -431,10 +431,21 @@ func (c *Client) fetch(ctx context.Context) (*WeatherData, error) {
 	frameWg.Wait()
 
 	// Compute moon phase (pure function, no API call).
-	moon := ComputeMoonPhase(time.Now())
+	now := time.Now()
+	moon := ComputeMoonPhase(now)
 
 	// Compute planet positions (pure function, no API call).
-	planets := ComputePlanets(time.Now(), c.lat, c.lon)
+	planets := ComputePlanets(now, c.lat, c.lon)
+
+	// Compute sun data (pure function, no API call).
+	sunData := ComputeSunData(now, c.lat, c.lon)
+
+	// Compute UV index from solar position and current conditions.
+	cloudDesc := ""
+	if len(hourly) > 0 {
+		cloudDesc = hourly[0].ShortForecast
+	}
+	uvIndex := ComputeUVIndex(now, c.lat, c.lon, cloudDesc)
 
 	// Fetch tide predictions if a nearby station was found (best-effort).
 	var tideData *TideData
@@ -516,6 +527,8 @@ func (c *Client) fetch(ctx context.Context) (*WeatherData, error) {
 		Solar:           c.solarData.Load(),
 		PrecipTotal24h:  precipMM,
 		SnowTotal24h:    snowMM,
+		Sun:             sunData,
+		UVIndex:         uvIndex,
 	}, nil
 }
 
