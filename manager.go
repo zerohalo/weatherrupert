@@ -314,10 +314,10 @@ func (m *Manager) StoreCachedPreview(zip string, png []byte) {
 // begins serving a "Loading..." slide right away. clockFormat is "12" or "24".
 func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time.Location) (*Pipeline, error) {
 	cityLabel := fmt.Sprintf("%s, %s", loc.City, loc.State)
-	getSatProduct := func() string {
+	getSatProduct := func(frameTime time.Time) string {
 		prod := m.store.SatelliteProduct()
 		if prod == config.SatelliteAuto {
-			h := time.Now().In(tzLoc).Hour()
+			h := frameTime.In(tzLoc).Hour()
 			if h >= 7 && h < 19 {
 				return config.SatelliteVIS
 			}

@@ -52,7 +52,7 @@ type Client struct {
 	radius float64 // bounding box radius in miles (default: 120)
 
 	// Satellite settings.
-	getSatelliteProduct func() string // "IR" or "VIS"; called on each fetch
+	getSatelliteProduct func(time.Time) string // "IR" or "VIS"; called per frame with the frame's UTC time
 
 	// Timezone for this pipeline's time display.
 	loc *time.Location
@@ -65,7 +65,7 @@ type Client struct {
 }
 
 // NewClient creates a new weather client. Bootstrap must be called before Run or Current.
-func NewClient(baseURL string, lat, lon float64, location string, frames int, radius float64, getSatelliteProduct func() string, httpClient *http.Client, loc *time.Location) *Client {
+func NewClient(baseURL string, lat, lon float64, location string, frames int, radius float64, getSatelliteProduct func(time.Time) string, httpClient *http.Client, loc *time.Location) *Client {
 	if frames <= 0 {
 		frames = 4
 	}
@@ -73,7 +73,7 @@ func NewClient(baseURL string, lat, lon float64, location string, frames int, ra
 		radius = 120.0
 	}
 	if getSatelliteProduct == nil {
-		getSatelliteProduct = func() string { return config.SatelliteAuto }
+		getSatelliteProduct = func(time.Time) string { return config.SatelliteAuto }
 	}
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 15 * time.Second}
@@ -668,7 +668,7 @@ func (c *Client) fetchSatelliteAt(ctx context.Context, t time.Time) ([]byte, err
 
 	q := url.Values{}
 	q.Add("layers[]", "goes")
-	q.Set("goes_product", c.getSatelliteProduct())
+	q.Set("goes_product", c.getSatelliteProduct(t))
 	q.Add("layers[]", "uscounties")
 	q.Set("width", fmt.Sprintf("%d", imgW))
 	q.Set("height", fmt.Sprintf("%d", imgH))
