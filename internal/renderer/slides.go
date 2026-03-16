@@ -1880,15 +1880,54 @@ func slideAlerts(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *ti
 	if loc == nil {
 		loc = time.Local
 	}
-	drawBackground(dc, "WEATHER ALERTS", data.Location, use24h, loc, fonts)
-	drawHeaderCurrentTemp(dc, data, false, loc, fonts)
-
 	w := float64(dc.Width())
 	h := float64(dc.Height())
 	contentTop := headerH + 8.0
 
 	// Filter out expired alerts.
 	alerts := activeAlerts(data.Alerts)
+
+	// Determine severity for header color.
+	maxSeverity := "Minor"
+	for _, a := range alerts {
+		if severityRank(a.Severity) > severityRank(maxSeverity) {
+			maxSeverity = a.Severity
+		}
+	}
+
+	// Draw gradient background, then overlay severity color on the header
+	// area, then redraw all header elements on top so they're not tinted.
+	DrawGradientBackground(dc)
+	bandR, bandG, bandB := severityColor(maxSeverity)
+	dc.SetRGBA(bandR, bandG, bandB, 0.7)
+	dc.DrawRectangle(0, 0, w, headerH)
+	dc.Fill()
+	dc.SetRGB(bandR, bandG, bandB)
+	dc.DrawRectangle(0, headerH, w, 3)
+	dc.Fill()
+
+	// Redraw header elements on top of the tinted background.
+	dc.SetRGBA(1, 1, 1, 0.25)
+	dc.DrawRectangle(0, headerH, w, 2)
+	dc.Fill()
+	dc.SetFontFace(fonts.title)
+	drawShadowText(dc, "WEATHER ALERTS", 60, 56, titleR, titleG, titleB)
+	if data.Location != "" {
+		dc.SetFontFace(fonts.small)
+		drawShadowText(dc, truncate(strings.ToUpper(data.Location), 42), 60, 80, textR, textG, textB)
+	}
+	DrawLogoSun(dc, w/2-100, headerH/2, 30)
+	dc.SetFontFace(fonts.small)
+	drawShadowTextAnchored(dc, "WEATHER RUPERT", w/2+10, headerH/2, 0.5, 0.5, titleR, titleG, titleB)
+	now := time.Now().In(loc)
+	timeFmt := "3:04 PM"
+	if use24h {
+		timeFmt = "15:04"
+	}
+	dc.SetFontFace(fonts.small)
+	drawShadowTextAnchored(dc, now.Format("Mon Jan 2"), w-50, 40, 1.0, 0.5, textR, textG, textB)
+	drawShadowTextAnchored(dc, now.Format(timeFmt+" MST"), w-50, 64, 1.0, 0.5, textR, textG, textB)
+	drawHeaderCurrentTemp(dc, data, false, loc, fonts)
 
 	// Page through alerts: 2 per page.
 	const alertsPerPage = 2
@@ -1899,7 +1938,6 @@ func slideAlerts(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *ti
 	totalPages := (nAlerts + alertsPerPage - 1) / alertsPerPage
 
 	// Pick page based on elapsed time within the extended duration.
-	// Each page gets one full slide duration worth of display time.
 	pageDur := total
 	if pageDur <= 0 {
 		pageDur = 8 * time.Second
@@ -1916,29 +1954,6 @@ func slideAlerts(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *ti
 		endIdx = nAlerts
 	}
 	pageAlerts := alerts[startIdx:endIdx]
-
-	// Severity-colored header background.
-	maxSeverity := "Minor"
-	for _, a := range alerts {
-		if severityRank(a.Severity) > severityRank(maxSeverity) {
-			maxSeverity = a.Severity
-		}
-	}
-	bandR, bandG, bandB := severityColor(maxSeverity)
-	dc.SetRGBA(bandR, bandG, bandB, 0.7)
-	dc.DrawRectangle(0, 0, w, headerH)
-	dc.Fill()
-	// Re-draw the header text on top of the colored background so it's legible.
-	dc.SetFontFace(fonts.title)
-	drawShadowText(dc, "WEATHER ALERTS", 60, 56, textR, textG, textB)
-	if data.Location != "" {
-		dc.SetFontFace(fonts.small)
-		drawShadowText(dc, truncate(strings.ToUpper(data.Location), 42), 60, 80, textR, textG, textB)
-	}
-	// Thin rule at the bottom of the header.
-	dc.SetRGB(bandR, bandG, bandB)
-	dc.DrawRectangle(0, headerH, w, 3)
-	dc.Fill()
 
 	// Render each alert.
 	y := contentTop + 30.0
