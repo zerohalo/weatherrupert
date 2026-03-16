@@ -126,6 +126,13 @@ func DrawGradientBackground(dc *gg.Context) {
 	copy(dst.Pix, bg.Pix)
 }
 
+// drawBackgroundWithData fills the gradient, renders the standard header, and
+// adds a small current-condition icon + temperature near the time display.
+func drawBackgroundWithData(dc *gg.Context, title string, data *weather.WeatherData, use24h, useMetric bool, loc *time.Location, fonts *fontSet) {
+	drawBackground(dc, title, data.Location, use24h, loc, fonts)
+	drawHeaderCurrentTemp(dc, data, useMetric, loc, fonts)
+}
+
 // drawBackground fills the gradient and renders the header common to all slides:
 // yellow screen title (left), white location (left below title),
 // and current date/time (right). use24h selects 24-hour vs 12-hour clock format.
@@ -165,6 +172,39 @@ func drawBackground(dc *gg.Context, title, location string, use24h bool, loc *ti
 	dc.SetFontFace(fonts.small)
 	drawShadowTextAnchored(dc, now.Format("Mon Jan 2"), w-50, 40, 1.0, 0.5, textR, textG, textB)
 	drawShadowTextAnchored(dc, now.Format(timeFmt+" MST"), w-50, 64, 1.0, 0.5, textR, textG, textB)
+}
+
+// drawHeaderCurrentTemp draws a small current-condition icon and temperature
+// in the header, to the left of the date/time display. Call after drawBackground.
+func drawHeaderCurrentTemp(dc *gg.Context, data *weather.WeatherData, useMetric bool, loc *time.Location, fonts *fontSet) {
+	if data == nil || data.Current.TempF == nil {
+		return
+	}
+	w := float64(dc.Width())
+
+	// Temperature string.
+	temp := *data.Current.TempF
+	unit := "°F"
+	if useMetric {
+		temp = fToC(temp)
+		unit = "°C"
+	}
+	tempLabel := fmt.Sprintf("%.0f%s", temp, unit)
+
+	// Position: to the left of the date/time block.
+	// Date/time right edge is at w-50; the date text is ~120px wide.
+	tempX := w - 240
+	tempY := headerH / 2
+
+	// Small condition icon.
+	isDaytime := currentIsDaytime(data, loc)
+	icon := conditionIcon(data.Current.Description, isDaytime)
+	iconSize := 34.0
+	drawIcon(dc, icon, tempX-20, tempY+3, iconSize)
+
+	// Temperature text — right-aligned so it stays clear of the date.
+	dc.SetFontFace(fonts.small)
+	drawShadowTextAnchored(dc, tempLabel, tempX+8, tempY, 0.0, 0.5, textR, textG, textB)
 }
 
 // drawShadowText draws s at (x, y) baseline-left with a dark drop-shadow.
@@ -239,7 +279,7 @@ func NewSlideCurrentConditions(use24h, useMetric bool, loc *time.Location, getRe
 }
 
 func slideCurrentConditions(dc *gg.Context, data *weather.WeatherData, use24h, useMetric bool, loc *time.Location, getRealisticMoon func() bool, fonts *fontSet) time.Duration {
-	drawBackground(dc, "LOCAL CONDITIONS", data.Location, use24h, loc, fonts)
+	drawBackgroundWithData(dc, "LOCAL CONDITIONS", data, use24h, useMetric, loc, fonts)
 
 	w := float64(dc.Width())
 	h := float64(dc.Height())
@@ -363,7 +403,7 @@ func NewSlideHourlyForecast(use24h, useMetric bool, loc *time.Location, getReali
 }
 
 func slideHourlyForecast(dc *gg.Context, data *weather.WeatherData, use24h, useMetric bool, loc *time.Location, getRealisticMoon func() bool, fonts *fontSet) time.Duration {
-	drawBackground(dc, "HOURLY FORECAST", data.Location, use24h, loc, fonts)
+	drawBackgroundWithData(dc, "HOURLY FORECAST", data, use24h, useMetric, loc, fonts)
 
 	w := float64(dc.Width())
 	h := float64(dc.Height())
@@ -597,7 +637,7 @@ func NewSlideExtendedForecast(use24h, useMetric bool, loc *time.Location, getRea
 }
 
 func slideExtendedForecast(dc *gg.Context, data *weather.WeatherData, use24h, useMetric bool, loc *time.Location, getRealisticMoon func() bool, fonts *fontSet) time.Duration {
-	drawBackground(dc, "EXTENDED FORECAST", data.Location, use24h, loc, fonts)
+	drawBackgroundWithData(dc, "EXTENDED FORECAST", data, use24h, useMetric, loc, fonts)
 
 	if len(data.DailyPeriods) == 0 {
 		dc.SetFontFace(fonts.medium)
@@ -733,6 +773,7 @@ func NewSlideRadar(use24h bool, loc *time.Location, fonts *fontSet) SlideFunc {
 
 func drawRadarSlide(dc *gg.Context, data *weather.WeatherData, elapsed, total time.Duration, cache *radarFrameCache, use24h bool, loc *time.Location, fonts *fontSet) {
 	drawBackground(dc, "LOCAL RADAR", data.Location, use24h, loc, fonts)
+	drawHeaderCurrentTemp(dc, data, false, loc, fonts)
 
 	w := float64(dc.Width())
 	h := float64(dc.Height())
@@ -864,6 +905,7 @@ func NewSlideSatellite(use24h bool, loc *time.Location, fonts *fontSet) SlideFun
 
 func drawSatelliteSlide(dc *gg.Context, data *weather.WeatherData, elapsed, total time.Duration, cache *satelliteFrameCache, use24h bool, loc *time.Location, fonts *fontSet) {
 	drawBackground(dc, "SATELLITE", data.Location, use24h, loc, fonts)
+	drawHeaderCurrentTemp(dc, data, false, loc, fonts)
 
 	w := float64(dc.Width())
 	h := float64(dc.Height())
@@ -960,6 +1002,7 @@ func NewSlideAnnouncements(getAnns func() []ann.Announcement, getDur func() time
 	lastElapsed := time.Duration(-1)
 	return func(dc *gg.Context, data *weather.WeatherData, elapsed, total time.Duration) time.Duration {
 		drawBackground(dc, "ANNOUNCEMENTS", data.Location, use24h, loc, fonts)
+		drawHeaderCurrentTemp(dc, data, false, loc, fonts)
 
 		// Filter to announcements active today (date-specific ones only show
 		// on their MM-DD; entries with no date show every day).
@@ -1084,6 +1127,7 @@ func NewSlideTrivia(getItems func() []trivia.TriviaItem, getDur func() time.Dura
 
 	return func(dc *gg.Context, data *weather.WeatherData, elapsed, total time.Duration) time.Duration {
 		drawBackground(dc, "TRIVIA", data.Location, use24h, loc, fonts)
+		drawHeaderCurrentTemp(dc, data, false, loc, fonts)
 
 		items := getItems()
 		if len(items) == 0 {
@@ -1390,7 +1434,7 @@ func slideMoonTides(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 	if hasTides {
 		title = "MOON & TIDES"
 	}
-	drawBackground(dc, title, data.Location, use24h, loc, fonts)
+	drawBackgroundWithData(dc, title, data, use24h, useMetric, loc, fonts)
 
 	w := float64(dc.Width())
 	h := float64(dc.Height())
@@ -1663,7 +1707,7 @@ func NewSlidePrecipitation(use24h, useMetric bool, loc *time.Location, getRealis
 }
 
 func slidePrecipitation(dc *gg.Context, data *weather.WeatherData, use24h, useMetric bool, loc *time.Location, getRealisticMoon func() bool, fonts *fontSet) time.Duration {
-	drawBackground(dc, "CHANCE OF PRECIPITATION", data.Location, use24h, loc, fonts)
+	drawBackgroundWithData(dc, "CHANCE OF PRECIPITATION", data, use24h, useMetric, loc, fonts)
 
 	w := float64(dc.Width())
 	h := float64(dc.Height())
@@ -1799,6 +1843,7 @@ func slideAlerts(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *ti
 		loc = time.Local
 	}
 	drawBackground(dc, "WEATHER ALERTS", data.Location, use24h, loc, fonts)
+	drawHeaderCurrentTemp(dc, data, false, loc, fonts)
 
 	w := float64(dc.Width())
 	h := float64(dc.Height())
@@ -1990,6 +2035,7 @@ func slideNightSky(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *
 		loc = time.Local
 	}
 	drawBackground(dc, "Night Sky", data.Location, use24h, loc, fonts)
+	drawHeaderCurrentTemp(dc, data, false, loc, fonts)
 
 	w := float64(dc.Width())
 	h := float64(dc.Height())
@@ -2270,6 +2316,7 @@ func NewSlideSolarWeather(use24h, useMetric bool, loc *time.Location, fonts *fon
 
 func drawSolarSlide(dc *gg.Context, data *weather.WeatherData, cache *solarImageCache, use24h bool, loc *time.Location, fonts *fontSet) {
 	drawBackground(dc, "Solar Weather", data.Location, use24h, loc, fonts)
+	drawHeaderCurrentTemp(dc, data, false, loc, fonts)
 
 	w := float64(dc.Width())
 	h := float64(dc.Height())
@@ -2511,7 +2558,7 @@ func NewSlideWeeklyHighLow(use24h, useMetric bool, loc *time.Location, fonts *fo
 }
 
 func slideWeeklyHighLow(dc *gg.Context, data *weather.WeatherData, use24h, useMetric bool, loc *time.Location, fonts *fontSet) time.Duration {
-	drawBackground(dc, "WEEKLY HIGHS & LOWS", data.Location, use24h, loc, fonts)
+	drawBackgroundWithData(dc, "WEEKLY HIGHS & LOWS", data, use24h, useMetric, loc, fonts)
 
 	w := float64(dc.Width())
 	h := float64(dc.Height())
@@ -2678,7 +2725,7 @@ var cardinalToDegrees = map[string]float64{
 }
 
 func slideWindForecast(dc *gg.Context, data *weather.WeatherData, use24h, useMetric bool, loc *time.Location, fonts *fontSet) time.Duration {
-	drawBackground(dc, "WIND FORECAST", data.Location, use24h, loc, fonts)
+	drawBackgroundWithData(dc, "WIND FORECAST", data, use24h, useMetric, loc, fonts)
 
 	w := float64(dc.Width())
 	h := float64(dc.Height())
@@ -2894,7 +2941,7 @@ func computeFeelsLikeF(tempF, windMph, humidity float64) float64 {
 }
 
 func slideFeelsLike(dc *gg.Context, data *weather.WeatherData, use24h, useMetric bool, loc *time.Location, fonts *fontSet) time.Duration {
-	drawBackground(dc, "FEELS LIKE", data.Location, use24h, loc, fonts)
+	drawBackgroundWithData(dc, "FEELS LIKE", data, use24h, useMetric, loc, fonts)
 
 	w := float64(dc.Width())
 	h := float64(dc.Height())
@@ -3114,6 +3161,7 @@ func slideSunMoon(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *t
 		loc = time.Local
 	}
 	drawBackground(dc, "SUN & MOON", data.Location, use24h, loc, fonts)
+	drawHeaderCurrentTemp(dc, data, false, loc, fonts)
 
 	w := float64(dc.Width())
 	h := float64(dc.Height())
@@ -3259,6 +3307,7 @@ func slideUVIndex(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *t
 		loc = time.Local
 	}
 	drawBackground(dc, "UV INDEX", data.Location, use24h, loc, fonts)
+	drawHeaderCurrentTemp(dc, data, false, loc, fonts)
 
 	w := float64(dc.Width())
 	h := float64(dc.Height())
