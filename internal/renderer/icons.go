@@ -19,6 +19,7 @@ const (
 	iconPartlyCloudy
 	iconNightPartlyCloudy
 	iconMostlyCloudy
+	iconNightMostlyCloudy
 	iconCloudy
 	iconRain
 	iconThunderstorm
@@ -52,7 +53,10 @@ func conditionIcon(desc string, isDaytime bool) iconType {
 	case anyOf(s, "wind", "breezy", "blustery"):
 		return iconWindy
 	case anyOf(s, "mostly cloudy", "considerable cloud", "overcast"):
-		return iconMostlyCloudy
+		if isDaytime {
+			return iconMostlyCloudy
+		}
+		return iconNightMostlyCloudy
 	case anyOf(s, "partly cloudy", "partly sunny", "mostly sunny", "partly clear"):
 		if isDaytime {
 			return iconPartlyCloudy
@@ -94,7 +98,9 @@ func drawIcon(dc *gg.Context, t iconType, cx, cy, size float64) {
 	case iconNightPartlyCloudy:
 		drawPartlyCloudy(dc, cx, cy, size, true)
 	case iconMostlyCloudy:
-		drawMostlyCloudy(dc, cx, cy, size)
+		drawMostlyCloudy(dc, cx, cy, size, false)
+	case iconNightMostlyCloudy:
+		drawMostlyCloudy(dc, cx, cy, size, true)
 	case iconCloudy:
 		drawCloudShape(dc, cx, cy, size, 1.0, 1.0, 1.0)
 	case iconRain:
@@ -119,7 +125,7 @@ func drawIcon(dc *gg.Context, t iconType, cx, cy, size float64) {
 // drawIconWithMoon is like drawIcon but uses a phase-accurate moon disc
 // for night icons when realistic is true.
 func drawIconWithMoon(dc *gg.Context, t iconType, cx, cy, size, moonPhase float64, realistic bool) {
-	if !realistic || (t != iconNightClear && t != iconNightPartlyCloudy) {
+	if !realistic || (t != iconNightClear && t != iconNightPartlyCloudy && t != iconNightMostlyCloudy) {
 		drawIcon(dc, t, cx, cy, size)
 		return
 	}
@@ -128,6 +134,8 @@ func drawIconWithMoon(dc *gg.Context, t iconType, cx, cy, size, moonPhase float6
 		drawMoonPhase(dc, cx, cy, size*0.48, moonPhase)
 	case iconNightPartlyCloudy:
 		drawPartlyCloudyMoon(dc, cx, cy, size, moonPhase)
+	case iconNightMostlyCloudy:
+		drawMostlyCloudyMoon(dc, cx, cy, size, moonPhase)
 	}
 }
 
@@ -407,16 +415,33 @@ func drawPartlyCloudy(dc *gg.Context, cx, cy, size float64, night bool) {
 	drawCloudShape(dc, cx-size*0.10, cy+size*0.08, size*0.76, 1, 1, 1)
 }
 
-// drawMostlyCloudy draws a large gray cloud with a small sun peeking from the top-right.
-func drawMostlyCloudy(dc *gg.Context, cx, cy, size float64) {
-	// Small sun peek
-	sunR := size * 0.15
-	sunX := cx + size*0.22
-	sunY := cy - size*0.15
-	dc.SetRGB(hlR, hlG, 0)
-	dc.DrawCircle(sunX, sunY, sunR)
-	dc.Fill()
+// drawMostlyCloudy draws a large gray cloud with a small sun or moon peeking from the top-right.
+func drawMostlyCloudy(dc *gg.Context, cx, cy, size float64, night bool) {
+	peekR := size * 0.15
+	peekX := cx + size*0.22
+	peekY := cy - size*0.15
 
+	if night {
+		// Moon crescent peek
+		drawCrescent(dc, peekX, peekY, peekR, 0.95, 0.95, 0.80)
+	} else {
+		// Small sun peek
+		dc.SetRGB(hlR, hlG, 0)
+		dc.DrawCircle(peekX, peekY, peekR)
+		dc.Fill()
+	}
+
+	// Dominant gray cloud
+	drawCloudShape(dc, cx-size*0.04, cy+size*0.07, size*0.90, 0.78, 0.80, 0.84)
+}
+
+// drawMostlyCloudyMoon is like drawMostlyCloudy for nighttime but uses
+// a phase-accurate moon disc instead of a crescent.
+func drawMostlyCloudyMoon(dc *gg.Context, cx, cy, size, moonPhase float64) {
+	peekR := size * 0.15
+	peekX := cx + size*0.22
+	peekY := cy - size*0.15
+	drawMoonPhase(dc, peekX, peekY, peekR*2, moonPhase)
 	// Dominant gray cloud
 	drawCloudShape(dc, cx-size*0.04, cy+size*0.07, size*0.90, 0.78, 0.80, 0.84)
 }
@@ -695,6 +720,7 @@ func RenderIconSheet(path string) error {
 		{iconPartlyCloudy, "Partly Cloudy"},
 		{iconNightPartlyCloudy, "Night Partly Cloudy"},
 		{iconMostlyCloudy, "Mostly Cloudy"},
+		{iconNightMostlyCloudy, "Night Mostly Cloudy"},
 		{iconCloudy, "Cloudy"},
 		{iconRain, "Rain"},
 		{iconThunderstorm, "Thunderstorm"},
