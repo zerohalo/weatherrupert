@@ -93,8 +93,9 @@ func main() {
 		}},
 		{"extended-forecast", renderer.NewSlideExtendedForecast(false, false, nil, realisticMoon, nil), nil},
 		{"weekly-high-low", renderer.NewSlideWeeklyHighLow(false, false, nil, nil), nil},
-		{"sun-moon", renderer.NewSlideSunMoon(false, nil, realisticMoon, nil), func(d *weather.WeatherData) {
+		{"sun-solar", renderer.NewSlideSunMoon(false, nil, nil), func(d *weather.WeatherData) {
 			d.Sun = makeSunData(now)
+			d.Solar = makeSolarData()
 		}},
 		{"moon-tides", renderer.NewSlideMoonTides(false, false, nil, nil), func(d *weather.WeatherData) {
 			d.TideData = makeTideData(now)
@@ -108,9 +109,6 @@ func main() {
 		}},
 		{"night-sky", renderer.NewSlideNightSky(false, false, nil, nil), func(d *weather.WeatherData) {
 			d.Planets = makePlanetData(now)
-		}},
-		{"solar-weather", renderer.NewSlideSolarWeather(false, false, nil, nil), func(d *weather.WeatherData) {
-			d.Solar = makeSolarData()
 		}},
 		{"satellite", renderer.NewSlideSatellite(false, nil, nil), func(d *weather.WeatherData) {
 			d.SatelliteFrames = makeSatelliteFrames()

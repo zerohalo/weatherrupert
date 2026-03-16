@@ -352,12 +352,11 @@ The stream cycles through the following slides:
 | Feels Like | Actual vs feels-like temperature comparison (wind chill / heat index) |
 | Extended Forecast | 6-day daily forecast |
 | Weekly Highs & Lows | Temperature range bar chart for the week |
-| Sun & Moon | Sunrise/sunset, day length, golden hour, and moon phase |
+| Sun & Solar | Sunrise/sunset, day length, golden hour, and solar weather (SDO imagery, Kp index, X-ray flux) |
 | Moon & Tides | Moon phase and NOAA tide predictions (coastal locations within 100 mi of a tide station) |
 | Moon Phase | Moon phase only (inland locations with no nearby tide station) |
 | UV Index | Current UV index gauge with 12-hour forecast curve |
 | Night Sky | Visible planet positions |
-| Solar Weather | SDO solar imagery and NOAA space weather metrics |
 | Satellite | Infrared or visible satellite imagery |
 | Radar | Local weather radar |
 
@@ -465,12 +464,11 @@ Running `docker compose up` without the overlay works exactly as before — no R
 ![Feels Like](screenshots/feels-like.png)
 ![Extended Forecast](screenshots/extended-forecast.png)
 ![Weekly Highs & Lows](screenshots/weekly-high-low.png)
-![Sun & Moon](screenshots/sun-moon.png)
+![Sun & Solar](screenshots/sun-solar.png)
 ![Moon & Tides](screenshots/moon-tides.png)
 ![Moon Phase](screenshots/moon-phase.png)
 ![UV Index](screenshots/uv-index.png)
 ![Night Sky Planets](screenshots/night-sky.png)
-![Solar Weather](screenshots/solar-weather.png)
 ![Satellite Imagery](screenshots/satellite.png)
 ![Local Radar](screenshots/radar.png)
 ![Trivia — Multiple Choice Question](screenshots/trivia-mc-question.png)

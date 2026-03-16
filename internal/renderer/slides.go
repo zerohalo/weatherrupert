@@ -2424,7 +2424,15 @@ func drawSolarDiskImage(dc *gg.Context, img *image.RGBA, cx, y, size float64, fo
 		drawShadowTextAnchored(dc, "No data", cx, y+size/2, 0.5, 0.5, subR, subG, subB)
 		return
 	}
-	dc.DrawImage(img, int(cx-size/2), int(y))
+	// Scale image to requested size (decoded images are 280x280).
+	s := int(size)
+	if img.Bounds().Dx() != s {
+		scaled := image.NewRGBA(image.Rect(0, 0, s, s))
+		xdraw.BiLinear.Scale(scaled, scaled.Bounds(), img, img.Bounds(), xdraw.Over, nil)
+		dc.DrawImage(scaled, int(cx-size/2), int(y))
+	} else {
+		dc.DrawImage(img, int(cx-size/2), int(y))
+	}
 }
 
 // drawSolarStat draws a label-value-suffix row for solar metrics.
@@ -3193,24 +3201,22 @@ func feelsLikeDiffers(data *weather.WeatherData, threshold float64) bool {
 // ────────────────────────────────────────────────────────────────────────────
 
 // NewSlideSunMoon returns a SlideFunc that shows sunrise/sunset, day length,
-// golden hour, and moon phase information.
-func NewSlideSunMoon(use24h bool, loc *time.Location, getRealisticMoon func() bool, fonts *fontSet) SlideFunc {
+// golden hour, and a compact solar weather summary.
+func NewSlideSunMoon(use24h bool, loc *time.Location, fonts *fontSet) SlideFunc {
 	if fonts == nil {
 		fonts = defaultFonts
 	}
-	if getRealisticMoon == nil {
-		getRealisticMoon = func() bool { return false }
-	}
+	cache := &solarImageCache{}
 	return func(dc *gg.Context, data *weather.WeatherData, _, _ time.Duration) time.Duration {
-		return slideSunMoon(dc, data, use24h, loc, getRealisticMoon, fonts)
+		return slideSunMoon(dc, data, use24h, loc, cache, fonts)
 	}
 }
 
-func slideSunMoon(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *time.Location, getRealisticMoon func() bool, fonts *fontSet) time.Duration {
+func slideSunMoon(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *time.Location, cache *solarImageCache, fonts *fontSet) time.Duration {
 	if loc == nil {
 		loc = time.Local
 	}
-	drawBackground(dc, "SUN & MOON", data.Location, use24h, loc, fonts)
+	drawBackground(dc, "SUN & SOLAR", data.Location, use24h, loc, fonts)
 	drawHeaderCurrentTemp(dc, data, false, loc, fonts)
 
 	w := float64(dc.Width())
@@ -3316,23 +3322,69 @@ func slideSunMoon(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *t
 	dc.DrawLine(midX, contentTop+20, midX, h-30)
 	dc.Stroke()
 
-	// ── Right panel: Moon data ──
-	moonCX := midX + midX/2 - 20
-	moonR := 70.0
-	moonCY := contentTop + 180
+	// ── Right panel: Solar weather ──
+	panelCX2 := midX + midX/2 - 20
 
-	if getRealisticMoon() {
-		drawMoonPhase(dc, moonCX, moonCY, moonR*2, data.MoonPhase.Phase)
+	if data.Solar == nil {
+		dc.SetFontFace(fonts.medium)
+		drawShadowTextAnchored(dc, "SOLAR DATA", panelCX2, h/2-20, 0.5, 0.5, subR, subG, subB)
+		drawShadowTextAnchored(dc, "UNAVAILABLE", panelCX2, h/2+20, 0.5, 0.5, subR, subG, subB)
 	} else {
-		drawMoon(dc, moonCX, moonCY, moonR*2.5)
+		sd := data.Solar
+
+		// Rebuild image cache when data changes.
+		if cache.fetched != sd.FetchedAt.Unix() {
+			cache.sunspot = decodeSolarImage(sd.SunspotImage)
+			cache.corona = decodeSolarImage(sd.CoronaImage)
+			cache.fetched = sd.FetchedAt.Unix()
+		}
+
+		// Layout: two solar images side by side, stats below, all vertically centred.
+		panelLeft := midX + 20
+		panelRight := w - 20
+		panelW := panelRight - panelLeft
+		gap := 24.0
+		imgSize := (panelW - gap) / 2
+		if imgSize > 195 {
+			imgSize = 195
+		}
+
+		// Compute total block height: label + images + gap + stats.
+		labelH := 24.0
+		imgGap := 18.0   // between label and images
+		statsGap := 34.0 // between images and stats
+		rowH := 24.0
+		statsH := rowH * 6
+		totalH := labelH + imgGap + imgSize + statsGap + statsH
+		contentH := h - contentTop - 10
+		startY := contentTop + (contentH-totalH)/2
+
+		// Center the image pair horizontally in the panel.
+		totalImgW := imgSize*2 + gap
+		imgLeft := panelCX2 - totalImgW/2
+		imgRight := imgLeft + imgSize + gap
+
+		imgLabelY := startY + labelH/2
+		imgTop := startY + labelH + imgGap
+
+		dc.SetFontFace(fonts.small)
+		drawShadowTextAnchored(dc, "SUNSPOTS", imgLeft+imgSize/2, imgLabelY, 0.5, 0.5, titleR, titleG, titleB)
+		drawShadowTextAnchored(dc, "CORONA", imgRight+imgSize/2, imgLabelY, 0.5, 0.5, titleR, titleG, titleB)
+
+		drawSolarDiskImage(dc, cache.sunspot, imgLeft+imgSize/2, imgTop, imgSize, fonts)
+		drawSolarDiskImage(dc, cache.corona, imgRight+imgSize/2, imgTop, imgSize, fonts)
+
+		// Stats centred below both images.
+		statsY := imgTop + imgSize + statsGap
+		statsBlockW := 280.0
+		statsX := panelCX2 - statsBlockW/2
+		drawSolarStat(dc, "KP INDEX", formatKp(sd.KpIndex), kpLabel(sd.KpIndex), statsX, statsY, kpColor(sd.KpIndex), fonts)
+		drawSolarStat(dc, "X-RAY", formatXRay(sd.XRayFlux), "", statsX, statsY+rowH, xrayColor(sd.XRayFlux), fonts)
+		drawSolarStat(dc, "WIND", fmt.Sprintf("%.0f km/s", sd.WindSpeedKms), "", statsX, statsY+rowH*2, windColor(sd.WindSpeedKms), fonts)
+		drawSolarStat(dc, "GEOMAG (G)", fmt.Sprintf("G%d", sd.GeomagScale), noaaScaleLabel(sd.GeomagScale), statsX, statsY+rowH*3, noaaScaleColor(sd.GeomagScale), fonts)
+		drawSolarStat(dc, "RADIO (R)", fmt.Sprintf("R%d", sd.RadioScale), noaaScaleLabel(sd.RadioScale), statsX, statsY+rowH*4, noaaScaleColor(sd.RadioScale), fonts)
+		drawSolarStat(dc, "SOLAR (S)", fmt.Sprintf("S%d", sd.SolarScale), noaaScaleLabel(sd.SolarScale), statsX, statsY+rowH*5, noaaScaleColor(sd.SolarScale), fonts)
 	}
-
-	dc.SetFontFace(fonts.medium)
-	drawShadowTextAnchored(dc, strings.ToUpper(data.MoonPhase.Name), moonCX, moonCY+moonR+40, 0.5, 0.5, textR, textG, textB)
-
-	dc.SetFontFace(fonts.small)
-	drawShadowTextAnchored(dc, fmt.Sprintf("%.0f%% ILLUMINATED", data.MoonPhase.Illumination*100), moonCX, moonCY+moonR+70, 0.5, 0.5, subR, subG, subB)
-	drawShadowTextAnchored(dc, fmt.Sprintf("DAY %.1f", data.MoonPhase.AgeDays), moonCX, moonCY+moonR+94, 0.5, 0.5, subR, subG, subB)
 
 	return 0
 }
