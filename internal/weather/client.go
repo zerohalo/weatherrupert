@@ -226,6 +226,13 @@ func (c *Client) runSolarRefresh(ctx context.Context, hasClients func() bool) {
 			hasImages := solar.SunspotImage != nil || solar.CoronaImage != nil
 			log.Printf("weather: solar data refreshed (images=%v, kp=%.1f, xray=%s)",
 				hasImages, solar.KpIndex, solar.XRayFlux)
+			// Patch the current WeatherData snapshot so slides see solar
+			// data immediately without waiting for the next weather refresh.
+			if cur := c.data.Load(); cur != nil && cur.Solar == nil {
+				patched := *cur
+				patched.Solar = solar
+				c.data.Store(&patched)
+			}
 		} else {
 			log.Printf("weather: solar data fetch failed entirely")
 		}
