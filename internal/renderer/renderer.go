@@ -59,6 +59,11 @@ type Renderer struct {
 	// (HTTP handler goroutine) and written by Run (renderer goroutine).
 	slideMu sync.Mutex
 
+	// renderMu serialises slide rendering so that Run and RenderPreview
+	// never call font.Face.Glyph concurrently on the shared fontSet.
+	// The opentype rasterizer is not safe for concurrent use.
+	renderMu sync.Mutex
+
 	// cachedPreview holds the last successfully rendered preview PNG
 	// (when weather data was available). Used as a fallback when the
 	// pipeline is suspended and no live render is possible.
@@ -326,7 +331,9 @@ func (r *Renderer) Run(ctx context.Context) error {
 			}
 
 			slideName := r.currentSlideName()
+			r.renderMu.Lock()
 			pix, slideDur, err := renderSlide(r.w, r.h, r.currentSlide(), data, elapsed, r.getSlideDuration(), slideName)
+			r.renderMu.Unlock()
 			if err != nil {
 				log.Printf("renderer: render slide %q error: %v", slideName, err)
 				continue
@@ -467,6 +474,7 @@ func (r *Renderer) RenderPreview() ([]byte, error) {
 
 	dc := gg.NewContext(r.w, r.h)
 
+	r.renderMu.Lock()
 	func() {
 		defer func() {
 			if rec := recover(); rec != nil {
@@ -476,6 +484,7 @@ func (r *Renderer) RenderPreview() ([]byte, error) {
 		elapsed := time.Since(slideStart)
 		slide(dc, data, elapsed, r.getSlideDuration())
 	}()
+	r.renderMu.Unlock()
 
 	png, err := encodePNG(dc)
 	if err == nil {
