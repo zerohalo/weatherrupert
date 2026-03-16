@@ -1831,14 +1831,12 @@ func NewSlideAlerts(use24h bool, loc *time.Location, fonts *fontSet) SlideFunc {
 	if fonts == nil {
 		fonts = defaultFonts
 	}
-	lastElapsed := time.Duration(-1)
-	page := 0
 	return func(dc *gg.Context, data *weather.WeatherData, elapsed, total time.Duration) time.Duration {
-		return slideAlerts(dc, data, use24h, loc, elapsed, &lastElapsed, &page, fonts)
+		return slideAlerts(dc, data, use24h, loc, elapsed, total, fonts)
 	}
 }
 
-func slideAlerts(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *time.Location, elapsed time.Duration, lastElapsed *time.Duration, page *int, fonts *fontSet) time.Duration {
+func slideAlerts(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *time.Location, elapsed, total time.Duration, fonts *fontSet) time.Duration {
 	if loc == nil {
 		loc = time.Local
 	}
@@ -1857,19 +1855,18 @@ func slideAlerts(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *ti
 	}
 	totalPages := (nAlerts + alertsPerPage - 1) / alertsPerPage
 
-	// Detect slide restart to advance page.
-	if *lastElapsed > elapsed {
-		*page = (*page + 1) % totalPages
+	// Pick page based on elapsed time within the extended duration.
+	// Each page gets one full slide duration worth of display time.
+	pageDur := total
+	if pageDur <= 0 {
+		pageDur = 8 * time.Second
 	}
-	*lastElapsed = elapsed
-	if *page >= totalPages {
-		*page = 0
-	}
+	page := int(elapsed/pageDur) % totalPages
 
-	startIdx := *page * alertsPerPage
+	startIdx := page * alertsPerPage
 	if startIdx >= nAlerts {
 		startIdx = 0
-		*page = 0
+		page = 0
 	}
 	endIdx := startIdx + alertsPerPage
 	if endIdx > nAlerts {
@@ -1932,10 +1929,14 @@ func slideAlerts(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *ti
 	// Page indicator if multiple pages.
 	if totalPages > 1 {
 		dc.SetFontFace(fonts.small)
-		pageLabel := fmt.Sprintf("%d / %d", *page+1, totalPages)
+		pageLabel := fmt.Sprintf("%d / %d", page+1, totalPages)
 		drawShadowTextAnchored(dc, pageLabel, w-40, h-16, 1.0, 0.5, subR, subG, subB)
 	}
 
+	// Request extended display time so all pages are shown.
+	if totalPages > 1 {
+		return pageDur * time.Duration(totalPages)
+	}
 	return 0
 }
 
@@ -2851,7 +2852,8 @@ func slideWindForecast(dc *gg.Context, data *weather.WeatherData, use24h, useMet
 		// Wind direction arrow above the graph.
 		arrowY := plotTop - 30
 		angle := dirs[i] * math.Pi / 180 // direction wind comes FROM
-		// Draw arrow pointing in the direction wind is going (from + 180).
+		// Arrow points in the direction wind is going (FROM + 180°).
+		// "S" wind (from south) → arrow points north (up).
 		drawAngle := angle + math.Pi
 		dc.SetRGB(textR, textG, textB)
 		dc.SetLineWidth(2)
