@@ -200,11 +200,47 @@ func drawHeaderCurrentTemp(dc *gg.Context, data *weather.WeatherData, useMetric 
 	isDaytime := currentIsDaytime(data, loc)
 	icon := conditionIcon(data.Current.Description, isDaytime)
 	iconSize := 34.0
-	drawIcon(dc, icon, tempX-20, tempY+3, iconSize)
+	iconX := tempX - 20
 
-	// Temperature text — right-aligned so it stays clear of the date.
+	// Alert indicator — warning triangle to the left of the condition icon.
+	if len(activeAlerts(data.Alerts)) > 0 {
+		drawAlertIndicator(dc, iconX-iconSize/2-20, tempY+3, 26.0, data.Alerts)
+	}
+
+	drawIcon(dc, icon, iconX, tempY+3, iconSize)
+
+	// Temperature text.
 	dc.SetFontFace(fonts.small)
 	drawShadowTextAnchored(dc, tempLabel, tempX+8, tempY, 0.0, 0.5, textR, textG, textB)
+}
+
+// drawAlertIndicator draws a warning triangle icon at (cx, cy).
+// Color matches the highest severity alert.
+func drawAlertIndicator(dc *gg.Context, cx, cy, size float64, alerts []weather.Alert) {
+	maxSev := "Minor"
+	for _, a := range activeAlerts(alerts) {
+		if severityRank(a.Severity) > severityRank(maxSev) {
+			maxSev = a.Severity
+		}
+	}
+	r, g, b := severityColor(maxSev)
+
+	// Triangle pointing up.
+	h := size * 0.9
+	dc.SetRGB(r, g, b)
+	dc.MoveTo(cx, cy-h/2)
+	dc.LineTo(cx-size/2, cy+h/2)
+	dc.LineTo(cx+size/2, cy+h/2)
+	dc.ClosePath()
+	dc.Fill()
+
+	// Exclamation mark inside — scaled to triangle size.
+	dc.SetRGB(0, 0, 0)
+	dc.SetLineWidth(size * 0.12)
+	dc.DrawLine(cx, cy-h*0.2, cx, cy+h*0.22)
+	dc.Stroke()
+	dc.DrawCircle(cx, cy+h*0.35, size*0.06)
+	dc.Fill()
 }
 
 // drawShadowText draws s at (x, y) baseline-left with a dark drop-shadow.

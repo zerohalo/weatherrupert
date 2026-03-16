@@ -47,6 +47,7 @@ func main() {
 		MoonPhase:      weather.ComputeMoonPhase(now),
 		PrecipTotal24h: 12.7,
 		SnowTotal24h:   50.8,
+		Alerts:         makeAlerts(now),
 	}
 
 	realisticMoon := func() bool { return true }
@@ -55,12 +56,8 @@ func main() {
 		slide renderer.SlideFunc
 		tweak func(*weather.WeatherData)
 	}{
-		{"alerts", renderer.NewSlideAlerts(false, nil, nil), func(d *weather.WeatherData) {
-			d.Alerts = makeAlerts(now)
-		}},
-		{"local-conditions", renderer.NewSlideCurrentConditions(false, false, nil, realisticMoon, nil), func(d *weather.WeatherData) {
-			d.Alerts = nil
-		}},
+		{"alerts", renderer.NewSlideAlerts(false, nil, nil), nil},
+		{"local-conditions", renderer.NewSlideCurrentConditions(false, false, nil, realisticMoon, nil), nil},
 		{"hourly-forecast", renderer.NewSlideHourlyForecast(false, false, nil, realisticMoon, nil), nil},
 		{"precipitation", renderer.NewSlidePrecipitation(false, false, nil, realisticMoon, nil), nil},
 		{"wind-forecast", renderer.NewSlideWindForecast(false, false, nil, nil), func(d *weather.WeatherData) {
