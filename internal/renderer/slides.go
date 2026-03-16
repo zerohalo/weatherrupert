@@ -133,6 +133,29 @@ func drawBackgroundWithData(dc *gg.Context, title string, data *weather.WeatherD
 	drawHeaderCurrentTemp(dc, data, useMetric, loc, fonts)
 }
 
+// drawBackgroundTinted is like drawBackgroundWithData but overlays a color tint
+// on the header band (e.g. for alerts). The tint is drawn between the gradient
+// and the header elements so text/icons remain untinted.
+func drawBackgroundTinted(dc *gg.Context, title string, data *weather.WeatherData, use24h, useMetric bool, loc *time.Location, fonts *fontSet, tintR, tintG, tintB, tintA float64) {
+	if loc == nil {
+		loc = time.Local
+	}
+	w := float64(dc.Width())
+	DrawGradientBackground(dc)
+
+	// Tint the header area.
+	dc.SetRGBA(tintR, tintG, tintB, tintA)
+	dc.DrawRectangle(0, 0, w, headerH)
+	dc.Fill()
+	dc.SetRGB(tintR, tintG, tintB)
+	dc.DrawRectangle(0, headerH, w, 3)
+	dc.Fill()
+
+	// Draw all header elements on top of the tint.
+	drawHeaderElements(dc, title, data.Location, use24h, loc, fonts)
+	drawHeaderCurrentTemp(dc, data, useMetric, loc, fonts)
+}
+
 // drawBackground fills the gradient and renders the header common to all slides:
 // yellow screen title (left), white location (left below title),
 // and current date/time (right). use24h selects 24-hour vs 12-hour clock format.
@@ -140,30 +163,37 @@ func drawBackground(dc *gg.Context, title, location string, use24h bool, loc *ti
 	if loc == nil {
 		loc = time.Local
 	}
-	w := float64(dc.Width())
 	DrawGradientBackground(dc)
+	drawHeaderElements(dc, title, location, use24h, loc, fonts)
+}
 
-	// Subtle horizontal rule below header
+// drawHeaderElements renders all header elements: title, location, branding,
+// date/time, and the horizontal rule. Separated from drawBackground so it can
+// be redrawn on top of a tinted header background.
+func drawHeaderElements(dc *gg.Context, title, location string, use24h bool, loc *time.Location, fonts *fontSet) {
+	w := float64(dc.Width())
+
+	// Subtle horizontal rule below header.
 	dc.SetRGBA(1, 1, 1, 0.25)
 	dc.DrawRectangle(0, headerH, w, 2)
 	dc.Fill()
 
-	// Screen title — yellow, left side
+	// Screen title — yellow, left side.
 	dc.SetFontFace(fonts.title)
 	drawShadowText(dc, strings.ToUpper(title), 60, 56, titleR, titleG, titleB)
 
-	// Location — white, smaller, below title
+	// Location — white, smaller, below title.
 	if location != "" {
 		dc.SetFontFace(fonts.small)
 		drawShadowText(dc, truncate(strings.ToUpper(location), 42), 60, 80, textR, textG, textB)
 	}
 
-	// Logo: small sun icon + "WEATHER RUPERT" branding, centered in header
+	// Logo: small sun icon + "WEATHER RUPERT" branding, centered in header.
 	DrawLogoSun(dc, w/2-100, headerH/2, 30)
 	dc.SetFontFace(fonts.small)
 	drawShadowTextAnchored(dc, "WEATHER RUPERT", w/2+10, headerH/2, 0.5, 0.5, titleR, titleG, titleB)
 
-	// Date + time — right-aligned, vertically centred in the header band
+	// Date + time — right-aligned, vertically centred in the header band.
 	now := time.Now().In(loc)
 	timeFmt := "3:04 PM"
 	if use24h {
@@ -1895,47 +1925,15 @@ func slideAlerts(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *ti
 	// Filter out expired alerts.
 	alerts := activeAlerts(data.Alerts)
 
-	// Determine severity for header color.
+	// Determine severity for header tint color.
 	maxSeverity := "Minor"
 	for _, a := range alerts {
 		if severityRank(a.Severity) > severityRank(maxSeverity) {
 			maxSeverity = a.Severity
 		}
 	}
-
-	// Draw gradient background, then overlay severity color on the header
-	// area, then redraw all header elements on top so they're not tinted.
-	DrawGradientBackground(dc)
 	bandR, bandG, bandB := severityColor(maxSeverity)
-	dc.SetRGBA(bandR, bandG, bandB, 0.7)
-	dc.DrawRectangle(0, 0, w, headerH)
-	dc.Fill()
-	dc.SetRGB(bandR, bandG, bandB)
-	dc.DrawRectangle(0, headerH, w, 3)
-	dc.Fill()
-
-	// Redraw header elements on top of the tinted background.
-	dc.SetRGBA(1, 1, 1, 0.25)
-	dc.DrawRectangle(0, headerH, w, 2)
-	dc.Fill()
-	dc.SetFontFace(fonts.title)
-	drawShadowText(dc, "WEATHER ALERTS", 60, 56, titleR, titleG, titleB)
-	if data.Location != "" {
-		dc.SetFontFace(fonts.small)
-		drawShadowText(dc, truncate(strings.ToUpper(data.Location), 42), 60, 80, textR, textG, textB)
-	}
-	DrawLogoSun(dc, w/2-100, headerH/2, 30)
-	dc.SetFontFace(fonts.small)
-	drawShadowTextAnchored(dc, "WEATHER RUPERT", w/2+10, headerH/2, 0.5, 0.5, titleR, titleG, titleB)
-	now := time.Now().In(loc)
-	timeFmt := "3:04 PM"
-	if use24h {
-		timeFmt = "15:04"
-	}
-	dc.SetFontFace(fonts.small)
-	drawShadowTextAnchored(dc, now.Format("Mon Jan 2"), w-50, 40, 1.0, 0.5, textR, textG, textB)
-	drawShadowTextAnchored(dc, now.Format(timeFmt+" MST"), w-50, 64, 1.0, 0.5, textR, textG, textB)
-	drawHeaderCurrentTemp(dc, data, false, loc, fonts)
+	drawBackgroundTinted(dc, "WEATHER ALERTS", data, use24h, false, loc, fonts, bandR, bandG, bandB, 0.7)
 
 	// Page through alerts: 2 per page.
 	const alertsPerPage = 2
@@ -2772,6 +2770,147 @@ func slideWeeklyHighLow(dc *gg.Context, data *weather.WeatherData, use24h, useMe
 	return 0
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Shared chart layout helper
+// ────────────────────────────────────────────────────────────────────────────
+
+// chartLayout defines the geometry for a 12-hour line chart. It precomputes
+// axis mapping functions and data-point positions so individual slides only
+// need to provide their data values and rendering logic.
+type chartLayout struct {
+	PlotLeft, PlotRight, PlotTop, PlotBottom float64
+	PlotW, PlotH                             float64
+	XPad                                     float64
+	N                                        int       // number of data points
+	Xs, Ys                                   []float64 // precomputed positions
+	MinVal, MaxVal                           float64   // value range
+}
+
+// newChartLayout creates a chart layout for n data points with the given
+// value range and plot bounds. Values are mapped to Y positions automatically.
+func newChartLayout(n int, values []float64, minVal, maxVal float64, plotLeft, plotRight, plotTop, plotBottom, xPad float64) *chartLayout {
+	cl := &chartLayout{
+		PlotLeft:   plotLeft,
+		PlotRight:  plotRight,
+		PlotTop:    plotTop,
+		PlotBottom: plotBottom,
+		PlotW:      plotRight - plotLeft,
+		PlotH:      plotBottom - plotTop,
+		XPad:       xPad,
+		N:          n,
+		MinVal:     minVal,
+		MaxVal:     maxVal,
+	}
+	cl.Xs = make([]float64, n)
+	cl.Ys = make([]float64, n)
+	for i := range values {
+		cl.Xs[i] = cl.IdxToX(i)
+		if i < len(values) {
+			cl.Ys[i] = cl.ValToY(values[i])
+		}
+	}
+	return cl
+}
+
+// IdxToX maps a data-point index to an X pixel coordinate.
+func (cl *chartLayout) IdxToX(i int) float64 {
+	if cl.N <= 1 {
+		return cl.PlotLeft + cl.PlotW/2
+	}
+	return cl.PlotLeft + cl.XPad + float64(i)*(cl.PlotW-2*cl.XPad)/float64(cl.N-1)
+}
+
+// ValToY maps a data value to a Y pixel coordinate.
+func (cl *chartLayout) ValToY(v float64) float64 {
+	rng := cl.MaxVal - cl.MinVal
+	if rng == 0 {
+		rng = 1
+	}
+	return cl.PlotBottom - (v-cl.MinVal)/rng*cl.PlotH
+}
+
+// DrawGridLines draws horizontal grid lines with value labels on the Y axis.
+func (cl *chartLayout) DrawGridLines(dc *gg.Context, lines int, unitSuffix string, fonts *fontSet) {
+	dc.SetFontFace(fonts.small)
+	for g := 0; g <= lines; g++ {
+		val := cl.MinVal + float64(g)*(cl.MaxVal-cl.MinVal)/float64(lines)
+		y := cl.ValToY(val)
+		dc.SetRGBA(1, 1, 1, 0.07)
+		dc.SetLineWidth(1)
+		dc.DrawLine(cl.PlotLeft, y, cl.PlotRight, y)
+		dc.Stroke()
+		label := fmt.Sprintf("%.0f%s", val, unitSuffix)
+		drawShadowTextAnchored(dc, label, cl.PlotLeft-6, y, 1.0, 0.5, subR, subG, subB)
+	}
+}
+
+// DrawGridLinesStep draws horizontal grid lines at fixed value intervals.
+func (cl *chartLayout) DrawGridLinesStep(dc *gg.Context, step float64, baseLabel string, fonts *fontSet) {
+	dc.SetFontFace(fonts.small)
+	for val := 0.0; val <= cl.MaxVal; val += step {
+		y := cl.ValToY(val)
+		dc.SetRGBA(1, 1, 1, 0.07)
+		dc.SetLineWidth(1)
+		dc.DrawLine(cl.PlotLeft, y, cl.PlotRight, y)
+		dc.Stroke()
+		label := fmt.Sprintf("%.0f", val)
+		if val == 0 && baseLabel != "" {
+			label += " " + baseLabel
+		}
+		drawShadowTextAnchored(dc, label, cl.PlotLeft-8, y, 1.0, 0.5, subR, subG, subB)
+	}
+}
+
+// DrawAreaFill draws a filled area under the data line.
+func (cl *chartLayout) DrawAreaFill(dc *gg.Context, r, g, b, a float64) {
+	if cl.N < 2 {
+		return
+	}
+	dc.SetRGBA(r, g, b, a)
+	dc.MoveTo(cl.Xs[0], cl.PlotBottom)
+	for i := 0; i < cl.N; i++ {
+		dc.LineTo(cl.Xs[i], cl.Ys[i])
+	}
+	dc.LineTo(cl.Xs[cl.N-1], cl.PlotBottom)
+	dc.ClosePath()
+	dc.Fill()
+}
+
+// DrawLine draws the data line.
+func (cl *chartLayout) DrawLine(dc *gg.Context, r, g, b, width float64) {
+	if cl.N < 2 {
+		return
+	}
+	dc.SetRGB(r, g, b)
+	dc.SetLineWidth(width)
+	dc.MoveTo(cl.Xs[0], cl.Ys[0])
+	for i := 1; i < cl.N; i++ {
+		dc.LineTo(cl.Xs[i], cl.Ys[i])
+	}
+	dc.Stroke()
+}
+
+// DrawDots draws small circles at each data point.
+func (cl *chartLayout) DrawDots(dc *gg.Context, r, g, b, radius float64) {
+	dc.SetRGB(r, g, b)
+	for i := 0; i < cl.N; i++ {
+		dc.DrawCircle(cl.Xs[i], cl.Ys[i], radius)
+		dc.Fill()
+	}
+}
+
+// DrawTimeLabels draws time labels below the X axis for each hourly period.
+func (cl *chartLayout) DrawTimeLabels(dc *gg.Context, periods []weather.ForecastPeriod, use24h bool, loc *time.Location, fonts *fontSet) {
+	dc.SetFontFace(fonts.small)
+	for i, p := range periods {
+		if i >= cl.N {
+			break
+		}
+		drawShadowTextAnchored(dc, hourLabel(p.StartTime, use24h, loc, i),
+			cl.Xs[i], cl.PlotBottom+26, 0.5, 0.5, textR, textG, textB)
+	}
+}
+
 // convertTemp converts a temperature from the given unit to display units.
 func convertTemp(t float64, unit string, useMetric bool) float64 {
 	if useMetric && unit == "F" {
@@ -2852,109 +2991,42 @@ func slideWindForecast(dc *gg.Context, data *weather.WeatherData, use24h, useMet
 		}
 	}
 
-	// Plot bounds.
-	const (
-		plotLeft  = 120.0
-		plotRight = 1230.0
-		plotTop   = 160.0
-		xPad      = 50.0
-	)
-	plotBottom := h - 60.0
-	plotW := plotRight - plotLeft
-	plotH := plotBottom - plotTop
-
-	// Speed range.
 	maxY := maxSpeed + 5
 	if maxY < 15 {
 		maxY = 15
 	}
 
-	speedToY := func(s float64) float64 {
-		return plotBottom - (s/maxY)*plotH
-	}
-	idxToX := func(i int) float64 {
-		if n <= 1 {
-			return plotLeft + plotW/2
-		}
-		return plotLeft + xPad + float64(i)*(plotW-2*xPad)/float64(n-1)
-	}
+	cl := newChartLayout(n, speeds, 0, maxY, 120, 1230, 160, h-60, 50)
 
-	// Y-axis grid.
 	gridStep := 5.0
 	if maxY > 30 {
 		gridStep = 10
 	}
-	dc.SetFontFace(fonts.small)
-	for g := 0.0; g <= maxY; g += gridStep {
-		gY := speedToY(g)
-		dc.SetRGBA(1, 1, 1, 0.07)
-		dc.SetLineWidth(1)
-		dc.DrawLine(plotLeft, gY, plotRight, gY)
-		dc.Stroke()
-
-		unitLabel := "mph"
-		if useMetric {
-			unitLabel = "km/h"
-		}
-		label := fmt.Sprintf("%.0f", g)
-		if g == 0 {
-			label += " " + unitLabel
-		}
-		drawShadowTextAnchored(dc, label, plotLeft-8, gY, 1.0, 0.5, subR, subG, subB)
+	unitLabel := "mph"
+	if useMetric {
+		unitLabel = "km/h"
 	}
+	cl.DrawGridLinesStep(dc, gridStep, unitLabel, fonts)
+	cl.DrawAreaFill(dc, divR, divG, divB, 0.15)
+	cl.DrawLine(dc, divR, divG, divB, 2.5)
 
-	// Area fill under the speed curve.
-	xs := make([]float64, n)
-	ys := make([]float64, n)
-	for i := range periods {
-		xs[i] = idxToX(i)
-		ys[i] = speedToY(speeds[i])
-	}
-
-	if n > 1 {
-		dc.SetRGBA(divR, divG, divB, 0.15)
-		dc.MoveTo(xs[0], plotBottom)
-		for i := 0; i < n; i++ {
-			dc.LineTo(xs[i], ys[i])
-		}
-		dc.LineTo(xs[n-1], plotBottom)
-		dc.ClosePath()
-		dc.Fill()
-
-		// Speed line.
-		dc.SetRGB(divR, divG, divB)
-		dc.SetLineWidth(2.5)
-		dc.MoveTo(xs[0], ys[0])
-		for i := 1; i < n; i++ {
-			dc.LineTo(xs[i], ys[i])
-		}
-		dc.Stroke()
-	}
+	cl.DrawDots(dc, divR, divG, divB, 4)
 
 	// Wind arrows and labels at each point.
 	arrowSize := 18.0
 	for i := range periods {
-		x, y := xs[i], ys[i]
-
-		// Speed dot.
-		dc.SetRGB(divR, divG, divB)
-		dc.DrawCircle(x, y, 4)
-		dc.Fill()
+		x, y := cl.Xs[i], cl.Ys[i]
 
 		// Wind direction arrow above the graph.
-		arrowY := plotTop - 30
-		angle := dirs[i] * math.Pi / 180 // direction wind comes FROM
-		// Arrow points in the direction wind is going (FROM + 180°).
-		// "S" wind (from south) → arrow points north (up).
+		arrowY := cl.PlotTop - 30
+		angle := dirs[i] * math.Pi / 180
 		drawAngle := angle + math.Pi
 		dc.SetRGB(textR, textG, textB)
 		dc.SetLineWidth(2)
-		// Arrow shaft.
 		dx := arrowSize * 0.45 * math.Sin(drawAngle)
 		dy := -arrowSize * 0.45 * math.Cos(drawAngle)
 		dc.DrawLine(x-dx, arrowY-dy, x+dx, arrowY+dy)
 		dc.Stroke()
-		// Arrowhead.
 		headLen := arrowSize * 0.3
 		headAngle := 0.5
 		tipX, tipY := x+dx, arrowY+dy
@@ -2967,19 +3039,14 @@ func slideWindForecast(dc *gg.Context, data *weather.WeatherData, use24h, useMet
 		// Speed label above the plot line.
 		dc.SetFontFace(fonts.small)
 		labelY := y - 40
-		if labelY < plotTop+10 {
-			labelY = plotTop + 10
+		if labelY < cl.PlotTop+10 {
+			labelY = cl.PlotTop + 10
 		}
-
-		// Color code speed.
 		sr, sg, sb := windSpeedColor(speeds[i], useMetric)
 		drawShadowTextAnchored(dc, fmt.Sprintf("%.0f", speeds[i]), x, labelY, 0.5, 1.0, sr, sg, sb)
-
-		// Time labels.
-		drawShadowTextAnchored(dc, hourLabel(periods[i].StartTime, use24h, loc, i),
-			x, plotBottom+26, 0.5, 0.5, textR, textG, textB)
 	}
 
+	cl.DrawTimeLabels(dc, periods, use24h, loc, fonts)
 	return 0
 }
 
