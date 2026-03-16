@@ -1240,7 +1240,7 @@ func (s *Store) handleDashboard(w http.ResponseWriter, r *http.Request) {
 <tr><td>Clock format</td><td style="color:#FFFF00">%s</td></tr>
 <tr><td>Unit system</td><td style="color:#FFFF00">%s</td></tr>
 <tr><td>Satellite</td><td style="color:#FFFF00">%s</td></tr>
-<tr><td>Realistic moon icons</td><td style="color:#FFFF00">%s</td></tr>
+<tr><td>Phase-accurate moon icons</td><td style="color:#FFFF00">%s</td></tr>
 <tr><td>Slide duration</td><td style="color:#FFFF00">%s</td></tr>
 <tr><td colspan="2" style="color:#FFFF00; letter-spacing:1px; padding:10px 0 2px"><b>ANNOUNCEMENTS</b></td></tr>
 <tr><td>Announcements</td><td style="color:#FFFF00">%d items</td></tr>
@@ -1643,7 +1643,7 @@ func (s *Store) handleSettingsGet(w http.ResponseWriter, r *http.Request) {
 
 <label style="display:flex; align-items:center; gap:10px; cursor:pointer; margin-top:14px">
   <input type="checkbox" name="realisticMoonIcons" value="1"%s style="width:auto; accent-color:#FFFF00">
-  Realistic moon icons
+  Phase-accurate moon icons
 </label>
 <p class="hint">When enabled, nighttime weather icons use a phase-accurate moon instead of the default crescent shape.</p>
 
