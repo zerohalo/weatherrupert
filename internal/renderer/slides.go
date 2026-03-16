@@ -202,9 +202,10 @@ func drawHeaderCurrentTemp(dc *gg.Context, data *weather.WeatherData, useMetric 
 	iconSize := 34.0
 	iconX := tempX - 20
 
-	// Alert indicator — warning triangle to the left of the condition icon.
+	// Alert indicator — warning triangle to the left of the condition icon,
+	// spaced the same distance as the icon is from the temperature text.
 	if len(activeAlerts(data.Alerts)) > 0 {
-		drawAlertIndicator(dc, iconX-iconSize/2-20, tempY+3, 26.0, data.Alerts)
+		drawAlertIndicator(dc, iconX-iconSize/2-28, tempY+3, 26.0, data.Alerts)
 	}
 
 	drawIcon(dc, icon, iconX, tempY+3, iconSize)
@@ -215,7 +216,8 @@ func drawHeaderCurrentTemp(dc *gg.Context, data *weather.WeatherData, useMetric 
 }
 
 // drawAlertIndicator draws a warning triangle icon at (cx, cy).
-// Color matches the highest severity alert.
+// Color matches the highest severity alert. Uses the ⚠ glyph style:
+// filled triangle with a filled exclamation mark inside.
 func drawAlertIndicator(dc *gg.Context, cx, cy, size float64, alerts []weather.Alert) {
 	maxSev := "Minor"
 	for _, a := range activeAlerts(alerts) {
@@ -224,22 +226,28 @@ func drawAlertIndicator(dc *gg.Context, cx, cy, size float64, alerts []weather.A
 		}
 	}
 	r, g, b := severityColor(maxSev)
-
-	// Triangle pointing up.
 	h := size * 0.9
-	dc.SetRGB(r, g, b)
-	dc.MoveTo(cx, cy-h/2)
-	dc.LineTo(cx-size/2, cy+h/2)
-	dc.LineTo(cx+size/2, cy+h/2)
-	dc.ClosePath()
-	dc.Fill()
 
-	// Exclamation mark inside — scaled to triangle size.
-	dc.SetRGB(0, 0, 0)
-	dc.SetLineWidth(size * 0.12)
-	dc.DrawLine(cx, cy-h*0.2, cx, cy+h*0.22)
+	// Outlined triangle with rounded corners for clean anti-aliasing.
+	dc.SetRGB(r, g, b)
+	dc.SetLineWidth(2)
+	dc.NewSubPath()
+	dc.MoveTo(cx, cy-h/2)
+	dc.LineTo(cx+size/2, cy+h/2)
+	dc.LineTo(cx-size/2, cy+h/2)
+	dc.ClosePath()
+	dc.FillPreserve()
+	dc.SetRGB(r*0.7, g*0.7, b*0.7)
 	dc.Stroke()
-	dc.DrawCircle(cx, cy+h*0.35, size*0.06)
+
+	// Exclamation mark — filled shapes instead of stroked lines.
+	barW := size * 0.11
+	dc.SetRGB(0, 0, 0)
+	// Vertical bar.
+	dc.DrawRoundedRectangle(cx-barW/2, cy-h*0.18, barW, h*0.38, barW/2)
+	dc.Fill()
+	// Dot.
+	dc.DrawCircle(cx, cy+h*0.32, barW*0.65)
 	dc.Fill()
 }
 
