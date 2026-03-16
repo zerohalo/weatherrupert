@@ -3098,30 +3098,33 @@ func slideFeelsLike(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 			dc.DrawCircle(x, aYs[i], 3.5)
 			dc.Fill()
 			drawShadowTextAnchored(dc, fmt.Sprintf("%.0f%s", actuals[i], unit),
-				x, aYs[i]-14, 0.5, 1.0, hlR, hlG, hlB)
+				x, aYs[i]-34, 0.5, 1.0, hlR, hlG, hlB)
 		} else {
-			// Different — actual label above its line, feels-like below its line.
+			// Different — labels always on the outside of their respective lines.
 			dc.SetRGB(hlR, hlG, hlB)
 			dc.DrawCircle(x, aYs[i], 3.5)
 			dc.Fill()
-			// Place actual label on the outside (above if actual is higher, below if lower).
 			if actuals[i] >= feelsLike[i] {
+				// Actual is higher (above) — label goes above
 				drawShadowTextAnchored(dc, fmt.Sprintf("%.0f%s", actuals[i], unit),
-					x, aYs[i]-14, 0.5, 1.0, hlR, hlG, hlB)
+					x, aYs[i]-34, 0.5, 1.0, hlR, hlG, hlB)
 			} else {
+				// Actual is lower (below) — label goes below
 				drawShadowTextAnchored(dc, fmt.Sprintf("%.0f%s", actuals[i], unit),
-					x, aYs[i]+18, 0.5, 0.0, hlR, hlG, hlB)
+					x, aYs[i]+24, 0.5, 0.0, hlR, hlG, hlB)
 			}
 
 			dc.SetRGB(divR, divG, divB)
 			dc.DrawCircle(x, fYs[i], 3.5)
 			dc.Fill()
 			if feelsLike[i] >= actuals[i] {
+				// Feels-like is higher (above) — label goes above
 				drawShadowTextAnchored(dc, fmt.Sprintf("%.0f%s", feelsLike[i], unit),
-					x, fYs[i]-14, 0.5, 1.0, divR, divG, divB)
+					x, fYs[i]-34, 0.5, 1.0, divR, divG, divB)
 			} else {
+				// Feels-like is lower (below) — label goes below
 				drawShadowTextAnchored(dc, fmt.Sprintf("%.0f%s", feelsLike[i], unit),
-					x, fYs[i]+18, 0.5, 0.0, divR, divG, divB)
+					x, fYs[i]+24, 0.5, 0.0, divR, divG, divB)
 			}
 		}
 
