@@ -120,7 +120,7 @@ func New(w, h, frameRate int, label string,
 		out:              out,
 		fonts:            fonts,
 		weatherSlides: []weatherSlideEntry{
-			{name: "alerts", fn: NewSlideAlerts(use24h, loc, fonts), skip: func(d *weather.WeatherData) bool { return len(d.Alerts) == 0 }},
+			{name: "alerts", fn: NewSlideAlerts(use24h, loc, fonts), skip: func(d *weather.WeatherData) bool { return len(activeAlerts(d.Alerts)) == 0 }},
 			{name: "current-conditions", fn: NewSlideCurrentConditions(use24h, useMetric, loc, getRealisticMoon, fonts)},
 			{name: "hourly-forecast", fn: NewSlideHourlyForecast(use24h, useMetric, loc, getRealisticMoon, fonts)},
 			{name: "precipitation", fn: NewSlidePrecipitation(use24h, useMetric, loc, getRealisticMoon, fonts), skip: func() func(*weather.WeatherData) bool {
