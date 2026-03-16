@@ -1124,7 +1124,8 @@ func (s *Store) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	s.mu.RLock()
 	na := len(s.announcements)
 	nt := len(s.triviaItems)
-	ntAPI := len(s.triviaAPIItems)
+	ntAPIMatched := len(s.triviaAPIItems)
+	ntAPICached := len(s.triviaAPICache)
 	musicStreams := make([]StreamEntry, len(s.streams))
 	copy(musicStreams, s.streams)
 	slide := s.slideDur
@@ -1248,7 +1249,7 @@ func (s *Store) handleDashboard(w http.ResponseWriter, r *http.Request) {
 <tr><td>Announcement duration</td><td style="color:#FFFF00">%s</td></tr>
 <tr><td>Announcement interval</td><td style="color:#FFFF00">%s</td></tr>
 <tr><td colspan="2" style="color:#FFFF00; letter-spacing:1px; padding:10px 0 2px"><b>TRIVIA</b></td></tr>
-<tr><td>Trivia questions</td><td style="color:#FFFF00">%d built-in + %d API</td></tr>
+<tr><td>Trivia questions</td><td style="color:#FFFF00">%d built-in + %d API (%d cached)</td></tr>
 <tr><td>Trivia duration</td><td style="color:#FFFF00">%s</td></tr>
 <tr><td>Trivia interval</td><td style="color:#FFFF00">%s</td></tr>
 <tr><td>Randomize</td><td style="color:#FFFF00">%s</td></tr>
@@ -1283,7 +1284,7 @@ setInterval(function() {
 		fmtUptime(time.Since(s.startedAt)), loadAvgStr, cpuPctStr,
 		clockDisplay, unitDisplay, satDisplay, yn(realisticMoon), slide,
 		na, annD, fmtInterval(annInt),
-		nt, ntAPI, trivD, fmtInterval(trivInt), yn(trivRand), yn(trivBuiltin), trivAPIDetail,
+		nt, ntAPIMatched, ntAPICached, trivD, fmtInterval(trivInt), yn(trivRand), yn(trivBuiltin), trivAPIDetail,
 		musicCell,
 		apiStatsHTML,
 		pipelineHTML)
