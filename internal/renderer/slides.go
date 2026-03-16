@@ -1917,7 +1917,7 @@ func slideAlerts(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *ti
 	}
 	pageAlerts := alerts[startIdx:endIdx]
 
-	// Severity color band at top.
+	// Severity-colored header background.
 	maxSeverity := "Minor"
 	for _, a := range alerts {
 		if severityRank(a.Severity) > severityRank(maxSeverity) {
@@ -1925,8 +1925,19 @@ func slideAlerts(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *ti
 		}
 	}
 	bandR, bandG, bandB := severityColor(maxSeverity)
+	dc.SetRGBA(bandR, bandG, bandB, 0.7)
+	dc.DrawRectangle(0, 0, w, headerH)
+	dc.Fill()
+	// Re-draw the header text on top of the colored background so it's legible.
+	dc.SetFontFace(fonts.title)
+	drawShadowText(dc, "WEATHER ALERTS", 60, 56, textR, textG, textB)
+	if data.Location != "" {
+		dc.SetFontFace(fonts.small)
+		drawShadowText(dc, truncate(strings.ToUpper(data.Location), 42), 60, 80, textR, textG, textB)
+	}
+	// Thin rule at the bottom of the header.
 	dc.SetRGB(bandR, bandG, bandB)
-	dc.DrawRectangle(0, contentTop, w, 6)
+	dc.DrawRectangle(0, headerH, w, 3)
 	dc.Fill()
 
 	// Render each alert.
