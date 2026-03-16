@@ -166,15 +166,15 @@ func drawMoonPhase(dc *gg.Context, cx, cy, size, phase float64) {
 
 	if illumination < 0.02 {
 		// New moon — draw a dim disc so something is visible.
-		dc.SetRGBA(0.15, 0.15, 0.20, 0.6)
+		dc.SetRGBA(0.18, 0.20, 0.30, 0.65)
 		dc.DrawCircle(cx, cy, r)
 		dc.Fill()
 		return
 	}
 
-	// Draw the dark side disc first — a subtle dark grey so the
-	// unlit portion is visible against the background.
-	dc.SetRGBA(0.12, 0.12, 0.18, 0.7)
+	// Draw the dark side disc first — a subtle dark blue-grey so the
+	// unlit portion is visible against the gradient background.
+	dc.SetRGBA(0.15, 0.17, 0.28, 0.75)
 	dc.DrawCircle(cx, cy, r)
 	dc.Fill()
 
