@@ -3170,23 +3170,40 @@ func slideFeelsLike(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 			x, plotBottom+26, 0.5, 0.5, textR, textG, textB)
 	}
 
-	// Legend.
+	// Legend — only show cooler/warmer if present in the data.
+	hasCooler, hasWarmer := false, false
+	for i := range actuals {
+		if feelsLike[i] < actuals[i]-1 {
+			hasCooler = true
+		}
+		if feelsLike[i] > actuals[i]+1 {
+			hasWarmer = true
+		}
+	}
+
 	dc.SetFontFace(fonts.small)
 	legY := headerH + 30.0
+	legX := plotLeft
 	dc.SetRGB(hlR, hlG, hlB)
-	dc.DrawRectangle(plotLeft, legY-6, 20, 3)
+	dc.DrawRectangle(legX, legY-6, 20, 3)
 	dc.Fill()
-	drawShadowText(dc, "ACTUAL", plotLeft+26, legY, hlR, hlG, hlB)
+	drawShadowText(dc, "ACTUAL", legX+26, legY, hlR, hlG, hlB)
+	legX += 140
 
-	dc.SetRGB(divR, divG, divB)
-	dc.DrawRectangle(plotLeft+140, legY-6, 20, 3)
-	dc.Fill()
-	drawShadowText(dc, "COOLER", plotLeft+166, legY, divR, divG, divB)
+	if hasCooler {
+		dc.SetRGB(divR, divG, divB)
+		dc.DrawRectangle(legX, legY-6, 20, 3)
+		dc.Fill()
+		drawShadowText(dc, "COOLER", legX+26, legY, divR, divG, divB)
+		legX += 140
+	}
 
-	dc.SetRGB(heatR, 0.4, 0.2)
-	dc.DrawRectangle(plotLeft+280, legY-6, 20, 3)
-	dc.Fill()
-	drawShadowText(dc, "WARMER", plotLeft+306, legY, heatR, 0.4, 0.2)
+	if hasWarmer {
+		dc.SetRGB(heatR, 0.4, 0.2)
+		dc.DrawRectangle(legX, legY-6, 20, 3)
+		dc.Fill()
+		drawShadowText(dc, "WARMER", legX+26, legY, heatR, 0.4, 0.2)
+	}
 
 	return 0
 }
