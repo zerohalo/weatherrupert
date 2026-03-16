@@ -151,7 +151,16 @@ func New(w, h, frameRate int, label string,
 			{name: "weekly-high-low", fn: NewSlideWeeklyHighLow(use24h, useMetric, loc, fonts), skip: func(d *weather.WeatherData) bool { return len(d.DailyPeriods) == 0 }},
 			{name: "sun-solar", fn: NewSlideSunMoon(use24h, loc, fonts)},
 			{name: "moon-tides", fn: NewSlideMoonTides(use24h, useMetric, loc, fonts)},
-			{name: "uv-index", fn: NewSlideUVIndex(use24h, loc, fonts), skip: func(d *weather.WeatherData) bool { return d.UVIndex < 1 }},
+			{name: "uv-index", fn: NewSlideUVIndex(use24h, loc, fonts), skip: func(d *weather.WeatherData) bool {
+				if d.UVIndex < 1 {
+					return true
+				}
+				// Hide after sunset even if stale data still shows UV > 0.
+				if d.Sun != nil && !d.Sun.Sunset.IsZero() {
+					return time.Now().After(d.Sun.Sunset)
+				}
+				return false
+			}},
 			{name: "night-sky", fn: NewSlideNightSky(use24h, useMetric, loc, fonts)},
 			{name: "satellite", fn: NewSlideSatellite(use24h, loc, fonts), skip: func(d *weather.WeatherData) bool { return len(d.SatelliteFrames) == 0 }},
 			{name: "radar", fn: NewSlideRadar(use24h, loc, fonts)},
