@@ -264,7 +264,7 @@ When multiple admin-configured streams exist, a pipeline rotates to a random str
 |---|---|
 | `internal/config` | Loads and validates environment variables |
 | `internal/geo` | Converts a ZIP code to lat/lon using an embedded Census ZCTA dataset (~33k ZIPs, no external API) |
-| `internal/weather` | Fetches current conditions, hourly, and 7-day forecast from `api.weather.gov`. Fetches solar activity data (SDO images and NOAA SWPC metrics) hourly in a separate background goroutine. Refreshes weather every `WEATHER_REFRESH`; exposes data via an atomic pointer for lock-free reads. |
+| `internal/weather` | Fetches current conditions, hourly, and 6-day forecast from `api.weather.gov`. Fetches solar activity data (SDO images and NOAA SWPC metrics) hourly in a separate background goroutine. Refreshes weather every `WEATHER_REFRESH`; exposes data via an atomic pointer for lock-free reads. |
 | `internal/renderer` | Draws weather slides using [sbinet/gg](https://sr.ht/~sbinet/gg/) (2D graphics) with embedded Inconsolata fonts. All weather icons (sun, moon, clouds, rain, snow, etc.) are procedurally generated — no image assets. Outputs raw RGBA frames at the configured frame rate. |
 | `internal/stream` | Manages the FFmpeg subprocess (RGBA → H.264/AAC MPEG-TS), scans the music directory, broadcasts the MPEG-TS output to all connected HTTP clients via a buffered fan-out hub, provides HLS segmentation with an in-memory ring buffer for `/live.m3u8` playback, and implements `MusicRelay` — a shared HTTP audio stream that fans out to multiple pipelines via OS pipes. |
 | `internal/guide` | Generates the M3U playlist and XMLTV guide XML. |
@@ -348,7 +348,7 @@ The stream cycles through the following slides:
 | Local Conditions | Current temperature, wind, humidity, and conditions |
 | Hourly Forecast | 12-hour forecast with icons and temperatures |
 | Precipitation | Chance-of-precipitation graph |
-| Extended Forecast | 7-day daily forecast |
+| Extended Forecast | 6-day daily forecast |
 | Moon & Tides | Moon phase and NOAA tide predictions (coastal locations within 100 mi of a tide station) |
 | Moon Phase | Moon phase only (inland locations with no nearby tide station) |
 | Night Sky | Visible planet positions |
