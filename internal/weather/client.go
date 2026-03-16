@@ -73,7 +73,7 @@ func NewClient(baseURL string, lat, lon float64, location string, frames int, ra
 		radius = 120.0
 	}
 	if getSatelliteProduct == nil {
-		getSatelliteProduct = func() string { return config.SatelliteIR }
+		getSatelliteProduct = func() string { return config.SatelliteAuto }
 	}
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 15 * time.Second}

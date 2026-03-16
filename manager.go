@@ -314,7 +314,18 @@ func (m *Manager) StoreCachedPreview(zip string, png []byte) {
 // begins serving a "Loading..." slide right away. clockFormat is "12" or "24".
 func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time.Location) (*Pipeline, error) {
 	cityLabel := fmt.Sprintf("%s, %s", loc.City, loc.State)
-	wc := weather.NewClient(m.cfg.WeatherAPIURL, loc.Lat, loc.Lon, cityLabel, m.cfg.Frames, m.cfg.Radius, m.store.SatelliteProduct, m.httpClient, tzLoc)
+	getSatProduct := func() string {
+		prod := m.store.SatelliteProduct()
+		if prod == config.SatelliteAuto {
+			h := time.Now().In(tzLoc).Hour()
+			if h >= 7 && h < 19 {
+				return config.SatelliteVIS
+			}
+			return config.SatelliteIR
+		}
+		return prod
+	}
+	wc := weather.NewClient(m.cfg.WeatherAPIURL, loc.Lat, loc.Lon, cityLabel, m.cfg.Frames, m.cfg.Radius, getSatProduct, m.httpClient, tzLoc)
 
 	// Resolve the music source for this pipeline:
 	//   1. MUSIC_STREAM_URL env var (single-URL pin) takes priority.

@@ -16,29 +16,30 @@ const (
 	UnitsImperial = "imperial"
 	UnitsMetric   = "metric"
 
-	SatelliteIR  = "IR"
-	SatelliteVIS = "VIS"
+	SatelliteIR   = "IR"
+	SatelliteVIS  = "VIS"
+	SatelliteAuto = "AUTO"
 )
 
 // Config holds all runtime configuration loaded from environment variables.
 type Config struct {
-	WeatherAPIURL  string // base URL for NWS API (default: https://api.weather.gov)
-	FrameRate      int
-	ChannelNumber  string
-	Port           int
-	Width          int
-	Height         int
-	WeatherRefresh time.Duration
-	SlideDuration  time.Duration
-	MusicDir            string
-	MusicStreamURL      string // HTTP/Icecast stream URL; used when MUSIC_DIR has no files
-	AnnouncementsPath   string        // path to announcements.csv; defaults to /announcements/announcements.csv
+	WeatherAPIURL        string // base URL for NWS API (default: https://api.weather.gov)
+	FrameRate            int
+	ChannelNumber        string
+	Port                 int
+	Width                int
+	Height               int
+	WeatherRefresh       time.Duration
+	SlideDuration        time.Duration
+	MusicDir             string
+	MusicStreamURL       string        // HTTP/Icecast stream URL; used when MUSIC_DIR has no files
+	AnnouncementsPath    string        // path to announcements.csv; defaults to /announcements/announcements.csv
 	AnnouncementDuration time.Duration // how long each announcement is displayed
-	TriviaPath          string        // path to trivia.csv; defaults to /trivia/trivia.csv
-	TriviaDuration      time.Duration // total time for each trivia question+answer cycle
-	AdminDataPath        string // path to JSON settings file; defaults to /data/settings.json
-	AnnouncementInterval int    // weather cycles between announcement slides (0 = disabled)
-	TriviaInterval       int    // weather cycles between trivia slides (0 = disabled)
+	TriviaPath           string        // path to trivia.csv; defaults to /trivia/trivia.csv
+	TriviaDuration       time.Duration // total time for each trivia question+answer cycle
+	AdminDataPath        string        // path to JSON settings file; defaults to /data/settings.json
+	AnnouncementInterval int           // weather cycles between announcement slides (0 = disabled)
+	TriviaInterval       int           // weather cycles between trivia slides (0 = disabled)
 
 	// HLS settings
 	HLSSegmentDuration time.Duration // duration of each HLS segment (default: 3s)
@@ -63,16 +64,16 @@ type Config struct {
 // Load reads environment variables and returns a Config with defaults applied.
 func Load() (*Config, error) {
 	cfg := &Config{
-		WeatherAPIURL:  envOrDefault("WEATHER_API_URL", apiurl.DefaultNWSBase),
-		FrameRate:      intOrDefault("FRAME_RATE", 5),
-		ChannelNumber:  envOrDefault("CHANNEL_NUMBER", "100"),
-		Port:           intOrDefault("PORT", 9798),
-		Width:          intOrDefault("VIDEO_WIDTH", 1280),
-		Height:         intOrDefault("VIDEO_HEIGHT", 720),
-		WeatherRefresh: durationOrDefault("WEATHER_REFRESH", 20*time.Minute),
-		SlideDuration:  durationOrDefault("SLIDE_DURATION", 8*time.Second),
-		MusicDir:          envOrDefault("MUSIC_DIR", "/music"),
-		MusicStreamURL:    envOrDefault("MUSIC_STREAM_URL", ""),
+		WeatherAPIURL:        envOrDefault("WEATHER_API_URL", apiurl.DefaultNWSBase),
+		FrameRate:            intOrDefault("FRAME_RATE", 5),
+		ChannelNumber:        envOrDefault("CHANNEL_NUMBER", "100"),
+		Port:                 intOrDefault("PORT", 9798),
+		Width:                intOrDefault("VIDEO_WIDTH", 1280),
+		Height:               intOrDefault("VIDEO_HEIGHT", 720),
+		WeatherRefresh:       durationOrDefault("WEATHER_REFRESH", 20*time.Minute),
+		SlideDuration:        durationOrDefault("SLIDE_DURATION", 8*time.Second),
+		MusicDir:             envOrDefault("MUSIC_DIR", "/music"),
+		MusicStreamURL:       envOrDefault("MUSIC_STREAM_URL", ""),
 		AnnouncementsPath:    envOrDefault("ANNOUNCEMENTS_PATH", "/announcements/announcements.csv"),
 		AnnouncementDuration: durationOrDefault("ANNOUNCEMENT_DURATION", 10*time.Second),
 		TriviaPath:           envOrDefault("TRIVIA_PATH", "/trivia/trivia.csv"),

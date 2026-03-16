@@ -198,7 +198,7 @@ func NewStore(path string, anns []ann.Announcement, triviaItems []trivia.TriviaI
 		triviaAPIRefresh:    defaultTriviaAPIRefresh,
 		triviaAPICacheMax:   500,
 		triviaBuiltin:       defaultTriviaBuiltin,
-		satelliteProduct:    config.SatelliteIR,
+		satelliteProduct:    config.SatelliteAuto,
 		clockFormat:         config.ClockFormat24h,
 		unitSystem:          config.UnitsImperial,
 		streams:             append([]StreamEntry(nil), defaultStreams...),
@@ -322,7 +322,7 @@ func (s *Store) loadFromDisk() {
 	if pd.RealisticMoonIcons != nil {
 		s.realisticMoonIcons = *pd.RealisticMoonIcons
 	}
-	if pd.SatelliteProduct == config.SatelliteIR || pd.SatelliteProduct == config.SatelliteVIS {
+	if pd.SatelliteProduct == config.SatelliteIR || pd.SatelliteProduct == config.SatelliteVIS || pd.SatelliteProduct == config.SatelliteAuto {
 		s.satelliteProduct = pd.SatelliteProduct
 	}
 	if pd.ClockFormat == config.ClockFormat12h || pd.ClockFormat == config.ClockFormat24h {
@@ -1181,8 +1181,11 @@ func (s *Store) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		unitDisplay = "Metric"
 	}
 	satDisplay := "Infrared"
-	if satProd == "visible" {
+	switch satProd {
+	case config.SatelliteVIS:
 		satDisplay = "Visible"
+	case config.SatelliteAuto:
+		satDisplay = "Auto (VIS day / IR night)"
 	}
 
 	trivAPIDetail := yn(trivAPI)
@@ -1581,10 +1584,13 @@ func (s *Store) handleSettingsGet(w http.ResponseWriter, r *http.Request) {
 	} else {
 		unitsImperialChecked = " checked"
 	}
-	satIRChecked, satVISChecked := "", ""
-	if satProd == config.SatelliteVIS {
+	satIRChecked, satVISChecked, satAutoChecked := "", "", ""
+	switch satProd {
+	case config.SatelliteVIS:
 		satVISChecked = " checked"
-	} else {
+	case config.SatelliteAuto:
+		satAutoChecked = " checked"
+	default:
 		satIRChecked = " checked"
 	}
 
@@ -1645,13 +1651,16 @@ func (s *Store) handleSettingsGet(w http.ResponseWriter, r *http.Request) {
 <label>Satellite Product</label>
 <div style="margin:6px 0 4px; display:flex; gap:20px">
   <label style="display:inline-flex; align-items:center; gap:8px; cursor:pointer; color:#fff; font-weight:normal; margin:0">
-    <input type="radio" name="satelliteProduct" value="IR"%s style="accent-color:#FFFF00"> Infrared (day &amp; night)
+    <input type="radio" name="satelliteProduct" value="IR"%s style="accent-color:#FFFF00"> Infrared
   </label>
   <label style="display:inline-flex; align-items:center; gap:8px; cursor:pointer; color:#fff; font-weight:normal; margin:0">
-    <input type="radio" name="satelliteProduct" value="VIS"%s style="accent-color:#FFFF00"> Visible (daytime only)
+    <input type="radio" name="satelliteProduct" value="VIS"%s style="accent-color:#FFFF00"> Visible
+  </label>
+  <label style="display:inline-flex; align-items:center; gap:8px; cursor:pointer; color:#fff; font-weight:normal; margin:0">
+    <input type="radio" name="satelliteProduct" value="AUTO"%s style="accent-color:#FFFF00"> Auto
   </label>
 </div>
-<p class="hint">GOES satellite imagery layer. Infrared works day and night; visible is higher contrast but blank after dark.</p>
+<p class="hint">GOES satellite imagery layer. Infrared works day and night; visible is higher contrast but blank after dark. Auto switches to visible 7AM–7PM, infrared at night.</p>
 
 <label>Slide Duration (weather slides)</label>
 <input type="text" name="slideDuration" value="%s">
@@ -1749,7 +1758,7 @@ function addStreamRow() {
   tbody.appendChild(tr);
   tr.querySelector('input').focus();
 }
-</script>`, flash, clock24Checked, clock12Checked, unitsImperialChecked, unitsMetricChecked, realisticMoonChecked, satIRChecked, satVISChecked, slide, annD, annInt, trivD, trivInt, trivRandChecked, trivBuiltinChecked, trivAPIChecked, trivAPIAmount, categoryOptions.String(), difficultyOptions.String(), trivAPIRefresh, trivAPICacheMax, trivAPICacheCount, trivAPICacheExpiry, streamRows.String())
+</script>`, flash, clock24Checked, clock12Checked, unitsImperialChecked, unitsMetricChecked, realisticMoonChecked, satIRChecked, satVISChecked, satAutoChecked, slide, annD, annInt, trivD, trivInt, trivRandChecked, trivBuiltinChecked, trivAPIChecked, trivAPIAmount, categoryOptions.String(), difficultyOptions.String(), trivAPIRefresh, trivAPICacheMax, trivAPICacheCount, trivAPICacheExpiry, streamRows.String())
 	writePage(w, "SETTINGS", body)
 }
 
@@ -1858,7 +1867,7 @@ func (s *Store) handleSettingsPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	satProd := r.FormValue("satelliteProduct")
-	if satProd != config.SatelliteIR && satProd != config.SatelliteVIS {
+	if satProd != config.SatelliteIR && satProd != config.SatelliteVIS && satProd != config.SatelliteAuto {
 		warnings = append(warnings, "Satellite reset to Infrared (invalid value)")
 		satProd = config.SatelliteIR
 	}
