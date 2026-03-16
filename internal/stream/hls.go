@@ -134,12 +134,6 @@ func NewHLSSegmenter(hub *Hub, zip, clock, units string, segDuration time.Durati
 	}
 }
 
-// SubscribeNow subscribes to the Hub immediately so segments start
-// accumulating before any HLS client connects (warmup).
-func (s *HLSSegmenter) SubscribeNow() {
-	s.subscribe()
-}
-
 // Run is the main loop. It must be run in a goroutine. It blocks until ctx is cancelled.
 func (s *HLSSegmenter) Run(ctx context.Context) {
 	defer s.stopped.Store(true)
@@ -330,7 +324,6 @@ func (s *HLSSegmenter) unsubscribe() {
 func (s *HLSSegmenter) checkIdle() {
 	s.mu.RLock()
 	subscribed := s.subscribed
-	subscribedAt := s.subscribedAt
 	s.mu.RUnlock()
 
 	if !subscribed {
@@ -339,25 +332,19 @@ func (s *HLSSegmenter) checkIdle() {
 
 	last := s.lastPoll.Load()
 	if last == 0 {
-		// No HLS client has ever polled. Unsubscribe once the warmup
-		// window has elapsed so we don't keep the hub (and music relay)
-		// active indefinitely when only direct-stream clients connect.
-		if time.Since(subscribedAt) <= 2*s.segmentDuration {
-			return
-		}
-	} else if time.Since(time.UnixMilli(last)) <= 2*s.segmentDuration {
 		return
 	}
-
-	s.unsubscribe()
-	// Clean up view tracking for any stale viewers.
-	s.viewMu.Lock()
-	now := time.Now()
-	for addr, t := range s.activeViewers {
-		s.viewTotal += now.Sub(t)
-		delete(s.activeViewers, addr)
+	if time.Since(time.UnixMilli(last)) > 2*s.segmentDuration {
+		s.unsubscribe()
+		// Clean up view tracking for any stale viewers.
+		s.viewMu.Lock()
+		now := time.Now()
+		for addr, t := range s.activeViewers {
+			s.viewTotal += now.Sub(t)
+			delete(s.activeViewers, addr)
+		}
+		s.viewMu.Unlock()
 	}
-	s.viewMu.Unlock()
 }
 
 // touchPoll records a poll, subscribes if needed, and returns the ready channel.

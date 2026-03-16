@@ -385,7 +385,6 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 	ctx, cancel := context.WithCancel(m.rootCtx)
 
 	seg := stream.NewHLSSegmenter(hub, loc.ZipCode, clockFormat, units, m.cfg.HLSSegmentDuration, m.cfg.HLSPlaylistSize, m.cfg.HLSRingSize)
-	seg.SubscribeNow() // Pre-subscribe so warmup frames produce HLS segments immediately.
 	go seg.Run(ctx)
 
 	// Build the canonical stream URL for the admin dashboard.
@@ -495,16 +494,14 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 	go hub.Run(ff.Stdout())
 
 	// Renderer writes frames to FFmpeg stdin.
-	// During the initial warmup window, always write frames so FFmpeg
-	// can produce HLS segments before any viewer connects. After the
-	// warmup, only write when someone is watching.
+	// Only write when someone is watching — FFmpeg blocks on pipe when
+	// nobody is reading, which is fine (near-zero CPU).
 	use24h := clockFormat != config.ClockFormat12h
 	useMetric := units == config.UnitsMetric
-	warmupDeadline := time.Now().Add(2 * m.cfg.HLSSegmentDuration)
 	p.rnd = renderer.New(m.cfg.Width, m.cfg.Height, m.cfg.FrameRate, loc.ZipCode,
 		m.store.SlideDuration,
 		wc, ff.Stdin(),
-		func() bool { return time.Now().Before(warmupDeadline) || hub.ClientCount() > 0 },
+		func() bool { return hub.ClientCount() > 0 },
 		m.store.Announcements, m.store.AnnouncementDuration, m.store.AnnouncementInterval,
 		m.store.TriviaItems, m.store.TriviaDuration, m.store.TriviaInterval, m.store.TriviaRandomize,
 		m.store.PlanetLiveAlways,
@@ -530,7 +527,7 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 		}
 	}()
 
-	log.Printf("pipeline %s: started (%dx%d @ %dfps, warmup %s)", loc.ZipCode, m.cfg.Width, m.cfg.Height, m.cfg.FrameRate, 2*m.cfg.HLSSegmentDuration)
+	log.Printf("pipeline %s: started (%dx%d @ %dfps)", loc.ZipCode, m.cfg.Width, m.cfg.Height, m.cfg.FrameRate)
 	return p, nil
 }
 
