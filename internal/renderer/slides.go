@@ -3085,16 +3085,46 @@ func slideFeelsLike(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 		dc.Stroke()
 	}
 
-	// Data points.
+	// Data points and temperature labels.
+	unit := "°"
 	for i := range periods {
 		x := xs[i]
-		dc.SetRGB(hlR, hlG, hlB)
-		dc.DrawCircle(x, aYs[i], 3.5)
-		dc.Fill()
-		dc.SetRGB(divR, divG, divB)
-		dc.DrawCircle(x, fYs[i], 3.5)
-		dc.Fill()
 		dc.SetFontFace(fonts.small)
+
+		diff := math.Abs(actuals[i] - feelsLike[i])
+		if diff < 1 {
+			// Same — single label above the actual line.
+			dc.SetRGB(hlR, hlG, hlB)
+			dc.DrawCircle(x, aYs[i], 3.5)
+			dc.Fill()
+			drawShadowTextAnchored(dc, fmt.Sprintf("%.0f%s", actuals[i], unit),
+				x, aYs[i]-14, 0.5, 1.0, hlR, hlG, hlB)
+		} else {
+			// Different — actual label above its line, feels-like below its line.
+			dc.SetRGB(hlR, hlG, hlB)
+			dc.DrawCircle(x, aYs[i], 3.5)
+			dc.Fill()
+			// Place actual label on the outside (above if actual is higher, below if lower).
+			if actuals[i] >= feelsLike[i] {
+				drawShadowTextAnchored(dc, fmt.Sprintf("%.0f%s", actuals[i], unit),
+					x, aYs[i]-14, 0.5, 1.0, hlR, hlG, hlB)
+			} else {
+				drawShadowTextAnchored(dc, fmt.Sprintf("%.0f%s", actuals[i], unit),
+					x, aYs[i]+18, 0.5, 0.0, hlR, hlG, hlB)
+			}
+
+			dc.SetRGB(divR, divG, divB)
+			dc.DrawCircle(x, fYs[i], 3.5)
+			dc.Fill()
+			if feelsLike[i] >= actuals[i] {
+				drawShadowTextAnchored(dc, fmt.Sprintf("%.0f%s", feelsLike[i], unit),
+					x, fYs[i]-14, 0.5, 1.0, divR, divG, divB)
+			} else {
+				drawShadowTextAnchored(dc, fmt.Sprintf("%.0f%s", feelsLike[i], unit),
+					x, fYs[i]+18, 0.5, 0.0, divR, divG, divB)
+			}
+		}
+
 		drawShadowTextAnchored(dc, hourLabel(periods[i].StartTime, use24h, loc, i),
 			x, plotBottom+26, 0.5, 0.5, textR, textG, textB)
 	}
