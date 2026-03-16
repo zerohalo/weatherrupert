@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -65,7 +66,7 @@ func fetchAlerts(ctx context.Context, baseURL string, lat, lon float64, client *
 	var alerts []Alert
 	for _, f := range ar.Features {
 		p := f.Properties
-		if p.Status != "" && p.Status != "actual" {
+		if p.Status != "" && !strings.EqualFold(p.Status, "actual") {
 			continue
 		}
 		if seen[p.Event] {
