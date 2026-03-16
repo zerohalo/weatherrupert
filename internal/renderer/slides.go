@@ -2377,12 +2377,6 @@ func slideNightSky(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *
 		}
 	}
 
-	// ── "LIVE" label — centered at bottom of left (dome) panel ──
-	panelCenterX := midX / 2
-	labelY := h - 25.0
-	dc.SetFontFace(fonts.small)
-	drawShadowTextAnchored(dc, "LIVE", panelCenterX, labelY, 0.5, 0.5, 0.3, 1.0, 0.3)
-
 	return 0
 }
 
