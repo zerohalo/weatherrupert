@@ -59,6 +59,8 @@ func fetchAlerts(ctx context.Context, baseURL string, lat, lon float64, client *
 		return nil
 	}
 
+	log.Printf("weather: alerts response: %d features for point %.4f,%.4f", len(ar.Features), lat, lon)
+
 	seen := make(map[string]bool)
 	var alerts []Alert
 	for _, f := range ar.Features {
@@ -84,6 +86,11 @@ func fetchAlerts(ctx context.Context, baseURL string, lat, lon float64, client *
 			a.Expires = t
 		}
 		alerts = append(alerts, a)
+	}
+	if len(alerts) > 0 {
+		for _, a := range alerts {
+			log.Printf("weather: alert: %s (%s)", a.Event, a.Severity)
+		}
 	}
 	return alerts
 }
