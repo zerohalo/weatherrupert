@@ -296,7 +296,9 @@ func (c *Client) Run(ctx context.Context, interval time.Duration, hasClients fun
 			data.Location, tempLog, data.Current.Description)
 	}
 
-	var lastFetch time.Time
+	// Initialize to now so the wake guard correctly skips redundant fetches
+	// immediately after bootstrap (which already did an initial fetch).
+	lastFetch := time.Now()
 
 	for {
 		if idle {
