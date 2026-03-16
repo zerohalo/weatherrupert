@@ -96,7 +96,7 @@ Visit `http://<host>:9798/admin/` to manage content live without restarting:
 - **Dashboard** — live view of active pipelines, viewer counts, stream health, host load average, and container CPU usage
 - **Announcements** — scrolling text shown between weather cycles
 - **Trivia** — Q&A trivia slides shown between weather cycles
-- **Settings** — slide duration, announcement/trivia intervals, clock format, unit system, satellite product, music streams
+- **Settings** — slide duration, announcement/trivia intervals, clock format, unit system, satellite product, realistic moon icons, music streams
 
 ### Configuration
 
@@ -166,7 +166,7 @@ All settings are environment variables. Copy `.env.example` to `.env` to overrid
 | `RADAR_FRAMES` | `4` | Number of animation frames (radar & satellite) |
 | `RADAR_RADIUS` | `120` | Bounding box radius in miles (radar & satellite) |
 
-The satellite product (infrared or visible) is configurable in the admin settings panel. Infrared is the default and works day and night; visible offers higher contrast but is blank after dark.
+The satellite product is configurable in the admin settings panel: Infrared (day and night), Visible (higher contrast, blank after dark), or Auto (visible 7AM–7PM, infrared at night). Auto is the default.
 
 #### Performance tuning
 
@@ -305,7 +305,7 @@ Go renderer                          Audio source (one of)
 
 ```
 go wc.Bootstrap()     → resolves NWS grid + station, then:
-go wc.Run()           → refreshes WeatherData every hour
+go wc.Run()           → refreshes WeatherData every WEATHER_REFRESH interval
 go wc.runSolarRefresh → fetches SDO images + NOAA SWPC data hourly
 go hub.Run()          → reads FFmpeg stdout, fans out to clients
 go seg.Run()          → HLS segmenter: subscribes to hub, splits into 3s segments
@@ -324,7 +324,7 @@ go relay.writer()     → one per subscriber: reads channel → writes to OS pip
 
 **SIGSTOP/SIGCONT for idle pipelines** — When all viewers disconnect from a pipeline, the FFmpeg subprocess is frozen with `SIGSTOP` at the OS level. It doesn't spin in a loop or decode silence — it's fully stopped by the kernel and consumes zero CPU. When a viewer reconnects, it's resumed with `SIGCONT`. This is the main mechanism behind the "does nothing when idle" goal.
 
-**Flush window on resume** — Resuming a frozen FFmpeg creates a problem: old encoded frames and audio sit in FFmpeg's internal thread queue and OS pipe buffers from before the pause. Without intervention, the viewer hears a burst of stale audio. To handle this, the music relay drains stale audio from the kernel pipe buffer using non-blocking reads, and the broadcast hub discards all output for a flush window derived from the audio thread queue size (~1.7s). The window is reset at the actual moment of resume, not when the viewer first connects, so relay reconnection time doesn't eat into it.
+**Flush window on resume** — Resuming a frozen FFmpeg creates a problem: old encoded frames and audio sit in FFmpeg's internal thread queue and OS pipe buffers from before the pause. Without intervention, the viewer hears a burst of stale audio. To handle this, the music relay drains stale audio from the kernel pipe buffer using non-blocking reads while FFmpeg is still frozen, and the broadcast hub discards all output for a flush window derived from the audio thread queue size (~1.7s). The window is reset at the actual moment of resume, not when the viewer first connects, so relay reconnection time doesn't eat into it.
 
 **Lock-free weather reads via `atomic.Pointer`** — The renderer reads weather data on every frame (5 fps, ~3.5 MB RGBA per frame). Using `atomic.Pointer[WeatherData]` means the background refresh goroutine can swap in new data without ever blocking the render loop. No mutex on the hottest path in the system.
 
