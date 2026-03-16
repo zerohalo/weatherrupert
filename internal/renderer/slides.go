@@ -3141,8 +3141,8 @@ func slideSunMoon(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *t
 		arcR := 130.0
 
 		// Draw arc (semicircle above horizon).
-		dc.SetRGBA(1, 1, 1, 0.1)
-		dc.SetLineWidth(2)
+		dc.SetRGBA(1, 1, 1, 0.25)
+		dc.SetLineWidth(2.5)
 		for i := 0; i <= 64; i++ {
 			a := math.Pi * float64(i) / 64.0
 			x := arcCX - arcR*math.Cos(a)
@@ -3156,8 +3156,8 @@ func slideSunMoon(dc *gg.Context, data *weather.WeatherData, use24h bool, loc *t
 		dc.Stroke()
 
 		// Horizon line.
-		dc.SetRGBA(1, 1, 1, 0.15)
-		dc.SetLineWidth(1)
+		dc.SetRGBA(1, 1, 1, 0.3)
+		dc.SetLineWidth(1.5)
 		dc.DrawLine(arcCX-arcR-20, arcCY, arcCX+arcR+20, arcCY)
 		dc.Stroke()
 
