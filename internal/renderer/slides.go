@@ -273,31 +273,6 @@ func drawHeaderElements(dc *gg.Context, title, location string, use24h bool, loc
 	dc.SetRGB(1.0, 1.0, 0.6)
 	dc.DrawCircle(sunCX, sunCY, sunR)
 	dc.Fill()
-	// Relaxed face — slit eyes in pool blue, gentle smile.
-	eyeY := sunCY - sunR*0.15
-	eyeW := sunR * 0.22
-	eyeH := sunR * 0.06
-	dc.SetRGB(0.2, 0.7, 0.9) // swimming pool blue
-	dc.DrawEllipse(sunCX-sunR*0.28, eyeY, eyeW, eyeH)
-	dc.Fill()
-	dc.DrawEllipse(sunCX+sunR*0.28, eyeY, eyeW, eyeH)
-	dc.Fill()
-	dc.SetRGB(0.6, 0.4, 0.0)
-	dc.SetLineWidth(sunR * 0.08)
-	smileR := sunR * 0.4
-	smileY := sunCY + sunR*0.15
-	dc.NewSubPath()
-	for j := 0; j <= 32; j++ {
-		a := math.Pi*0.25 + math.Pi*0.5*float64(j)/32
-		x := sunCX + smileR*math.Cos(a)
-		y := smileY + smileR*0.5*math.Sin(a)
-		if j == 0 {
-			dc.MoveTo(x, y)
-		} else {
-			dc.LineTo(x, y)
-		}
-	}
-	dc.Stroke()
 	// "RUPERT" text.
 	word2Left := sunCX + sunSize/2 + sunGap
 	dc.SetFontFace(fonts.mediumBold)

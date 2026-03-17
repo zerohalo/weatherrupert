@@ -348,34 +348,6 @@ func drawFunSun(dc *gg.Context, cx, cy, size float64) {
 	dc.DrawCircle(cx, cy, r)
 	dc.Fill()
 
-	// Relaxed face — slit eyes in pool blue, gentle smile.
-	eyeY := cy - r*0.15
-	eyeW := r * 0.22
-	eyeH := r * 0.06
-	dc.SetRGB(0.2, 0.7, 0.9) // swimming pool blue
-	// Left eye — horizontal slit.
-	dc.DrawEllipse(cx-r*0.28, eyeY, eyeW, eyeH)
-	dc.Fill()
-	// Right eye — horizontal slit.
-	dc.DrawEllipse(cx+r*0.28, eyeY, eyeW, eyeH)
-	dc.Fill()
-	// Gentle relaxed smile — shallow arc.
-	dc.SetRGB(0.6, 0.4, 0.0)
-	dc.SetLineWidth(r * 0.08)
-	smileR := r * 0.4
-	smileY := cy + r*0.15
-	dc.NewSubPath()
-	for i := 0; i <= 32; i++ {
-		a := math.Pi*0.25 + math.Pi*0.5*float64(i)/32
-		x := cx + smileR*math.Cos(a)
-		y := smileY + smileR*0.5*math.Sin(a) // flattened arc
-		if i == 0 {
-			dc.MoveTo(x, y)
-		} else {
-			dc.LineTo(x, y)
-		}
-	}
-	dc.Stroke()
 }
 
 // drawMoon draws a white crescent moon by tracing only the crescent path,
