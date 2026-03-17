@@ -280,6 +280,7 @@ func (r *Renderer) Run(ctx context.Context) error {
 
 	slideTimer := time.NewTimer(r.getSlideDuration())
 	defer slideTimer.Stop()
+	slideTimerRunning := true
 
 	// slideJustStarted is true for the first rendered frame of each slide.
 	// It lets slides (e.g. Announcements) return a custom display duration that
@@ -303,11 +304,22 @@ func (r *Renderer) Run(ctx context.Context) error {
 			r.log.Printf("showing slide %q", slideName)
 
 		case <-frameTicker.C:
-			// When nobody is watching, skip writing to FFmpeg stdin entirely.
-			// FFmpeg blocks waiting for the next frame (near-zero CPU), and the
-			// hub's broadcast loop also blocks waiting for FFmpeg output.
+			// When nobody is watching, stop the slide timer and skip
+			// frame rendering entirely. FFmpeg is frozen (SIGSTOP) so
+			// there's no point advancing slides or writing frames.
 			if r.hasClients != nil && !r.hasClients() {
+				if slideTimerRunning {
+					slideTimer.Stop()
+					slideTimerRunning = false
+				}
 				continue
+			}
+			// Viewer reconnected — restart the slide timer.
+			if !slideTimerRunning {
+				slideTimer.Reset(r.getSlideDuration())
+				slideTimerRunning = true
+				r.slideStart = time.Now()
+				slideJustStarted = true
 			}
 
 			data := r.wc.Current()
