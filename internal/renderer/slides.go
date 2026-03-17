@@ -200,10 +200,26 @@ func drawHeaderElements(dc *gg.Context, title, location string, use24h bool, loc
 		drawShadowText(dc, truncate(strings.ToUpper(location), 42), 60, 80, textR, textG, textB)
 	}
 
-	// Logo: small sun icon + "WEATHER RUPERT" branding, centered in header.
-	DrawLogoSun(dc, w/2-100, headerH/2, 30)
-	dc.SetFontFace(fonts.small)
-	drawShadowTextAnchored(dc, "WEATHER RUPERT", w/2+10, headerH/2, 0.5, 0.5, titleR, titleG, titleB)
+	// Logo: "WEATHER RUPERT" in a cyan-bordered box, centered in header.
+	// Draw the text first to get its baseline position, then draw the box around it.
+	dc.SetFontFace(fonts.cardBody)
+	logoText := "WEATHER RUPERT"
+	tw, _ := dc.MeasureString(logoText)
+	logoCX := w / 2
+	// Position text at a fixed baseline so the box can be placed precisely around it.
+	textBaseline := headerH/2 + 8 // baseline Y — text sits on this line
+	textLeft := logoCX - tw/2
+	padX, padY := 10.0, 7.0
+	boxTop := textBaseline - 22 // ascent above baseline
+	boxBot := textBaseline + 6  // descent below baseline
+	dc.SetRGBA(divR, divG, divB, 0.6)
+	dc.SetLineWidth(2.0)
+	dc.DrawRoundedRectangle(textLeft-padX, boxTop-padY, tw+2*padX, (boxBot-boxTop)+2*padY, 4)
+	dc.Stroke()
+	dc.SetRGBA(0, 0, 0, 0.6)
+	dc.DrawString(logoText, textLeft+2, textBaseline+2)
+	dc.SetRGB(0.4, 0.9, 1.0)
+	dc.DrawString(logoText, textLeft, textBaseline)
 
 	// Date + time — right-aligned, vertically centred in the header band.
 	now := time.Now().In(loc)
