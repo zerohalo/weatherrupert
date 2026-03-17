@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"sync"
@@ -423,7 +424,8 @@ func (r *MusicRelay) fetch(stopCh chan struct{}) {
 
 	buf := make([]byte, relayChunkSize)
 	var bytesReceived int64
-	throughputTick := time.NewTicker(30 * time.Second)
+	var lastKBps float64
+	throughputTick := time.NewTicker(60 * time.Second)
 	defer throughputTick.Stop()
 	lastReport := time.Now()
 
@@ -440,14 +442,17 @@ func (r *MusicRelay) fetch(stopCh chan struct{}) {
 			return
 		}
 
-		// Log periodic throughput summary.
+		// Log periodic throughput summary — only when rate changes significantly.
 		select {
 		case <-throughputTick.C:
 			elapsed := time.Since(lastReport).Seconds()
 			if elapsed > 0 {
-				bps := float64(bytesReceived) / elapsed
-				log.Printf("music relay: throughput %.1f KB/s (%d bytes in %.0fs) from %s",
-					bps/1024, bytesReceived, elapsed, r.url)
+				kbps := float64(bytesReceived) / elapsed / 1024
+				// Log on first report or when throughput changes by >10%.
+				if lastKBps == 0 || math.Abs(kbps-lastKBps)/lastKBps > 0.1 {
+					log.Printf("music relay: throughput %.1f KB/s from %s", kbps, r.url)
+				}
+				lastKBps = kbps
 			}
 			bytesReceived = 0
 			lastReport = time.Now()

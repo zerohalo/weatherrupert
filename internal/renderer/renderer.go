@@ -261,6 +261,7 @@ func (r *Renderer) advanceSlide(data *weather.WeatherData) {
 			if e.skip == nil || !e.skip(data) {
 				break
 			}
+			log.Printf("renderer [%s]: skipping slide %q", r.label, e.name)
 			r.weatherIdx++
 			if r.weatherIdx >= len(r.weatherSlides) {
 				r.weatherIdx = 0
@@ -292,9 +293,11 @@ func (r *Renderer) Run(ctx context.Context) error {
 			r.advanceSlide(r.wc.Current())
 			r.slideSeq++
 			r.slideStart = time.Now()
+			slideName := r.currentSlideName()
 			r.slideMu.Unlock()
 			slideTimer.Reset(r.getSlideDuration())
 			slideJustStarted = true
+			log.Printf("renderer [%s]: showing slide %q", r.label, slideName)
 
 		case <-frameTicker.C:
 			// When nobody is watching, skip writing to FFmpeg stdin entirely.

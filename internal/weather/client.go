@@ -299,8 +299,15 @@ func (c *Client) Run(ctx context.Context, interval time.Duration, hasClients fun
 		if data.Current.TempF != nil {
 			tempLog = fmt.Sprintf("%.1f°F", *data.Current.TempF)
 		}
-		log.Printf("weather: refreshed for %s (%s, %s)",
-			data.Location, tempLog, data.Current.Description)
+		tideLog := "no"
+		if data.TideData != nil && len(data.TideData.Predictions) > 0 {
+			tideLog = "yes"
+		}
+		log.Printf("weather: refreshed for %s (%s, %s) — hourly=%d daily=%d radar=%d sat=%d alerts=%d tides=%s uv=%.1f",
+			data.Location, tempLog, data.Current.Description,
+			len(data.HourlyPeriods), len(data.DailyPeriods),
+			len(data.RadarFrames), len(data.SatelliteFrames),
+			len(data.Alerts), tideLog, data.UVIndex)
 	}
 
 	// Initialize to now so the wake guard correctly skips redundant fetches
