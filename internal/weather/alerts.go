@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/zerohalo/weatherrupert/internal/plog"
 )
 
 // alertsResponse is the GeoJSON FeatureCollection returned by /alerts/active.
@@ -31,12 +32,12 @@ type alertProperties struct {
 
 // fetchAlerts fetches active NWS alerts for the given lat/lon.
 // Deduplicates by event name, keeping the first (most recent) instance.
-func fetchAlerts(ctx context.Context, baseURL string, lat, lon float64, client *http.Client) []Alert {
+func fetchAlerts(ctx context.Context, baseURL string, lat, lon float64, client *http.Client, wlog *plog.Logger) []Alert {
 	url := fmt.Sprintf("%s/alerts/active?point=%.4f,%.4f&status=actual", baseURL, lat, lon)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		log.Printf("weather: alerts request: %v", err)
+		wlog.Printf("alerts request: %v", err)
 		return nil
 	}
 	req.Header.Set("User-Agent", userAgent)
@@ -44,23 +45,23 @@ func fetchAlerts(ctx context.Context, baseURL string, lat, lon float64, client *
 
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Printf("weather: alerts fetch: %v", err)
+		wlog.Printf("alerts fetch: %v", err)
 		return nil
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("weather: alerts HTTP %d", resp.StatusCode)
+		wlog.Printf("alerts HTTP %d", resp.StatusCode)
 		return nil
 	}
 
 	var ar alertsResponse
 	if err := json.NewDecoder(resp.Body).Decode(&ar); err != nil {
-		log.Printf("weather: alerts decode: %v", err)
+		wlog.Printf("alerts decode: %v", err)
 		return nil
 	}
 
-	log.Printf("weather: alerts response: %d features for point %.4f,%.4f", len(ar.Features), lat, lon)
+	wlog.Printf("alerts response: %d features for point %.4f,%.4f", len(ar.Features), lat, lon)
 
 	seen := make(map[string]bool)
 	var alerts []Alert
@@ -90,7 +91,7 @@ func fetchAlerts(ctx context.Context, baseURL string, lat, lon float64, client *
 	}
 	if len(alerts) > 0 {
 		for _, a := range alerts {
-			log.Printf("weather: alert: %s (%s)", a.Event, a.Severity)
+			wlog.Printf("alert: %s (%s)", a.Event, a.Severity)
 		}
 	}
 	return alerts

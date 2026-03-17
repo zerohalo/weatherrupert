@@ -326,7 +326,7 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 		}
 		return prod
 	}
-	wc := weather.NewClient(m.cfg.WeatherAPIURL, loc.Lat, loc.Lon, cityLabel, m.cfg.Frames, m.cfg.Radius, getSatProduct, m.httpClient, tzLoc)
+	wc := weather.NewClient(m.cfg.WeatherAPIURL, loc.Lat, loc.Lon, cityLabel, loc.ZipCode, m.cfg.Frames, m.cfg.Radius, getSatProduct, m.httpClient, tzLoc)
 
 	// Resolve the music source for this pipeline:
 	//   1. MUSIC_STREAM_URL env var (single-URL pin) takes priority.

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"math"
 	"net/http"
 	"net/url"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/zerohalo/weatherrupert/internal/apiurl"
 	"github.com/zerohalo/weatherrupert/internal/config"
+	"github.com/zerohalo/weatherrupert/internal/plog"
 )
 
 // radarIEM is the Iowa Environmental Mesonet radar map endpoint.
@@ -62,10 +62,13 @@ type Client struct {
 
 	// wake is signalled to trigger an immediate refresh (e.g. when a viewer connects).
 	wake chan struct{}
+
+	// log is the per-pipeline logger.
+	log *plog.Logger
 }
 
 // NewClient creates a new weather client. Bootstrap must be called before Run or Current.
-func NewClient(baseURL string, lat, lon float64, location string, frames int, radius float64, getSatelliteProduct func(time.Time) string, httpClient *http.Client, loc *time.Location) *Client {
+func NewClient(baseURL string, lat, lon float64, location string, zip string, frames int, radius float64, getSatelliteProduct func(time.Time) string, httpClient *http.Client, loc *time.Location) *Client {
 	if frames <= 0 {
 		frames = 4
 	}
@@ -92,6 +95,7 @@ func NewClient(baseURL string, lat, lon float64, location string, frames int, ra
 		http:                httpClient,
 		loc:                 loc,
 		wake:                make(chan struct{}, 1),
+		log:                 plog.New("weather", zip),
 	}
 }
 
@@ -105,7 +109,7 @@ func (c *Client) Bootstrap(ctx context.Context) error {
 	for {
 		err := c.bootstrap(ctx)
 		if err == nil {
-			log.Printf("weather: bootstrapped for %s (grid %s/%d,%d, %d stations)",
+			c.log.Printf("bootstrapped for %s (grid %s/%d,%d, %d stations)",
 				c.location, c.gridID, c.gridX, c.gridY, len(c.stationIDs))
 			return nil
 		}
@@ -114,7 +118,7 @@ func (c *Client) Bootstrap(ctx context.Context) error {
 			return fmt.Errorf("weather: bootstrap timed out after 5 minutes: %w", err)
 		}
 
-		log.Printf("weather: bootstrap failed (%v), retrying in %s", err, backoff)
+		c.log.Printf("bootstrap failed (%v), retrying in %s", err, backoff)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -140,7 +144,7 @@ func (c *Client) bootstrap(ctx context.Context) error {
 		defer tideCancel()
 		stations, err := fetchTideStations(tideCtx, c.http)
 		if err != nil {
-			log.Printf("weather: tide station fetch failed (non-fatal): %v", err)
+			c.log.Printf("tide station fetch failed (non-fatal): %v", err)
 			return
 		}
 		c.tideStations = stations
@@ -148,10 +152,10 @@ func (c *Client) bootstrap(ctx context.Context) error {
 		if nearest != nil {
 			c.nearestTide = nearest
 			c.tideDistMiles = dist
-			log.Printf("weather: nearest tide station: %s (%s) at %.1f mi",
+			c.log.Printf("nearest tide station: %s (%s) at %.1f mi",
 				nearest.Name, nearest.ID, dist)
 		} else {
-			log.Printf("weather: no tide station within 100 miles — moon-only mode")
+			c.log.Printf("no tide station within 100 miles — moon-only mode")
 		}
 	}()
 
@@ -163,11 +167,11 @@ func (c *Client) bootstrap(ctx context.Context) error {
 		defer mapCancel()
 		smap, err := c.fetchStaticMap(mapCtx)
 		if err != nil {
-			log.Printf("weather: static map fetch failed (non-fatal): %v", err)
+			c.log.Printf("static map fetch failed (non-fatal): %v", err)
 			return
 		}
 		c.staticMap = smap
-		log.Printf("weather: fetched static basemap (%d bytes)", len(smap))
+		c.log.Printf("fetched static basemap (%d bytes)", len(smap))
 	}()
 
 	// Step 1: resolve grid coordinates from lat/lon
@@ -219,12 +223,12 @@ func (c *Client) bootstrap(ctx context.Context) error {
 // Runs until ctx is cancelled. Skips fetches when no viewers are connected.
 func (c *Client) runSolarRefresh(ctx context.Context, hasClients func() bool) {
 	doFetch := func() {
-		log.Printf("weather: fetching solar data (images may take ~60s)...")
-		solar := fetchSolar(ctx, c.http)
+		c.log.Printf("fetching solar data (images may take ~60s)...")
+		solar := fetchSolar(ctx, c.http, c.log)
 		if solar != nil {
 			c.solarData.Store(solar)
 			hasImages := solar.SunspotImage != nil || solar.CoronaImage != nil
-			log.Printf("weather: solar data refreshed (images=%v, kp=%.1f, xray=%s)",
+			c.log.Printf("solar data refreshed (images=%v, kp=%.1f, xray=%s)",
 				hasImages, solar.KpIndex, solar.XRayFlux)
 			// Patch the current WeatherData snapshot so slides see solar
 			// data immediately without waiting for the next weather refresh.
@@ -234,7 +238,7 @@ func (c *Client) runSolarRefresh(ctx context.Context, hasClients func() bool) {
 				c.data.Store(&patched)
 			}
 		} else {
-			log.Printf("weather: solar data fetch failed entirely")
+			c.log.Printf("solar data fetch failed entirely")
 		}
 	}
 
@@ -291,7 +295,7 @@ func (c *Client) Run(ctx context.Context, interval time.Duration, hasClients fun
 	doFetch := func() {
 		data, err := c.fetch(ctx)
 		if err != nil {
-			log.Printf("weather: refresh failed: %v", err)
+			c.log.Printf("refresh failed: %v", err)
 			return
 		}
 		c.data.Store(data)
@@ -303,7 +307,7 @@ func (c *Client) Run(ctx context.Context, interval time.Duration, hasClients fun
 		if data.TideData != nil && len(data.TideData.Predictions) > 0 {
 			tideLog = "yes"
 		}
-		log.Printf("weather: refreshed for %s (%s, %s) — hourly=%d daily=%d radar=%d sat=%d alerts=%d tides=%s uv=%.1f",
+		c.log.Printf("refreshed for %s (%s, %s) — hourly=%d daily=%d radar=%d sat=%d alerts=%d tides=%s uv=%.1f",
 			data.Location, tempLog, data.Current.Description,
 			len(data.HourlyPeriods), len(data.DailyPeriods),
 			len(data.RadarFrames), len(data.SatelliteFrames),
@@ -322,7 +326,7 @@ func (c *Client) Run(ctx context.Context, interval time.Duration, hasClients fun
 				return
 			case <-c.wake:
 				idle = false
-				log.Printf("weather: viewer connected, resuming refresh")
+				c.log.Printf("viewer connected, resuming refresh")
 				doFetch()
 				lastFetch = time.Now()
 				// Drain any pending tick before resetting; in Go < 1.23
@@ -350,7 +354,7 @@ func (c *Client) Run(ctx context.Context, interval time.Duration, hasClients fun
 		case <-ticker.C:
 			if hasClients != nil && !hasClients() {
 				idle = true
-				log.Printf("weather: no viewers, pausing refresh")
+				c.log.Printf("no viewers, pausing refresh")
 				continue
 			}
 			doFetch()
@@ -412,7 +416,7 @@ func (c *Client) fetch(ctx context.Context) (*WeatherData, error) {
 			c.baseURL, sid)
 		var resp ObservationResponse
 		if err := c.getJSONRetry(ctx, "observation "+sid, obsURL, &resp, 3); err != nil {
-			log.Printf("weather: station %s observation failed: %v", sid, err)
+			c.log.Printf("station %s observation failed: %v", sid, err)
 			continue
 		}
 		obsResp = resp
@@ -420,7 +424,7 @@ func (c *Client) fetch(ctx context.Context) (*WeatherData, error) {
 		if resp.Properties.Temperature.Value.Value != nil {
 			break // got a station with real temperature data
 		}
-		log.Printf("weather: station %s returned null temperature, trying next", sid)
+		c.log.Printf("station %s returned null temperature, trying next", sid)
 	}
 	if obsStation == "" {
 		return nil, fmt.Errorf("observation: all %d stations failed", len(c.stationIDs))
@@ -489,10 +493,10 @@ func (c *Client) fetch(ctx context.Context) (*WeatherData, error) {
 				break
 			}
 			if attempt < tideRetries {
-				log.Printf("weather: tide predictions attempt %d/%d failed: %v, retrying", attempt, tideRetries, tideErr)
+				c.log.Printf("tide predictions attempt %d/%d failed: %v, retrying", attempt, tideRetries, tideErr)
 				time.Sleep(2 * time.Second)
 			} else {
-				log.Printf("weather: tide predictions failed after %d attempts (non-fatal): %v", tideRetries, tideErr)
+				c.log.Printf("tide predictions failed after %d attempts (non-fatal): %v", tideRetries, tideErr)
 			}
 		}
 		if tideErr == nil && len(preds) > 0 {
@@ -515,10 +519,10 @@ func (c *Client) fetch(ctx context.Context) (*WeatherData, error) {
 					break
 				}
 				if attempt < tideRetries {
-					log.Printf("weather: tide hilo attempt %d/%d failed: %v, retrying", attempt, tideRetries, hiloErr)
+					c.log.Printf("tide hilo attempt %d/%d failed: %v, retrying", attempt, tideRetries, hiloErr)
 					time.Sleep(2 * time.Second)
 				} else {
-					log.Printf("weather: tide hilo failed after %d attempts (non-fatal): %v", tideRetries, hiloErr)
+					c.log.Printf("tide hilo failed after %d attempts (non-fatal): %v", tideRetries, hiloErr)
 				}
 			}
 			if hiloErr == nil {
@@ -529,7 +533,7 @@ func (c *Client) fetch(ctx context.Context) (*WeatherData, error) {
 
 	// Fetch active weather alerts (best-effort, non-fatal).
 	alertCtx, alertCancel := context.WithTimeout(ctx, 10*time.Second)
-	alerts := fetchAlerts(alertCtx, c.baseURL, c.lat, c.lon, c.http)
+	alerts := fetchAlerts(alertCtx, c.baseURL, c.lat, c.lon, c.http, c.log)
 	alertCancel()
 
 	// Fetch raw gridpoint data for precipitation totals (best-effort, non-fatal).
@@ -583,7 +587,7 @@ func (c *Client) fetchRadarFrames(ctx context.Context) [][]byte {
 
 			png, err := c.fetchRadarAt(radarCtx, t)
 			if err != nil {
-				log.Printf("weather: radar frame %d (%s) failed: %v", i, t.Format("15:04Z"), err)
+				c.log.Printf("radar frame %d (%s) failed: %v", i, t.Format("15:04Z"), err)
 				return
 			}
 			frames[i] = png
@@ -675,7 +679,7 @@ func (c *Client) fetchSatelliteFrames(ctx context.Context) [][]byte {
 
 			png, err := c.fetchSatelliteAt(satCtx, t)
 			if err != nil {
-				log.Printf("weather: satellite frame %d (%s) failed: %v", i, t.Format("15:04Z"), err)
+				c.log.Printf("satellite frame %d (%s) failed: %v", i, t.Format("15:04Z"), err)
 				return
 			}
 			frames[i] = png
@@ -772,7 +776,7 @@ func (c *Client) getJSONRetry(ctx context.Context, label string, url string, dst
 			return err
 		}
 		if attempt < maxAttempts {
-			log.Printf("weather: %s attempt %d/%d failed: %v, retrying", label, attempt, maxAttempts, err)
+			c.log.Printf("%s attempt %d/%d failed: %v, retrying", label, attempt, maxAttempts, err)
 			time.Sleep(2 * time.Second)
 		}
 	}
@@ -790,7 +794,7 @@ func (c *Client) fetchGridPointRaw(ctx context.Context) (precipMM, snowMM float6
 
 	var raw gridPointRaw
 	if err := c.getJSON(rawCtx, rawURL, &raw); err != nil {
-		log.Printf("weather: gridpoint raw fetch failed (non-fatal): %v", err)
+		c.log.Printf("gridpoint raw fetch failed (non-fatal): %v", err)
 		return 0, 0
 	}
 

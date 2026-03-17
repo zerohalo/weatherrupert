@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/zerohalo/weatherrupert/internal/plog"
 	"time"
 
 	"github.com/zerohalo/weatherrupert/internal/apiurl"
@@ -41,7 +42,7 @@ const solarRefreshInterval = 1 * time.Hour
 // fetchSolar fetches solar activity data from NOAA SWPC and NASA SDO.
 // All sources are fetched in parallel. Image fetches use a 1-minute timeout
 // with up to 3 retries. Returns nil only if every source fails.
-func fetchSolar(ctx context.Context, httpClient *http.Client) *SolarData {
+func fetchSolar(ctx context.Context, httpClient *http.Client, wlog *plog.Logger) *SolarData {
 	sd := &SolarData{FetchedAt: time.Now()}
 	var mu sync.Mutex
 	var wg sync.WaitGroup
@@ -63,12 +64,12 @@ func fetchSolar(ctx context.Context, httpClient *http.Client) *SolarData {
 					return nil, ctx.Err()
 				}
 				if attempt < solarImageRetries {
-					log.Printf("weather: solar image %s attempt %d/%d failed: %v, retrying",
+					wlog.Printf("solar image %s attempt %d/%d failed: %v, retrying",
 						url, attempt, solarImageRetries, err)
 					time.Sleep(2 * time.Second)
 				}
 			}
-			log.Printf("weather: solar image %s failed after %d attempts, trying next source", url, solarImageRetries)
+			wlog.Printf("solar image %s failed after %d attempts, trying next source", url, solarImageRetries)
 		}
 		return nil, lastErr
 	}
@@ -86,7 +87,7 @@ func fetchSolar(ctx context.Context, httpClient *http.Client) *SolarData {
 		defer wg.Done()
 		data, err := fetchImageWithFallback(sunspotURLs)
 		if err != nil {
-			log.Printf("weather: solar sunspot image failed (non-fatal): %v", err)
+			wlog.Printf("solar sunspot image failed (non-fatal): %v", err)
 			return
 		}
 		mu.Lock()
@@ -101,7 +102,7 @@ func fetchSolar(ctx context.Context, httpClient *http.Client) *SolarData {
 		defer wg.Done()
 		data, err := fetchImageWithFallback(coronaURLs)
 		if err != nil {
-			log.Printf("weather: solar corona image failed (non-fatal): %v", err)
+			wlog.Printf("solar corona image failed (non-fatal): %v", err)
 			return
 		}
 		mu.Lock()
@@ -116,7 +117,7 @@ func fetchSolar(ctx context.Context, httpClient *http.Client) *SolarData {
 		defer wg.Done()
 		r, s, g, err := parseNOAAScales(fetchJSON)
 		if err != nil {
-			log.Printf("weather: solar NOAA scales failed (non-fatal): %v", err)
+			wlog.Printf("solar NOAA scales failed (non-fatal): %v", err)
 			return
 		}
 		mu.Lock()
@@ -133,7 +134,7 @@ func fetchSolar(ctx context.Context, httpClient *http.Client) *SolarData {
 		defer wg.Done()
 		class, err := parseXRayFlare(fetchJSON)
 		if err != nil {
-			log.Printf("weather: solar X-ray flare failed (non-fatal): %v", err)
+			wlog.Printf("solar X-ray flare failed (non-fatal): %v", err)
 			return
 		}
 		mu.Lock()
@@ -148,7 +149,7 @@ func fetchSolar(ctx context.Context, httpClient *http.Client) *SolarData {
 		defer wg.Done()
 		kp, err := parseKpIndex(fetchJSON)
 		if err != nil {
-			log.Printf("weather: solar Kp index failed (non-fatal): %v", err)
+			wlog.Printf("solar Kp index failed (non-fatal): %v", err)
 			return
 		}
 		mu.Lock()
@@ -163,7 +164,7 @@ func fetchSolar(ctx context.Context, httpClient *http.Client) *SolarData {
 		defer wg.Done()
 		speed, err := parseSolarWind(fetchJSON)
 		if err != nil {
-			log.Printf("weather: solar wind speed failed (non-fatal): %v", err)
+			wlog.Printf("solar wind speed failed (non-fatal): %v", err)
 			return
 		}
 		mu.Lock()
