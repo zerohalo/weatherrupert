@@ -200,26 +200,57 @@ func drawHeaderElements(dc *gg.Context, title, location string, use24h bool, loc
 		drawShadowText(dc, truncate(strings.ToUpper(location), 42), 60, 80, textR, textG, textB)
 	}
 
-	// Logo: "WEATHER RUPERT" in a cyan-bordered box, centered in header.
-	// Draw the text first to get its baseline position, then draw the box around it.
-	dc.SetFontFace(fonts.cardBody)
-	logoText := "WEATHER RUPERT"
-	tw, _ := dc.MeasureString(logoText)
+	// Logo: "WEATHER ☀ RUPERT" in a cyan-bordered box, centered in header.
+	dc.SetFontFace(fonts.mediumBold)
+	word1, word2 := "WEATHER", "RUPERT"
+	tw1, _ := dc.MeasureString(word1)
+	tw2, _ := dc.MeasureString(word2)
+	sunSize := 24.0
+	sunGap := 8.0 // space on each side of the sun
+	totalW := tw1 + sunGap + sunSize + sunGap + tw2
 	logoCX := w / 2
-	// Position text at a fixed baseline so the box can be placed precisely around it.
-	textBaseline := headerH/2 + 8 // baseline Y — text sits on this line
-	textLeft := logoCX - tw/2
+	textBaseline := headerH/2 + 8
+	textLeft := logoCX - totalW/2
 	padX, padY := 10.0, 7.0
-	boxTop := textBaseline - 22 // ascent above baseline
-	boxBot := textBaseline + 6  // descent below baseline
+	boxTop := textBaseline - 22
+	boxBot := textBaseline + 6
+	// Box border.
 	dc.SetRGBA(divR, divG, divB, 0.6)
-	dc.SetLineWidth(2.0)
-	dc.DrawRoundedRectangle(textLeft-padX, boxTop-padY, tw+2*padX, (boxBot-boxTop)+2*padY, 4)
+	dc.SetLineWidth(2.5)
+	dc.DrawRoundedRectangle(textLeft-padX, boxTop-padY, totalW+2*padX, (boxBot-boxTop)+2*padY, 4)
 	dc.Stroke()
+	// "WEATHER" text.
+	dc.SetFontFace(fonts.mediumBold)
 	dc.SetRGBA(0, 0, 0, 0.6)
-	dc.DrawString(logoText, textLeft+2, textBaseline+2)
+	dc.DrawString(word1, textLeft+2, textBaseline+2)
 	dc.SetRGB(0.4, 0.9, 1.0)
-	dc.DrawString(logoText, textLeft, textBaseline)
+	dc.DrawString(word1, textLeft, textBaseline)
+	// Pale yellow sun icon between the words.
+	sunCX := textLeft + tw1 + sunGap + sunSize/2
+	sunCY := textBaseline - 8 // vertically centered with text
+	paleR, paleG, paleB := 1.0, 1.0, 0.6
+	sunR := sunSize * 0.27
+	inner := sunSize * 0.32
+	outer := sunSize * 0.40
+	dc.SetRGB(paleR, paleG, paleB)
+	dc.SetLineWidth(sunSize * 0.06)
+	for j := 0; j < 8; j++ {
+		a := float64(j) * math.Pi / 4
+		dc.DrawLine(
+			sunCX+inner*math.Cos(a), sunCY+inner*math.Sin(a),
+			sunCX+outer*math.Cos(a), sunCY+outer*math.Sin(a),
+		)
+		dc.Stroke()
+	}
+	dc.DrawCircle(sunCX, sunCY, sunR)
+	dc.Fill()
+	// "RUPERT" text.
+	word2Left := sunCX + sunSize/2 + sunGap
+	dc.SetFontFace(fonts.mediumBold)
+	dc.SetRGBA(0, 0, 0, 0.6)
+	dc.DrawString(word2, word2Left+2, textBaseline+2)
+	dc.SetRGB(0.4, 0.9, 1.0)
+	dc.DrawString(word2, word2Left, textBaseline)
 
 	// Date + time — right-aligned, vertically centred in the header band.
 	now := time.Now().In(loc)
