@@ -516,20 +516,47 @@ func slideCurrentConditions(dc *gg.Context, data *weather.WeatherData, use24h, u
 		}
 		nextY += 52
 	}
-	if cur.HeatIndexF != nil && cur.TempF != nil && *cur.HeatIndexF > *cur.TempF+2 {
-		if useMetric {
-			drawShadowText(dc, fmt.Sprintf("HEAT INDEX: %.0f°C", fToC(*cur.HeatIndexF)), textX, nextY, heatR, heatG, heatB)
+	// Feels-like temperature — use NWS values if available, otherwise compute
+	// from temperature, wind speed, and humidity using the same formulas as
+	// the feels-like slide.
+	if cur.TempF != nil {
+		var feelsF float64
+		var hasFeels bool
+		if cur.HeatIndexF != nil && *cur.HeatIndexF > *cur.TempF+2 {
+			feelsF = *cur.HeatIndexF
+			hasFeels = true
+		} else if cur.WindChillF != nil && *cur.WindChillF < *cur.TempF-2 {
+			feelsF = *cur.WindChillF
+			hasFeels = true
 		} else {
-			drawShadowText(dc, fmt.Sprintf("HEAT INDEX: %.0f°F", *cur.HeatIndexF), textX, nextY, heatR, heatG, heatB)
+			// NWS didn't provide values — compute from observations.
+			windMph := 0.0
+			if cur.WindSpeedMph != nil {
+				windMph = *cur.WindSpeedMph
+			}
+			humidity := 50.0
+			if cur.Humidity != nil {
+				humidity = *cur.Humidity
+			}
+			feelsF = computeFeelsLikeF(*cur.TempF, windMph, humidity)
+			if math.Abs(feelsF-*cur.TempF) > 2 {
+				hasFeels = true
+			}
 		}
-		nextY += 52
-	} else if cur.WindChillF != nil && cur.TempF != nil && *cur.WindChillF < *cur.TempF-2 {
-		if useMetric {
-			drawShadowText(dc, fmt.Sprintf("WIND CHILL: %.0f°C", fToC(*cur.WindChillF)), textX, nextY, lowR, lowG, lowB)
-		} else {
-			drawShadowText(dc, fmt.Sprintf("WIND CHILL: %.0f°F", *cur.WindChillF), textX, nextY, lowR, lowG, lowB)
+		if hasFeels {
+			var flR, flG, flB float64
+			if feelsF > *cur.TempF {
+				flR, flG, flB = heatR, heatG, heatB
+			} else {
+				flR, flG, flB = lowR, lowG, lowB
+			}
+			if useMetric {
+				drawShadowText(dc, fmt.Sprintf("FEELS LIKE: %.0f°C", fToC(feelsF)), textX, nextY, flR, flG, flB)
+			} else {
+				drawShadowText(dc, fmt.Sprintf("FEELS LIKE: %.0f°F", feelsF), textX, nextY, flR, flG, flB)
+			}
+			nextY += 52
 		}
-		nextY += 52
 	}
 
 	// 2×2 stats grid flows directly below the text block.
@@ -3320,6 +3347,26 @@ func slideFeelsLike(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 		dc.DrawRectangle(legX, legY-6, 20, 3)
 		dc.Fill()
 		drawShadowText(dc, "WARMER", legX+26, legY, heatR, 0.4, 0.2)
+	}
+
+	// Current feels-like temperature — right-aligned on the legend row.
+	if len(actuals) > 0 {
+		unit := "°F"
+		if useMetric {
+			unit = "°C"
+		}
+		flLabel := fmt.Sprintf("FEELS LIKE %.0f%s", feelsLike[0], unit)
+		// Pick color based on warmer/cooler.
+		var flcR, flcG, flcB float64
+		if feelsLike[0] > actuals[0]+1 {
+			flcR, flcG, flcB = heatR, 0.4, 0.2
+		} else if feelsLike[0] < actuals[0]-1 {
+			flcR, flcG, flcB = divR, divG, divB
+		} else {
+			flcR, flcG, flcB = hlR, hlG, hlB
+		}
+		dc.SetFontFace(fonts.medium)
+		drawShadowTextAnchored(dc, flLabel, cl.PlotRight, legY, 1.0, 0.5, flcR, flcG, flcB)
 	}
 
 	return 0
