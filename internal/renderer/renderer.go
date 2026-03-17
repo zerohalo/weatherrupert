@@ -418,7 +418,7 @@ func (r *Renderer) writeLoadingFrame() error {
 			return err
 		}
 		r.loadingPix = pix
-		log.Printf("renderer %s: loading frame rendered (%d bytes)", r.label, len(pix))
+		log.Printf("renderer [%s]: loading frame rendered (%d bytes)", r.label, len(pix))
 	}
 
 	_, err := r.out.Write(r.loadingPix)

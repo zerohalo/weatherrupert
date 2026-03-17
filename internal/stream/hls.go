@@ -209,14 +209,14 @@ func (s *HLSSegmenter) ingestChunk(chunk []byte) {
 	kf := findKeyframe(s.accumBuf, prevLen)
 	if kf < 0 {
 		if len(s.accumBuf)%10000 < len(chunk) { // log periodically
-			log.Printf("hls: no keyframe yet, accumBuf=%d bytes, elapsed=%v, prevLen=%d (zip %s)",
-				len(s.accumBuf), elapsed, prevLen, s.zip)
+			log.Printf("hls [%s]: no keyframe yet, accumBuf=%d bytes, elapsed=%v, prevLen=%d",
+				s.zip, len(s.accumBuf), elapsed, prevLen)
 		}
 		return // no keyframe yet, keep accumulating
 	}
 
-	log.Printf("hls: splitting segment at keyframe offset %d, accumBuf=%d bytes, elapsed=%v (zip %s)",
-		kf, len(s.accumBuf), elapsed, s.zip)
+	log.Printf("hls [%s]: splitting segment at keyframe offset %d, accumBuf=%d bytes, elapsed=%v",
+		s.zip, kf, len(s.accumBuf), elapsed)
 
 	// Split: everything before the keyframe is the segment,
 	// the keyframe and beyond starts the next segment.
@@ -265,7 +265,7 @@ func (s *HLSSegmenter) finalizeSegmentData(now time.Time, segData []byte) {
 	if !s.readyClosed {
 		s.readyOnce.Do(func() { close(s.ready) })
 		s.readyClosed = true
-		log.Printf("hls: first segment ready (zip %s, seq %d, %d bytes)", s.zip, seg.SeqNum, size)
+		log.Printf("hls [%s]: first segment ready (seq %d, %d bytes)", s.zip, seg.SeqNum, size)
 	}
 }
 
@@ -294,7 +294,7 @@ func (s *HLSSegmenter) subscribe() {
 	s.ready = make(chan struct{})
 	s.readyOnce = sync.Once{}
 	s.readyClosed = false
-	log.Printf("hls: segmenter subscribed to hub (zip %s)", s.zip)
+	log.Printf("hls [%s]: segmenter subscribed to hub", s.zip)
 }
 
 // unsubscribe disconnects from the Hub if currently subscribed.
@@ -317,7 +317,7 @@ func (s *HLSSegmenter) unsubscribe() {
 	s.mu.Unlock()
 
 	s.hub.Unsubscribe(ch)
-	log.Printf("hls: segmenter unsubscribed from hub (zip %s)", s.zip)
+	log.Printf("hls [%s]: segmenter unsubscribed from hub", s.zip)
 }
 
 // checkIdle unsubscribes if no HLS client has polled recently.
@@ -377,7 +377,7 @@ func (s *HLSSegmenter) ServePlaylist(w http.ResponseWriter, r *http.Request) {
 	case <-r.Context().Done():
 		return
 	case <-time.After(10 * time.Second):
-		log.Printf("hls: playlist timeout waiting for first segment (zip %s)", s.zip)
+		log.Printf("hls [%s]: playlist timeout waiting for first segment", s.zip)
 		http.Error(w, "timeout waiting for stream", http.StatusServiceUnavailable)
 		return
 	}
@@ -392,7 +392,7 @@ func (s *HLSSegmenter) ServePlaylist(w http.ResponseWriter, r *http.Request) {
 	// Collect available segments for the playlist.
 	segments := s.recentSegments()
 	if len(segments) == 0 {
-		log.Printf("hls: playlist has no segments after ready (zip %s)", s.zip)
+		log.Printf("hls [%s]: playlist has no segments after ready", s.zip)
 		http.Error(w, "no segments available", http.StatusServiceUnavailable)
 		return
 	}
@@ -412,7 +412,7 @@ func (s *HLSSegmenter) ServePlaylist(w http.ResponseWriter, r *http.Request) {
 		playlist += "#EXT-X-ENDLIST\n"
 	}
 
-	log.Printf("hls: serving playlist with %d segment(s), mediaSeq=%d (zip %s)", len(segments), mediaSeq, s.zip)
+	log.Printf("hls [%s]: serving playlist with %d segment(s), mediaSeq=%d", s.zip, len(segments), mediaSeq)
 	w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
 	w.Header().Set("Cache-Control", "no-cache, no-store")
 	w.Write([]byte(playlist))
@@ -451,7 +451,7 @@ func (s *HLSSegmenter) ServeSegment(w http.ResponseWriter, r *http.Request) {
 					break
 				}
 			}
-			log.Printf("hls: serving segment seq=%d (%d bytes, lag=%d) (zip %s)", seq, len(seg.Data), lag, s.zip)
+			log.Printf("hls [%s]: serving segment seq=%d (%d bytes, lag=%d)", s.zip, seq, len(seg.Data), lag)
 			w.Header().Set("Content-Type", "video/mp2t")
 			w.Header().Set("Cache-Control", "max-age=3")
 			w.Write(seg.Data)
@@ -460,7 +460,7 @@ func (s *HLSSegmenter) ServeSegment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.segmentMisses.Add(1)
-	log.Printf("hls: segment seq=%d not found in ring (zip %s)", seq, s.zip)
+	log.Printf("hls [%s]: segment seq=%d not found in ring", s.zip, seq)
 	http.Error(w, "segment not found", http.StatusNotFound)
 }
 

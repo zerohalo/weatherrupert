@@ -364,10 +364,10 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 		relayPipe = relay.Subscribe()
 		if relayPipe != nil {
 			music = stream.NewRelaySource(relayPipe)
-			log.Printf("pipeline %s: music via shared relay for %s", loc.ZipCode, streamURL)
+			log.Printf("pipeline [%s]: music via shared relay for %s", loc.ZipCode, streamURL)
 		} else {
 			// Pipe creation failed — fall back to direct connection.
-			log.Printf("pipeline %s: relay pipe failed, using direct connection for %s", loc.ZipCode, streamURL)
+			log.Printf("pipeline [%s]: relay pipe failed, using direct connection for %s", loc.ZipCode, streamURL)
 			music = stream.NewStreamSource(streamURL)
 			relay = nil
 		}
@@ -430,11 +430,11 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 		defer close(locationReady)
 		if err := wc.Bootstrap(ctx); err != nil {
 			if ctx.Err() == nil {
-				log.Printf("pipeline %s: bootstrap failed: %v", loc.ZipCode, err)
+				log.Printf("pipeline [%s]: bootstrap failed: %v", loc.ZipCode, err)
 			}
 			return
 		}
-		log.Printf("pipeline %s: weather ready (%s)", loc.ZipCode, wc.Location())
+		log.Printf("pipeline [%s]: weather ready (%s)", loc.ZipCode, wc.Location())
 		go wc.Run(ctx, m.cfg.WeatherRefresh, func() bool { return hub.ClientCount() > 0 })
 	}()
 
@@ -467,16 +467,16 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 				waitCtx, waitCancel := context.WithTimeout(ctx, 5*time.Second)
 				defer waitCancel()
 				if err := curRelay.WaitConnected(waitCtx); err != nil {
-					log.Printf("pipeline %s: music relay wait: %v (audio may be delayed)", loc.ZipCode, err)
+					log.Printf("pipeline [%s]: music relay wait: %v (audio may be delayed)", loc.ZipCode, err)
 				}
 			}()
 		}
 		hub.ResetFlushWindow()
 		// Resume FFmpeg if it was suspended by OnIdle.
 		if err := ff.Resume(); err != nil {
-			log.Printf("pipeline %s: ffmpeg resume: %v", loc.ZipCode, err)
+			log.Printf("pipeline [%s]: ffmpeg resume: %v", loc.ZipCode, err)
 		} else {
-			log.Printf("pipeline %s: ffmpeg resumed (viewer connected)", loc.ZipCode)
+			log.Printf("pipeline [%s]: ffmpeg resumed (viewer connected)", loc.ZipCode)
 		}
 		wc.Wake() // trigger immediate weather refresh with fresh data
 	}
@@ -497,9 +497,9 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 			curRelay.SetActive(curPipe, false)
 		}
 		if err := ff.Suspend(); err != nil {
-			log.Printf("pipeline %s: ffmpeg suspend: %v", loc.ZipCode, err)
+			log.Printf("pipeline [%s]: ffmpeg suspend: %v", loc.ZipCode, err)
 		} else {
-			log.Printf("pipeline %s: ffmpeg suspended (no viewers)", loc.ZipCode)
+			log.Printf("pipeline [%s]: ffmpeg suspended (no viewers)", loc.ZipCode)
 		}
 	}
 
@@ -523,7 +523,7 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 		tzLoc)
 	go func() {
 		if err := p.rnd.Run(ctx); err != nil && ctx.Err() == nil {
-			log.Printf("pipeline %s: renderer: %v", loc.ZipCode, err)
+			log.Printf("pipeline [%s]: renderer: %v", loc.ZipCode, err)
 		}
 		ff.Stdin().Close()
 		ff.Wait()
@@ -540,7 +540,7 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 		}
 	}()
 
-	log.Printf("pipeline %s: started (%dx%d @ %dfps)", loc.ZipCode, m.cfg.Width, m.cfg.Height, m.cfg.FrameRate)
+	log.Printf("pipeline [%s]: started (%dx%d @ %dfps)", loc.ZipCode, m.cfg.Width, m.cfg.Height, m.cfg.FrameRate)
 	return p, nil
 }
 
@@ -603,5 +603,5 @@ func (m *Manager) rotateRelay(p *Pipeline, ctx context.Context) {
 		}
 	}
 
-	log.Printf("pipeline %s: rotated music to %s", p.zip, newName)
+	log.Printf("pipeline [%s]: rotated music to %s", p.zip, newName)
 }
