@@ -1056,3 +1056,818 @@ func RenderMoonPhaseSheet(path string) error {
 	fmt.Printf("wrote %s (%dx%d)\n", path, int(w), int(h))
 	return nil
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// Holiday Icons
+// ────────────────────────────────────────────────────────────────────────────
+
+// drawHolidayHeart draws a red heart (Valentine's Day).
+func drawHolidayHeart(dc *gg.Context, cx, cy, size float64) {
+	s := size * 0.35
+	dc.SetRGB(0.9, 0.1, 0.2)
+	// Heart as a single bezier path — no seams.
+	dc.NewSubPath()
+	dc.MoveTo(cx, cy+s*0.8) // bottom point
+	// Left side.
+	dc.CubicTo(cx-s*1.0, cy+s*0.1, cx-s*1.0, cy-s*0.6, cx-s*0.5, cy-s*0.75)
+	// Top-left bump to center dip.
+	dc.CubicTo(cx-s*0.15, cy-s*0.85, cx, cy-s*0.55, cx, cy-s*0.4)
+	// Center dip to top-right bump.
+	dc.CubicTo(cx, cy-s*0.55, cx+s*0.15, cy-s*0.85, cx+s*0.5, cy-s*0.75)
+	// Right side.
+	dc.CubicTo(cx+s*1.0, cy-s*0.6, cx+s*1.0, cy+s*0.1, cx, cy+s*0.8)
+	dc.ClosePath()
+	dc.Fill()
+}
+
+// drawHolidayShamrock draws a green four-leaf clover (St. Patrick's Day).
+func drawHolidayShamrock(dc *gg.Context, cx, cy, size float64) {
+	// Stem drawn first so leaves cover it.
+	dc.SetRGB(0.05, 0.5, 0.1)
+	dc.SetLineWidth(size * 0.03)
+	dc.MoveTo(cx, cy+size*0.02)
+	dc.CubicTo(cx+size*0.04, cy+size*0.18, cx-size*0.03, cy+size*0.28, cx+size*0.02, cy+size*0.38)
+	dc.Stroke()
+
+	// Draw each leaf as a heart shape rotated toward center.
+	// Each leaf: two lobes + a V-point aimed at center.
+	lr := size * 0.085      // lobe radius
+	leafDist := size * 0.12 // distance from center to leaf center
+	leafAngles := []float64{
+		-math.Pi / 2, // top
+		0,            // right
+		math.Pi / 2,  // bottom
+		math.Pi,      // left
+	}
+	leafColors := [][3]float64{
+		{0.1, 0.72, 0.22},
+		{0.08, 0.68, 0.18},
+		{0.12, 0.74, 0.24},
+		{0.08, 0.66, 0.2},
+	}
+
+	for i, la := range leafAngles {
+		lc := leafColors[i]
+		dc.SetRGB(lc[0], lc[1], lc[2])
+		// Leaf center position.
+		lx := cx + leafDist*math.Cos(la)
+		ly := cy + leafDist*math.Sin(la)
+		// The two lobes sit perpendicular to the leaf direction.
+		perp := la + math.Pi/2
+		lobeOff := lr * 0.6
+		// Lobe 1.
+		dc.DrawCircle(lx+lobeOff*math.Cos(perp), ly+lobeOff*math.Sin(perp), lr)
+		dc.Fill()
+		// Lobe 2.
+		dc.DrawCircle(lx-lobeOff*math.Cos(perp), ly-lobeOff*math.Sin(perp), lr)
+		dc.Fill()
+		// V-point toward center.
+		tipDist := lr * 1.6
+		tipX := lx + tipDist*math.Cos(la+math.Pi)
+		tipY := ly + tipDist*math.Sin(la+math.Pi)
+		wingDist := lr * 1.1
+		dc.MoveTo(lx+wingDist*math.Cos(perp), ly+wingDist*math.Sin(perp))
+		dc.LineTo(tipX, tipY)
+		dc.LineTo(lx-wingDist*math.Cos(perp), ly-wingDist*math.Sin(perp))
+		dc.ClosePath()
+		dc.Fill()
+
+		// Dark line down the center of each leaf for definition.
+		dc.SetRGBA(0.03, 0.4, 0.08, 0.5)
+		dc.SetLineWidth(size * 0.008)
+		dc.DrawLine(lx-lr*0.3*math.Cos(la), ly-lr*0.3*math.Sin(la),
+			tipX, tipY)
+		dc.Stroke()
+		dc.SetRGB(lc[0], lc[1], lc[2])
+	}
+}
+
+// drawHolidayChampagne draws a champagne flute with bubbles (New Year's Day).
+func drawHolidayChampagne(dc *gg.Context, cx, cy, size float64) {
+	// Flute — tall narrow glass, slight taper.
+	topW := size * 0.08
+	botW := size * 0.05
+	fluteTop := cy - size*0.3
+	fluteBot := cy + size*0.02
+	// Glass outline.
+	dc.SetRGBA(0.8, 0.88, 1.0, 0.45)
+	dc.MoveTo(cx-topW, fluteTop)
+	dc.LineTo(cx+topW, fluteTop)
+	dc.LineTo(cx+botW, fluteBot)
+	dc.LineTo(cx-botW, fluteBot)
+	dc.ClosePath()
+	dc.Fill()
+	// Rim — thin line at top.
+	dc.SetRGBA(0.9, 0.92, 1.0, 0.7)
+	dc.SetLineWidth(size * 0.01)
+	dc.DrawLine(cx-topW, fluteTop, cx+topW, fluteTop)
+	dc.Stroke()
+	// Champagne liquid — fills lower 60%.
+	liquidTop := fluteTop + (fluteBot-fluteTop)*0.4
+	lTopW := topW - (topW-botW)*0.4
+	dc.SetRGBA(1.0, 0.85, 0.3, 0.7)
+	dc.MoveTo(cx-lTopW, liquidTop)
+	dc.LineTo(cx+lTopW, liquidTop)
+	dc.LineTo(cx+botW, fluteBot)
+	dc.LineTo(cx-botW, fluteBot)
+	dc.ClosePath()
+	dc.Fill()
+	// Thin stem.
+	dc.SetRGBA(0.8, 0.88, 1.0, 0.6)
+	dc.SetLineWidth(size * 0.015)
+	stemBot := cy + size*0.18
+	dc.DrawLine(cx, fluteBot, cx, stemBot)
+	dc.Stroke()
+	// Small round base.
+	dc.SetLineWidth(size * 0.015)
+	dc.DrawEllipse(cx, stemBot+size*0.01, size*0.06, size*0.015)
+	dc.Stroke()
+	// Bubbles rising from glass.
+	dc.SetRGBA(1.0, 1.0, 0.85, 0.7)
+	bubbles := [][3]float64{
+		{cx - size*0.02, fluteTop - size*0.04, size * 0.012},
+		{cx + size*0.03, fluteTop - size*0.09, size * 0.01},
+		{cx - size*0.01, fluteTop - size*0.15, size * 0.008},
+		{cx + size*0.02, fluteTop - size*0.2, size * 0.007},
+		{cx, fluteTop - size*0.26, size * 0.006},
+	}
+	for _, b := range bubbles {
+		dc.DrawCircle(b[0], b[1], b[2])
+		dc.Fill()
+	}
+}
+
+// drawHolidayFirework draws a red/white/blue firework with sparkles (Independence Day).
+func drawHolidayFirework(dc *gg.Context, cx, cy, size float64) {
+	colors := [][3]float64{
+		{1.0, 0.2, 0.2}, {1.0, 1.0, 1.0}, {0.2, 0.4, 1.0},
+		{1.0, 0.2, 0.2}, {1.0, 1.0, 1.0}, {0.2, 0.4, 1.0},
+		{1.0, 0.2, 0.2}, {1.0, 1.0, 1.0}, {0.2, 0.4, 1.0},
+		{1.0, 0.2, 0.2}, {1.0, 1.0, 1.0}, {0.2, 0.4, 1.0},
+	}
+	inner := size * 0.08
+	dc.SetLineWidth(size * 0.03)
+	for i := 0; i < 12; i++ {
+		a := float64(i) * math.Pi / 6
+		// Alternate long and short rays.
+		outer := size * 0.38
+		if i%2 == 1 {
+			outer = size * 0.25
+		}
+		c := colors[i]
+		dc.SetRGB(c[0], c[1], c[2])
+		dc.DrawLine(cx+inner*math.Cos(a), cy+inner*math.Sin(a),
+			cx+outer*math.Cos(a), cy+outer*math.Sin(a))
+		dc.Stroke()
+		dc.DrawCircle(cx+outer*math.Cos(a), cy+outer*math.Sin(a), size*0.02)
+		dc.Fill()
+	}
+	// Sparkles between the rays.
+	dc.SetRGB(1.0, 1.0, 0.8)
+	sparkleR := size * 0.3
+	for i := 0; i < 8; i++ {
+		a := float64(i)*math.Pi/4 + math.Pi/8
+		sx := cx + sparkleR*math.Cos(a)
+		sy := cy + sparkleR*math.Sin(a)
+		// Four-pointed star sparkle.
+		sr := size * 0.025
+		dc.SetLineWidth(size * 0.012)
+		dc.DrawLine(sx-sr, sy, sx+sr, sy)
+		dc.Stroke()
+		dc.DrawLine(sx, sy-sr, sx, sy+sr)
+		dc.Stroke()
+	}
+	dc.SetRGB(1.0, 1.0, 0.9)
+	dc.DrawCircle(cx, cy, size*0.06)
+	dc.Fill()
+}
+
+// drawHolidayPumpkin draws an orange pumpkin with a face (Halloween).
+func drawHolidayPumpkin(dc *gg.Context, cx, cy, size float64) {
+	r := size * 0.3
+	dc.SetRGB(1.0, 0.55, 0.1)
+	dc.DrawEllipse(cx, cy, r*1.1, r)
+	dc.Fill()
+	dc.SetRGB(0.9, 0.45, 0.05)
+	dc.DrawEllipse(cx-r*0.5, cy, r*0.7, r*0.95)
+	dc.Fill()
+	dc.DrawEllipse(cx+r*0.5, cy, r*0.7, r*0.95)
+	dc.Fill()
+	// Stem.
+	dc.SetRGB(0.3, 0.5, 0.1)
+	dc.DrawRoundedRectangle(cx-size*0.02, cy-r-size*0.08, size*0.04, size*0.1, 2)
+	dc.Fill()
+	// Face.
+	dc.SetRGB(0.15, 0.1, 0.0)
+	dc.MoveTo(cx-r*0.4, cy-r*0.15)
+	dc.LineTo(cx-r*0.2, cy-r*0.15)
+	dc.LineTo(cx-r*0.3, cy-r*0.4)
+	dc.ClosePath()
+	dc.Fill()
+	dc.MoveTo(cx+r*0.2, cy-r*0.15)
+	dc.LineTo(cx+r*0.4, cy-r*0.15)
+	dc.LineTo(cx+r*0.3, cy-r*0.4)
+	dc.ClosePath()
+	dc.Fill()
+	dc.SetLineWidth(size * 0.025)
+	dc.MoveTo(cx-r*0.5, cy+r*0.3)
+	dc.LineTo(cx-r*0.3, cy+r*0.15)
+	dc.LineTo(cx-r*0.1, cy+r*0.35)
+	dc.LineTo(cx+r*0.1, cy+r*0.15)
+	dc.LineTo(cx+r*0.3, cy+r*0.35)
+	dc.LineTo(cx+r*0.5, cy+r*0.3)
+	dc.Stroke()
+}
+
+// drawHolidayTree draws a Christmas tree with a star on top.
+func drawHolidayTree(dc *gg.Context, cx, cy, size float64) {
+	h := size * 0.35
+	dc.SetRGB(0.1, 0.55, 0.2)
+	for i := 0; i < 3; i++ {
+		baseW := size * (0.14 + float64(i)*0.07)
+		top := cy - h + float64(i)*h*0.35
+		bot := top + h*0.55
+		dc.MoveTo(cx, top)
+		dc.LineTo(cx-baseW, bot)
+		dc.LineTo(cx+baseW, bot)
+		dc.ClosePath()
+		dc.Fill()
+	}
+	dc.SetRGB(0.45, 0.25, 0.1)
+	trunkW := size * 0.035
+	dc.DrawRectangle(cx-trunkW, cy+h*0.4, trunkW*2, size*0.08)
+	dc.Fill()
+	// Star on top.
+	dc.SetRGB(1.0, 1.0, 0.3)
+	dc.DrawCircle(cx, cy-h+size*0.01, size*0.045)
+	dc.Fill()
+	// Ornaments — evenly distributed across the three tiers.
+	ornaments := []struct {
+		x, y    float64
+		r, g, b float64
+	}{
+		{cx + size*0.03, cy - h*0.4, 0.9, 0.2, 0.8},  // top tier — purple
+		{cx - size*0.07, cy - h*0.05, 1.0, 0.2, 0.2}, // mid tier left — red
+		{cx + size*0.08, cy - h*0.1, 0.2, 0.4, 1.0},  // mid tier right — blue
+		{cx - size*0.12, cy + h*0.22, 1.0, 0.8, 0.1}, // bottom tier left — gold
+		{cx, cy + h*0.28, 0.3, 0.9, 0.9},             // bottom tier center — cyan
+		{cx + size*0.13, cy + h*0.18, 1.0, 0.3, 0.3}, // bottom tier right — red
+	}
+	for _, o := range ornaments {
+		dc.SetRGB(o.r, o.g, o.b)
+		dc.DrawCircle(o.x, o.y, size*0.022)
+		dc.Fill()
+	}
+}
+
+// drawHolidayEgg draws a decorated Easter egg.
+func drawHolidayEgg(dc *gg.Context, cx, cy, size float64) {
+	rx := size * 0.17
+	ry := size * 0.24
+	dc.SetRGB(0.7, 0.85, 1.0)
+	dc.DrawEllipse(cx, cy, rx, ry)
+	dc.Fill()
+	// Stripes clipped to the egg shape — draw as filled bands.
+	stripeColors := [][3]float64{
+		{1.0, 0.4, 0.5}, {0.4, 0.8, 0.4}, {0.9, 0.8, 0.2},
+	}
+	bandH := size * 0.03
+	for i, sc := range stripeColors {
+		y := cy - ry*0.4 + float64(i)*ry*0.4
+		dc.SetRGB(sc[0], sc[1], sc[2])
+		// Compute the egg width at this y position.
+		dy := (y - cy) / ry
+		if math.Abs(dy) >= 1 {
+			continue
+		}
+		halfW := rx * math.Sqrt(1-dy*dy)
+		dc.DrawRectangle(cx-halfW+1, y-bandH/2, 2*(halfW-1), bandH)
+		dc.Fill()
+	}
+}
+
+// drawHolidayTurkey draws a simple turkey (Thanksgiving).
+func drawHolidayTurkey(dc *gg.Context, cx, cy, size float64) {
+	r := size * 0.15
+	featherColors := [][3]float64{
+		{0.8, 0.2, 0.1}, {1.0, 0.5, 0.1}, {1.0, 0.8, 0.2},
+		{0.6, 0.3, 0.1}, {0.9, 0.3, 0.2},
+	}
+	for i, fc := range featherColors {
+		a := -math.Pi/2 + float64(i-2)*math.Pi/8
+		fx := cx + r*1.5*math.Cos(a)
+		fy := cy + r*1.5*math.Sin(a) + r*0.2
+		dc.SetRGB(fc[0], fc[1], fc[2])
+		dc.DrawEllipse(fx, fy, r*0.35, r*0.9)
+		dc.Fill()
+	}
+	dc.SetRGB(0.5, 0.3, 0.15)
+	dc.DrawCircle(cx, cy+r*0.3, r)
+	dc.Fill()
+	dc.DrawCircle(cx, cy-r*0.5, r*0.5)
+	dc.Fill()
+	dc.SetRGB(1.0, 0.7, 0.2)
+	dc.MoveTo(cx+r*0.5, cy-r*0.5)
+	dc.LineTo(cx+r*0.8, cy-r*0.35)
+	dc.LineTo(cx+r*0.5, cy-r*0.3)
+	dc.ClosePath()
+	dc.Fill()
+	dc.SetRGB(0.9, 0.2, 0.15)
+	dc.DrawCircle(cx+r*0.15, cy-r*0.2, r*0.15)
+	dc.Fill()
+	// Legs and feet.
+	dc.SetRGB(1.0, 0.7, 0.2)
+	dc.SetLineWidth(size * 0.02)
+	legTop := cy + r*1.1
+	legBot := cy + r*1.8
+	// Left leg.
+	dc.DrawLine(cx-r*0.3, legTop, cx-r*0.3, legBot)
+	dc.Stroke()
+	// Left foot — three toes.
+	dc.DrawLine(cx-r*0.3, legBot, cx-r*0.55, legBot+r*0.2)
+	dc.Stroke()
+	dc.DrawLine(cx-r*0.3, legBot, cx-r*0.3, legBot+r*0.25)
+	dc.Stroke()
+	dc.DrawLine(cx-r*0.3, legBot, cx-r*0.1, legBot+r*0.2)
+	dc.Stroke()
+	// Right leg.
+	dc.DrawLine(cx+r*0.3, legTop, cx+r*0.3, legBot)
+	dc.Stroke()
+	// Right foot.
+	dc.DrawLine(cx+r*0.3, legBot, cx+r*0.05, legBot+r*0.2)
+	dc.Stroke()
+	dc.DrawLine(cx+r*0.3, legBot, cx+r*0.3, legBot+r*0.25)
+	dc.Stroke()
+	dc.DrawLine(cx+r*0.3, legBot, cx+r*0.5, legBot+r*0.2)
+	dc.Stroke()
+}
+
+// drawHolidayDove draws a white dove outline (Martin Luther King Jr. Day).
+func drawHolidayDove(dc *gg.Context, cx, cy, size float64) {
+	s := size * 0.35
+	dc.SetRGB(0.95, 0.95, 1.0)
+	dc.SetLineWidth(size * 0.02)
+
+	// Dove silhouette as a single continuous path — body, head, beak,
+	// back to body, tail, wing sweep.
+	// Body curve — start at tail, go along belly to chest.
+	dc.NewSubPath()
+	dc.MoveTo(cx-s*0.8, cy+s*0.1)                                           // tail tip
+	dc.CubicTo(cx-s*0.3, cy+s*0.15, cx+s*0.1, cy+s*0.4, cx+s*0.4, cy+s*0.2) // belly
+	dc.CubicTo(cx+s*0.6, cy+s*0.1, cx+s*0.7, cy-s*0.1, cx+s*0.55, cy-s*0.3) // chest to head
+	// Head bump.
+	dc.CubicTo(cx+s*0.45, cy-s*0.5, cx+s*0.2, cy-s*0.45, cx+s*0.15, cy-s*0.3) // head
+	// Back line to tail.
+	dc.CubicTo(cx-s*0.1, cy-s*0.15, cx-s*0.5, cy-s*0.1, cx-s*0.8, cy+s*0.1) // back
+	dc.ClosePath()
+	dc.FillPreserve()
+	dc.SetRGB(0.85, 0.85, 0.9)
+	dc.Stroke()
+
+	// Wing line across the body.
+	dc.SetRGB(0.82, 0.82, 0.88)
+	dc.SetLineWidth(size * 0.015)
+	dc.NewSubPath()
+	dc.MoveTo(cx+s*0.2, cy+s*0.05)
+	dc.CubicTo(cx, cy-s*0.15, cx-s*0.3, cy-s*0.1, cx-s*0.6, cy+s*0.05)
+	dc.Stroke()
+
+	// Eye.
+	dc.SetRGB(0.2, 0.2, 0.3)
+	dc.DrawCircle(cx+s*0.4, cy-s*0.3, s*0.04)
+	dc.Fill()
+
+	// Beak.
+	dc.SetRGB(1.0, 0.7, 0.2)
+	dc.SetLineWidth(size * 0.012)
+	dc.MoveTo(cx+s*0.55, cy-s*0.22)
+	dc.LineTo(cx+s*0.75, cy-s*0.18)
+	dc.LineTo(cx+s*0.55, cy-s*0.14)
+	dc.Stroke()
+
+	// Olive branch in beak.
+	dc.SetRGB(0.2, 0.6, 0.2)
+	dc.SetLineWidth(size * 0.01)
+	dc.MoveTo(cx+s*0.65, cy-s*0.15)
+	dc.CubicTo(cx+s*0.5, cy+s*0.1, cx+s*0.2, cy+s*0.15, cx, cy+s*0.1)
+	dc.Stroke()
+	// Leaves.
+	for i := 0; i < 3; i++ {
+		t := 0.3 + float64(i)*0.25
+		bx := cx + s*(0.65-t*0.65)
+		by := cy + s*(-0.15+t*0.25)
+		dc.DrawCircle(bx, by-s*0.04, s*0.035)
+		dc.Fill()
+	}
+}
+
+// drawHolidayShield draws a red/white/blue shield (Presidents' Day).
+func drawHolidayShield(dc *gg.Context, cx, cy, size float64) {
+	s := size * 0.35
+	// Shield outline path — flat top, pointed bottom.
+	dc.NewSubPath()
+	dc.MoveTo(cx-s*0.7, cy-s*0.7)
+	dc.LineTo(cx+s*0.7, cy-s*0.7)
+	dc.LineTo(cx+s*0.7, cy+s*0.1)
+	dc.CubicTo(cx+s*0.65, cy+s*0.6, cx+s*0.2, cy+s*0.9, cx, cy+s*1.0)
+	dc.CubicTo(cx-s*0.2, cy+s*0.9, cx-s*0.65, cy+s*0.6, cx-s*0.7, cy+s*0.1)
+	dc.ClosePath()
+
+	// Fill white base.
+	dc.SetRGB(1.0, 1.0, 1.0)
+	dc.FillPreserve()
+
+	// Red stripes — clip to shield shape.
+	dc.Clip()
+	dc.SetRGB(0.8, 0.12, 0.15)
+	stripeH := s * 0.22
+	for i := 0; i < 7; i += 2 {
+		y := cy - s*0.7 + float64(i)*stripeH
+		dc.DrawRectangle(cx-s, y, s*2, stripeH)
+		dc.Fill()
+	}
+
+	// Blue canton (upper left).
+	dc.SetRGB(0.15, 0.2, 0.55)
+	dc.DrawRectangle(cx-s*0.7, cy-s*0.7, s*0.65, s*0.65)
+	dc.Fill()
+
+	// Stars in the canton.
+	dc.SetRGB(1.0, 1.0, 1.0)
+	starPositions := [][2]float64{
+		{cx - s*0.55, cy - s*0.55},
+		{cx - s*0.38, cy - s*0.55},
+		{cx - s*0.55, cy - s*0.35},
+		{cx - s*0.38, cy - s*0.35},
+		{cx - s*0.47, cy - s*0.45},
+	}
+	for _, sp := range starPositions {
+		dc.DrawCircle(sp[0], sp[1], s*0.045)
+		dc.Fill()
+	}
+	dc.ResetClip()
+
+	// Shield outline.
+	dc.SetRGB(0.3, 0.3, 0.35)
+	dc.SetLineWidth(size * 0.015)
+	dc.NewSubPath()
+	dc.MoveTo(cx-s*0.7, cy-s*0.7)
+	dc.LineTo(cx+s*0.7, cy-s*0.7)
+	dc.LineTo(cx+s*0.7, cy+s*0.1)
+	dc.CubicTo(cx+s*0.65, cy+s*0.6, cx+s*0.2, cy+s*0.9, cx, cy+s*1.0)
+	dc.CubicTo(cx-s*0.2, cy+s*0.9, cx-s*0.65, cy+s*0.6, cx-s*0.7, cy+s*0.1)
+	dc.ClosePath()
+	dc.Stroke()
+}
+
+// drawHolidayPoppy draws a red poppy flower (Memorial Day).
+func drawHolidayPoppy(dc *gg.Context, cx, cy, size float64) {
+	r := size * 0.14
+	// Stem drawn first so petals cover it.
+	dc.SetRGB(0.15, 0.5, 0.15)
+	dc.SetLineWidth(size * 0.025)
+	dc.MoveTo(cx, cy+r*1.0)
+	dc.CubicTo(cx-r*0.3, cy+r*2.0, cx+r*0.2, cy+r*2.8, cx-r*0.1, cy+r*3.2)
+	dc.Stroke()
+	// Petals — five overlapping red circles.
+	dc.SetRGB(0.85, 0.1, 0.1)
+	for i := 0; i < 5; i++ {
+		a := float64(i) * 2 * math.Pi / 5
+		px := cx + r*0.6*math.Cos(a)
+		py := cy + r*0.6*math.Sin(a)
+		dc.DrawCircle(px, py, r)
+		dc.Fill()
+	}
+	// Dark center.
+	dc.SetRGB(0.15, 0.1, 0.1)
+	dc.DrawCircle(cx, cy, r*0.4)
+	dc.Fill()
+}
+
+// drawHolidayJuneteenth draws an open birdcage with a bird flying free (Juneteenth).
+func drawHolidayJuneteenth(dc *gg.Context, cx, cy, size float64) {
+	s := size * 0.28
+
+	// Cage centered below, bird above.
+	cageX := cx
+	cageTop := cy + s*0.05
+	cageBot := cageTop + s*1.4
+	cageW := s * 0.8
+
+	dc.SetRGB(0.5, 0.5, 0.55)
+	lw := size * 0.013
+	dc.SetLineWidth(lw)
+
+	// Cage dome — smooth arc connecting to sides.
+	dc.NewSubPath()
+	dc.MoveTo(cageX-cageW/2, cageBot)
+	dc.LineTo(cageX-cageW/2, cageTop+s*0.3)
+	dc.CubicTo(cageX-cageW/2, cageTop-s*0.2, cageX+cageW/2, cageTop-s*0.2, cageX+cageW/2, cageTop+s*0.3)
+	dc.LineTo(cageX+cageW/2, cageBot)
+	dc.Stroke()
+
+	// Bottom bar.
+	dc.DrawLine(cageX-cageW/2, cageBot, cageX+cageW/2, cageBot)
+	dc.Stroke()
+
+	// Vertical bars.
+	for i := -1; i <= 1; i++ {
+		bx := cageX + float64(i)*cageW*0.3
+		// Bar from dome curve down to bottom.
+		barTop := cageTop + s*0.1 - float64((2-i*i))*s*0.08
+		dc.DrawLine(bx, barTop, bx, cageBot)
+		dc.Stroke()
+	}
+
+	// Hook/ring at top.
+	dc.DrawCircle(cageX, cageTop-s*0.3, s*0.1)
+	dc.Stroke()
+	dc.DrawLine(cageX, cageTop-s*0.2, cageX, cageTop-s*0.05)
+	dc.Stroke()
+
+	// Open door — right side, swung open.
+	dc.SetLineWidth(lw * 0.9)
+	doorTop := cageTop + s*0.35
+	doorBot := doorTop + s*0.55
+	dc.MoveTo(cageX+cageW/2, doorTop)
+	dc.LineTo(cageX+cageW/2+s*0.35, doorTop-s*0.15)
+	dc.LineTo(cageX+cageW/2+s*0.35, doorBot-s*0.15)
+	dc.LineTo(cageX+cageW/2, doorBot)
+	dc.Stroke()
+
+	// Bird — flying up and to the right, above the cage.
+	birdX := cx + s*0.5
+	birdY := cy - s*0.7
+	dc.SetRGB(1.0, 0.82, 0.2) // golden yellow
+
+	// Bird body — filled path for a clean silhouette.
+	dc.NewSubPath()
+	dc.MoveTo(birdX+s*0.25, birdY)                                                                // beak tip
+	dc.CubicTo(birdX+s*0.15, birdY-s*0.08, birdX+s*0.05, birdY-s*0.1, birdX-s*0.05, birdY-s*0.05) // head
+	dc.CubicTo(birdX-s*0.15, birdY, birdX-s*0.25, birdY+s*0.05, birdX-s*0.3, birdY+s*0.02)        // back
+	dc.CubicTo(birdX-s*0.35, birdY+s*0.08, birdX-s*0.4, birdY+s*0.12, birdX-s*0.45, birdY+s*0.05) // tail
+	dc.CubicTo(birdX-s*0.35, birdY+s*0.12, birdX-s*0.15, birdY+s*0.12, birdX, birdY+s*0.08)       // belly
+	dc.CubicTo(birdX+s*0.1, birdY+s*0.05, birdX+s*0.2, birdY+s*0.02, birdX+s*0.25, birdY)         // chest to beak
+	dc.ClosePath()
+	dc.Fill()
+
+	// Wings — two curved strokes spreading upward.
+	dc.SetLineWidth(size * 0.018)
+	dc.SetRGB(1.0, 0.85, 0.3)
+	// Left wing.
+	dc.NewSubPath()
+	dc.MoveTo(birdX-s*0.1, birdY)
+	dc.CubicTo(birdX-s*0.3, birdY-s*0.3, birdX-s*0.5, birdY-s*0.4, birdX-s*0.6, birdY-s*0.25)
+	dc.Stroke()
+	// Right wing.
+	dc.NewSubPath()
+	dc.MoveTo(birdX+s*0.05, birdY-s*0.03)
+	dc.CubicTo(birdX+s*0.1, birdY-s*0.3, birdX+s*0.25, birdY-s*0.4, birdX+s*0.35, birdY-s*0.3)
+	dc.Stroke()
+
+	// Eye.
+	dc.SetRGB(0.2, 0.15, 0.1)
+	dc.DrawCircle(birdX+s*0.13, birdY-s*0.04, s*0.025)
+	dc.Fill()
+}
+
+// drawHolidayTools draws crossed hammer and wrench (Labor Day).
+func drawHolidayTools(dc *gg.Context, cx, cy, size float64) {
+	s := size * 0.32
+
+	// Both tools cross at the center, each angled ~45 degrees.
+	// Wrench: upper-left to lower-right.
+	wAngle := math.Pi / 4 // 45 degrees
+	wLen := s * 1.3
+	wx1 := cx - wLen/2*math.Cos(wAngle)
+	wy1 := cy - wLen/2*math.Sin(wAngle)
+	wx2 := cx + wLen/2*math.Cos(wAngle)
+	wy2 := cy + wLen/2*math.Sin(wAngle)
+
+	// Wrench shaft.
+	dc.SetRGB(0.6, 0.6, 0.65)
+	dc.SetLineWidth(size * 0.025)
+	dc.DrawLine(wx1, wy1, wx2, wy2)
+	dc.Stroke()
+
+	// Wrench head at top-left — U-shape open jaw.
+	perp := wAngle + math.Pi/2
+	jawW := s * 0.18
+	jawDepth := s * 0.2
+	// Two prongs of the jaw.
+	dc.SetLineWidth(size * 0.025)
+	p1x := wx1 + jawW*math.Cos(perp)
+	p1y := wy1 + jawW*math.Sin(perp)
+	p2x := wx1 - jawW*math.Cos(perp)
+	p2y := wy1 - jawW*math.Sin(perp)
+	tipX := wx1 - jawDepth*math.Cos(wAngle)
+	tipY := wy1 - jawDepth*math.Sin(wAngle)
+	dc.DrawLine(p1x, p1y, tipX+jawW*math.Cos(perp), tipY+jawW*math.Sin(perp))
+	dc.Stroke()
+	dc.DrawLine(p2x, p2y, tipX-jawW*math.Cos(perp), tipY-jawW*math.Sin(perp))
+	dc.Stroke()
+
+	// Wrench closed end at bottom-right — small circle.
+	dc.SetRGB(0.55, 0.55, 0.6)
+	endX := wx2 + s*0.05*math.Cos(wAngle)
+	endY := wy2 + s*0.05*math.Sin(wAngle)
+	dc.DrawCircle(endX, endY, s*0.1)
+	dc.Stroke()
+
+	// Hammer: upper-right to lower-left, crossing at center.
+	hAngle := -math.Pi / 4 // -45 degrees
+	hLen := s * 1.3
+	hx1 := cx - hLen/2*math.Cos(hAngle) // lower-left (handle end)
+	hy1 := cy - hLen/2*math.Sin(hAngle)
+	hx2 := cx + hLen/2*math.Cos(hAngle) // upper-right (head end)
+	hy2 := cy + hLen/2*math.Sin(hAngle)
+
+	// Hammer handle — brown.
+	dc.SetRGB(0.55, 0.35, 0.15)
+	dc.SetLineWidth(size * 0.025)
+	dc.DrawLine(hx1, hy1, hx2, hy2)
+	dc.Stroke()
+
+	// Hammer head — gray filled rectangle at the upper-right end.
+	dc.SetRGB(0.5, 0.5, 0.55)
+	hPerp := hAngle + math.Pi/2
+	headCX := hx2 + s*0.05*math.Cos(hAngle)
+	headCY := hy2 + s*0.05*math.Sin(hAngle)
+	headL := s * 0.28
+	headW := s * 0.13
+	dc.NewSubPath()
+	dc.MoveTo(headCX-headL*math.Cos(hPerp)-headW*math.Cos(hAngle),
+		headCY-headL*math.Sin(hPerp)-headW*math.Sin(hAngle))
+	dc.LineTo(headCX+headL*math.Cos(hPerp)-headW*math.Cos(hAngle),
+		headCY+headL*math.Sin(hPerp)-headW*math.Sin(hAngle))
+	dc.LineTo(headCX+headL*math.Cos(hPerp)+headW*math.Cos(hAngle),
+		headCY+headL*math.Sin(hPerp)+headW*math.Sin(hAngle))
+	dc.LineTo(headCX-headL*math.Cos(hPerp)+headW*math.Cos(hAngle),
+		headCY-headL*math.Sin(hPerp)+headW*math.Sin(hAngle))
+	dc.ClosePath()
+	dc.Fill()
+}
+
+// drawHolidayFeather draws a decorated feather (Indigenous Peoples' Day).
+func drawHolidayFeather(dc *gg.Context, cx, cy, size float64) {
+	s := size * 0.35
+
+	// Shaft — straight vertical line with a pointed tip at top.
+	shaftTop := cy - s*0.9
+	shaftBot := cy + s*0.9
+
+	// Left vane — smooth curve from tip to base.
+	dc.SetRGB(0.3, 0.55, 0.7)
+	dc.NewSubPath()
+	dc.MoveTo(cx, shaftTop)
+	dc.CubicTo(cx-s*0.5, cy-s*0.4, cx-s*0.45, cy+s*0.1, cx-s*0.15, cy+s*0.4)
+	dc.LineTo(cx, cy+s*0.4)
+	dc.LineTo(cx, shaftTop)
+	dc.ClosePath()
+	dc.Fill()
+
+	// Right vane.
+	dc.SetRGB(0.35, 0.6, 0.75)
+	dc.NewSubPath()
+	dc.MoveTo(cx, shaftTop)
+	dc.CubicTo(cx+s*0.45, cy-s*0.4, cx+s*0.4, cy+s*0.1, cx+s*0.12, cy+s*0.4)
+	dc.LineTo(cx, cy+s*0.4)
+	dc.LineTo(cx, shaftTop)
+	dc.ClosePath()
+	dc.Fill()
+
+	// Shaft drawn on top.
+	dc.SetRGB(0.85, 0.8, 0.7)
+	dc.SetLineWidth(size * 0.018)
+	dc.DrawLine(cx, shaftTop, cx, shaftBot)
+	dc.Stroke()
+
+	// Quill tip — tapers to a point at the bottom.
+	dc.SetRGB(0.9, 0.85, 0.75)
+	dc.SetLineWidth(size * 0.01)
+	dc.DrawLine(cx, cy+s*0.4, cx, shaftBot)
+	dc.Stroke()
+
+	// Decorative bands where vane meets quill.
+	bandY := cy + s*0.42
+	dc.SetLineWidth(size * 0.022)
+	dc.SetRGB(0.85, 0.2, 0.15)
+	dc.DrawLine(cx-s*0.12, bandY, cx+s*0.12, bandY)
+	dc.Stroke()
+	dc.SetRGB(0.9, 0.75, 0.15)
+	dc.DrawLine(cx-s*0.1, bandY+s*0.08, cx+s*0.1, bandY+s*0.08)
+	dc.Stroke()
+	dc.SetRGB(0.2, 0.55, 0.3)
+	dc.DrawLine(cx-s*0.08, bandY+s*0.16, cx+s*0.08, bandY+s*0.16)
+	dc.Stroke()
+}
+
+// drawHolidayMedal draws a military medal/star (Veterans Day).
+func drawHolidayMedal(dc *gg.Context, cx, cy, size float64) {
+	s := size * 0.3
+	// Ribbon — blue with white/red stripes.
+	dc.SetRGB(0.15, 0.25, 0.7)
+	dc.DrawRoundedRectangle(cx-s*0.3, cy-s*0.9, s*0.6, s*0.7, 3)
+	dc.Fill()
+	dc.SetRGB(1.0, 1.0, 1.0)
+	dc.DrawRectangle(cx-s*0.1, cy-s*0.9, s*0.04, s*0.7)
+	dc.Fill()
+	dc.DrawRectangle(cx+s*0.06, cy-s*0.9, s*0.04, s*0.7)
+	dc.Fill()
+	dc.SetRGB(0.8, 0.15, 0.1)
+	dc.DrawRectangle(cx-s*0.02, cy-s*0.9, s*0.04, s*0.7)
+	dc.Fill()
+	// Gold star medal.
+	dc.SetRGB(0.9, 0.75, 0.2)
+	points := 5
+	outerR := s * 0.45
+	innerR := s * 0.18
+	dc.NewSubPath()
+	for i := 0; i < points*2; i++ {
+		a := float64(i)*math.Pi/float64(points) - math.Pi/2
+		r := outerR
+		if i%2 == 1 {
+			r = innerR
+		}
+		x := cx + r*math.Cos(a)
+		y := cy + s*0.15 + r*math.Sin(a)
+		if i == 0 {
+			dc.MoveTo(x, y)
+		} else {
+			dc.LineTo(x, y)
+		}
+	}
+	dc.ClosePath()
+	dc.Fill()
+}
+
+// RenderHolidayIconSheet draws all holiday icons in a grid and saves to path.
+func RenderHolidayIconSheet(path string) error {
+	type entry struct {
+		draw  func(dc *gg.Context, cx, cy, size float64)
+		label string
+	}
+	holidays := []entry{
+		{drawHolidayChampagne, "New Year's Day\nJan 1"},
+		{drawHolidayDove, "MLK Day\n3rd Mon Jan"},
+		{drawHolidayShield, "Presidents' Day\n3rd Mon Feb"},
+		{drawHolidayHeart, "Valentine's Day\nFeb 14"},
+		{drawHolidayShamrock, "St. Patrick's Day\nMar 17"},
+		{drawHolidayEgg, "Easter\n(variable)"},
+		{drawHolidayPoppy, "Memorial Day\nLast Mon May"},
+		{drawHolidayJuneteenth, "Juneteenth\nJun 19"},
+		{drawHolidayFirework, "Independence Day\nJul 4"},
+		{drawHolidayTools, "Labor Day\n1st Mon Sep"},
+		{drawHolidayFeather, "Indigenous Peoples'\n2nd Mon Oct"},
+		{drawHolidayPumpkin, "Halloween\nOct 31"},
+		{drawHolidayMedal, "Veterans Day\nNov 11"},
+		{drawHolidayTurkey, "Thanksgiving\n(variable)"},
+		{drawHolidayTree, "Christmas\nDec 25"},
+	}
+
+	cols := 4
+	rows := (len(holidays) + cols - 1) / cols
+	cellW, cellH := 320.0, 280.0
+	w := float64(cols) * cellW
+	h := float64(rows) * cellH
+
+	dc := gg.NewContext(int(w), int(h))
+
+	for y := 0; y < int(h); y++ {
+		t := float64(y) / h
+		r := 0.063*(1-t) + 0.0*t
+		g := 0.125*(1-t) + 0.063*t
+		b := 0.502*(1-t) + 0.251*t
+		dc.SetRGB(r, g, b)
+		dc.DrawRectangle(0, float64(y), w, 1)
+		dc.Fill()
+	}
+
+	iconSize := 160.0
+	for i, e := range holidays {
+		col := i % cols
+		row := i / cols
+		cx := float64(col)*cellW + cellW/2
+		cy := float64(row)*cellH + cellH/2 - 30
+
+		e.draw(dc, cx, cy, iconSize)
+
+		dc.SetRGB(textR, textG, textB)
+		dc.SetFontFace(defaultFonts.small)
+		lines := strings.Split(e.label, "\n")
+		for j, line := range lines {
+			dc.DrawStringAnchored(line, cx, cy+iconSize/2+16+float64(j)*22, 0.5, 0.5)
+		}
+	}
+
+	f, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("create %s: %w", path, err)
+	}
+	defer f.Close()
+	if err := png.Encode(f, dc.Image()); err != nil {
+		return fmt.Errorf("encode: %w", err)
+	}
+	fmt.Printf("wrote %s (%dx%d)\n", path, int(w), int(h))
+	return nil
+}
