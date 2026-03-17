@@ -205,7 +205,7 @@ func drawHeaderElements(dc *gg.Context, title, location string, use24h bool, loc
 	word1, word2 := "WEATHER", "RUPERT"
 	tw1, _ := dc.MeasureString(word1)
 	tw2, _ := dc.MeasureString(word2)
-	sunSize := 30.0
+	sunSize := 56.0
 	sunGap := 8.0 // space on each side of the sun
 	totalW := tw1 + sunGap + sunSize + sunGap + tw2
 	logoCX := w / 2
@@ -214,27 +214,55 @@ func drawHeaderElements(dc *gg.Context, title, location string, use24h bool, loc
 	padX, padY := 10.0, 7.0
 	boxTop := textBaseline - 22
 	boxBot := textBaseline + 6
-	// Box border.
-	dc.SetRGBA(divR, divG, divB, 0.6)
+	// Box border — lighter cyan.
+	dc.SetRGBA(0.3, 0.75, 0.9, 0.7)
 	dc.SetLineWidth(2.5)
-	dc.DrawRoundedRectangle(textLeft-padX, boxTop-padY, totalW+2*padX, (boxBot-boxTop)+2*padY, 4)
+	boxL := textLeft - padX
+	boxT := boxTop - padY
+	boxW := totalW + 2*padX
+	boxH := (boxBot - boxTop) + 2*padY
+	dc.DrawRoundedRectangle(boxL, boxT, boxW, boxH, 4)
 	dc.Stroke()
+
+	// Sun position — larger than the box so it breaks through the border.
+	sunCX := textLeft + tw1 + sunGap + sunSize/2
+	sunCY := textBaseline - 8
+
+	// Erase the rectangle lines where the sun overflows by drawing a
+	// gradient-matched circle to restore the background behind the sun area.
+	eraseR := sunSize*0.44 + 3 // slightly larger than the outer ray tips
+	hf := float64(dc.Height() - 1)
+	t := sunCY / hf
+	bgGradR := float64(0x10) * (1.0 - t) / 255
+	bgGradG := (float64(0x20)*(1.0-t) + float64(0x10)*t) / 255
+	bgGradB := (float64(0x80)*(1.0-t) + float64(0x40)*t) / 255
+	dc.SetRGB(bgGradR, bgGradG, bgGradB)
+	dc.DrawCircle(sunCX, sunCY, eraseR)
+	dc.Fill()
+
 	// "WEATHER" text.
 	dc.SetFontFace(fonts.mediumBold)
 	dc.SetRGBA(0, 0, 0, 0.6)
 	dc.DrawString(word1, textLeft+2, textBaseline+2)
-	dc.SetRGB(0.4, 0.9, 1.0)
+	dc.SetRGB(0.8, 0.97, 1.0)
 	dc.DrawString(word1, textLeft, textBaseline)
-	// Pale yellow sun icon between the words.
-	sunCX := textLeft + tw1 + sunGap + sunSize/2
-	sunCY := textBaseline - 8 // vertically centered with text
-	paleR, paleG, paleB := 1.0, 1.0, 0.6
 	sunR := sunSize * 0.27
 	inner := sunSize * 0.32
 	outer := sunSize * 0.40
-	dc.SetRGB(paleR, paleG, paleB)
-	dc.SetLineWidth(sunSize * 0.06)
+	rayColors := [][3]float64{
+		{1.0, 0.3, 0.3}, // red
+		{1.0, 0.6, 0.2}, // orange
+		{1.0, 1.0, 0.3}, // yellow
+		{0.4, 1.0, 0.4}, // green
+		{0.3, 0.8, 1.0}, // cyan
+		{0.4, 0.4, 1.0}, // blue
+		{0.7, 0.3, 1.0}, // purple
+		{1.0, 0.4, 0.7}, // pink
+	}
+	dc.SetLineWidth(sunSize * 0.07)
 	for j := 0; j < 8; j++ {
+		rc := rayColors[j]
+		dc.SetRGB(rc[0], rc[1], rc[2])
 		a := float64(j) * math.Pi / 4
 		dc.DrawLine(
 			sunCX+inner*math.Cos(a), sunCY+inner*math.Sin(a),
@@ -242,6 +270,7 @@ func drawHeaderElements(dc *gg.Context, title, location string, use24h bool, loc
 		)
 		dc.Stroke()
 	}
+	dc.SetRGB(1.0, 1.0, 0.6)
 	dc.DrawCircle(sunCX, sunCY, sunR)
 	dc.Fill()
 	// Smiley face on the sun.
@@ -273,7 +302,7 @@ func drawHeaderElements(dc *gg.Context, title, location string, use24h bool, loc
 	dc.SetFontFace(fonts.mediumBold)
 	dc.SetRGBA(0, 0, 0, 0.6)
 	dc.DrawString(word2, word2Left+2, textBaseline+2)
-	dc.SetRGB(0.4, 0.9, 1.0)
+	dc.SetRGB(0.8, 0.97, 1.0)
 	dc.DrawString(word2, word2Left, textBaseline)
 
 	// Date + time — right-aligned, vertically centred in the header band.
