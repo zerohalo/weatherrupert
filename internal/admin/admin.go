@@ -147,7 +147,7 @@ type Store struct {
 	triviaAPIItems       []trivia.TriviaItem // filtered view of cache for current category
 	triviaAPICache       []trivia.TriviaItem // all cached API items across all categories
 	realisticMoonIcons   bool                // when true, night icons use phase-accurate moon instead of crescent
-	funSunIcons          bool                // when true, sun icons use rainbow rays and smiley face
+	funSunIcons          bool                // when true, sun icons use rainbow-colored rays
 	satelliteProduct     string              // "IR" (infrared) or "VIS" (visible); default: "IR"
 	clockFormat          string              // default clock format: "12" or "24"
 	unitSystem           string              // default unit system: "imperial" or "metric"
@@ -665,7 +665,7 @@ func (s *Store) RealisticMoonIcons() bool {
 	return s.realisticMoonIcons
 }
 
-// FunSunIcons reports whether sun icons use rainbow rays and a smiley face.
+// FunSunIcons reports whether sun icons use rainbow-colored rays.
 func (s *Store) FunSunIcons() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -1673,7 +1673,7 @@ func (s *Store) handleSettingsGet(w http.ResponseWriter, r *http.Request) {
   <input type="checkbox" name="funSunIcons" value="1"%s style="width:auto; accent-color:#FFFF00">
   Fun sun icons
 </label>
-<p class="hint">When enabled, daytime sun icons use rainbow-colored rays and a smiley face.</p>
+<p class="hint">When enabled, daytime sun icons use rainbow-colored rays instead of solid yellow.</p>
 
 <label>Satellite Product</label>
 <div style="margin:6px 0 4px; display:flex; gap:20px">

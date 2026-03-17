@@ -96,7 +96,7 @@ Visit `http://<host>:9798/admin/` to manage content live without restarting:
 - **Dashboard** — live view of active pipelines, viewer counts, stream health, host load average, and container CPU usage
 - **Announcements** — scrolling text shown between weather cycles
 - **Trivia** — Q&A trivia slides shown between weather cycles
-- **Settings** — slide duration, announcement/trivia intervals, clock format, unit system, satellite product, phase-accurate moon icons, music streams
+- **Settings** — slide duration, announcement/trivia intervals, clock format, unit system, satellite product, phase-accurate moon icons, fun sun icons, music streams
 
 ### Configuration
 

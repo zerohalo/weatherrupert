@@ -315,7 +315,7 @@ func drawSun(dc *gg.Context, cx, cy, size float64) {
 	dc.Fill()
 }
 
-// drawFunSun draws a sun with rainbow-colored rays and a smiley face.
+// drawFunSun draws a sun with rainbow-colored rays.
 func drawFunSun(dc *gg.Context, cx, cy, size float64) {
 	r := size * 0.27
 	inner := size * 0.32
@@ -916,7 +916,7 @@ func RenderRealisticIconSheet(path string) error {
 	return nil
 }
 
-// RenderFunSunIconSheet draws all weather icons with fun sun (rainbow rays + smiley)
+// RenderFunSunIconSheet draws all weather icons with fun sun (rainbow rays)
 // and phase-accurate moon rendering, and saves to path.
 func RenderFunSunIconSheet(path string) error {
 	type entry struct {
