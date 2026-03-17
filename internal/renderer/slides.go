@@ -129,6 +129,12 @@ func DrawGradientBackground(dc *gg.Context) {
 // drawBackgroundWithData fills the gradient, renders the standard header, and
 // adds a small current-condition icon + temperature near the time display.
 func drawBackgroundWithData(dc *gg.Context, title string, data *weather.WeatherData, use24h, useMetric bool, loc *time.Location, fonts *fontSet) {
+	if fonts == nil {
+		fonts = defaultFonts
+	}
+	if loc == nil {
+		loc = time.Local
+	}
 	drawBackground(dc, title, data.Location, use24h, loc, fonts)
 	drawHeaderCurrentTemp(dc, data, useMetric, loc, fonts)
 }
@@ -137,6 +143,12 @@ func drawBackgroundWithData(dc *gg.Context, title string, data *weather.WeatherD
 // on the header band (e.g. for alerts). The tint is drawn between the gradient
 // and the header elements so text/icons remain untinted.
 func drawBackgroundTinted(dc *gg.Context, title string, data *weather.WeatherData, use24h, useMetric bool, loc *time.Location, fonts *fontSet, tintR, tintG, tintB, tintA float64) {
+	if fonts == nil {
+		fonts = defaultFonts
+	}
+	if loc == nil {
+		loc = time.Local
+	}
 	if loc == nil {
 		loc = time.Local
 	}
@@ -284,6 +296,9 @@ func drawAlertIndicator(dc *gg.Context, cx, cy, size float64, alerts []weather.A
 // drawNoData draws a centered "NO DATA AVAILABLE" message. Returns true so
 // callers can use: if drawNoData(dc, fonts) { return 0 }
 func drawNoData(dc *gg.Context, fonts *fontSet) {
+	if fonts == nil {
+		fonts = defaultFonts
+	}
 	dc.SetFontFace(fonts.medium)
 	drawShadowTextAnchored(dc, "NO DATA AVAILABLE",
 		float64(dc.Width())/2, float64(dc.Height())/2, 0.5, 0.5, subR, subG, subB)
@@ -349,6 +364,12 @@ func fmtConvOr(v *float64, conv func(float64) float64, format, fallback string) 
 // NewSlideCurrentConditions returns a SlideFunc that renders current temperature,
 // conditions, and atmospheric data. use24h controls the clock format in the header.
 func NewSlideCurrentConditions(use24h, useMetric bool, loc *time.Location, getRealisticMoon func() bool, fonts *fontSet) SlideFunc {
+	if fonts == nil {
+		fonts = defaultFonts
+	}
+	if loc == nil {
+		loc = time.Local
+	}
 
 	if getRealisticMoon == nil {
 		getRealisticMoon = func() bool { return false }
@@ -475,6 +496,12 @@ func slideCurrentConditions(dc *gg.Context, data *weather.WeatherData, use24h, u
 // NewSlideHourlyForecast returns a SlideFunc that renders the next 12 hours as a
 // temperature line graph. use24h controls the clock format for axis labels and the header.
 func NewSlideHourlyForecast(use24h, useMetric bool, loc *time.Location, getRealisticMoon func() bool, fonts *fontSet) SlideFunc {
+	if fonts == nil {
+		fonts = defaultFonts
+	}
+	if loc == nil {
+		loc = time.Local
+	}
 
 	if getRealisticMoon == nil {
 		getRealisticMoon = func() bool { return false }
@@ -650,6 +677,12 @@ func buildDayCards(periods []weather.ForecastPeriod) []dayCard {
 // NewSlideExtendedForecast returns a SlideFunc that renders a 3×2 grid of day cards.
 // use24h controls the clock format in the header.
 func NewSlideExtendedForecast(use24h, useMetric bool, loc *time.Location, getRealisticMoon func() bool, fonts *fontSet) SlideFunc {
+	if fonts == nil {
+		fonts = defaultFonts
+	}
+	if loc == nil {
+		loc = time.Local
+	}
 
 	if getRealisticMoon == nil {
 		getRealisticMoon = func() bool { return false }
@@ -783,6 +816,12 @@ type radarFrameCache struct {
 // no clients are connected (the renderer skips calling the slide function).
 // use24h controls the clock format in the header.
 func NewSlideRadar(use24h, useMetric bool, loc *time.Location, fonts *fontSet) SlideFunc {
+	if fonts == nil {
+		fonts = defaultFonts
+	}
+	if loc == nil {
+		loc = time.Local
+	}
 
 	cache := &radarFrameCache{}
 	return func(dc *gg.Context, data *weather.WeatherData, elapsed, total time.Duration) time.Duration {
@@ -912,6 +951,12 @@ type satelliteFrameCache struct {
 // NewSlideSatellite returns a SlideFunc that owns its own frame cache.
 // Mirrors NewSlideRadar but uses GOES visible satellite imagery.
 func NewSlideSatellite(use24h, useMetric bool, loc *time.Location, fonts *fontSet) SlideFunc {
+	if fonts == nil {
+		fonts = defaultFonts
+	}
+	if loc == nil {
+		loc = time.Local
+	}
 
 	cache := &satelliteFrameCache{}
 	return func(dc *gg.Context, data *weather.WeatherData, elapsed, total time.Duration) time.Duration {
@@ -1011,6 +1056,12 @@ func drawSatelliteSlide(dc *gg.Context, data *weather.WeatherData, elapsed, tota
 // overriding the renderer's default slide duration.
 // use24h controls the clock format in the header.
 func NewSlideAnnouncements(getAnns func() []ann.Announcement, getDur func() time.Duration, use24h, useMetric bool, loc *time.Location, fonts *fontSet) SlideFunc {
+	if fonts == nil {
+		fonts = defaultFonts
+	}
+	if loc == nil {
+		loc = time.Local
+	}
 
 	idx := 0
 	lastElapsed := time.Duration(-1)
@@ -1107,6 +1158,12 @@ func NewSlideAnnouncements(getAnns func() []ann.Announcement, getDur func() time
 // every question appears once before any repeats.
 // use24h controls the clock format in the header.
 func NewSlideTrivia(getItems func() []trivia.TriviaItem, getDur func() time.Duration, getRandomize func() bool, use24h, useMetric bool, loc *time.Location, fonts *fontSet) SlideFunc {
+	if fonts == nil {
+		fonts = defaultFonts
+	}
+	if loc == nil {
+		loc = time.Local
+	}
 
 	idx := 0
 	lastElapsed := time.Duration(-1)
@@ -1426,6 +1483,12 @@ func NewSlideTrivia(getItems func() []trivia.TriviaItem, getDur func() time.Dura
 // NewSlideMoonTides returns a SlideFunc that renders the moon phase and,
 // for coastal locations, a 24-hour tide prediction chart.
 func NewSlideMoonTides(use24h, useMetric bool, loc *time.Location, fonts *fontSet) SlideFunc {
+	if fonts == nil {
+		fonts = defaultFonts
+	}
+	if loc == nil {
+		loc = time.Local
+	}
 
 	return func(dc *gg.Context, data *weather.WeatherData, _, _ time.Duration) time.Duration {
 		return slideMoonTides(dc, data, use24h, useMetric, loc, fonts)
@@ -1700,6 +1763,12 @@ func formatTideTime(t time.Time, use24h bool) string {
 // NewSlidePrecipitation returns a SlideFunc that renders a 12-hour precipitation
 // probability bar chart.
 func NewSlidePrecipitation(use24h, useMetric bool, loc *time.Location, getRealisticMoon func() bool, fonts *fontSet) SlideFunc {
+	if fonts == nil {
+		fonts = defaultFonts
+	}
+	if loc == nil {
+		loc = time.Local
+	}
 
 	if getRealisticMoon == nil {
 		getRealisticMoon = func() bool { return false }
@@ -1830,6 +1899,12 @@ func slidePrecipitation(dc *gg.Context, data *weather.WeatherData, use24h, useMe
 // NewSlideAlerts returns a SlideFunc that renders active weather alerts.
 // The slide is skipped entirely by the renderer when no alerts are active.
 func NewSlideAlerts(use24h, useMetric bool, loc *time.Location, fonts *fontSet) SlideFunc {
+	if fonts == nil {
+		fonts = defaultFonts
+	}
+	if loc == nil {
+		loc = time.Local
+	}
 
 	return func(dc *gg.Context, data *weather.WeatherData, elapsed, total time.Duration) time.Duration {
 		return slideAlerts(dc, data, use24h, useMetric, loc, elapsed, total, fonts)
@@ -2021,6 +2096,12 @@ func wrapText(s string, maxLen int) []string {
 // NewSlideNightSky returns a SlideFunc that renders a planisphere-style sky
 // dome with planet positions and a stats table.
 func NewSlideNightSky(use24h, useMetric bool, loc *time.Location, fonts *fontSet) SlideFunc {
+	if fonts == nil {
+		fonts = defaultFonts
+	}
+	if loc == nil {
+		loc = time.Local
+	}
 
 	return func(dc *gg.Context, data *weather.WeatherData, _, _ time.Duration) time.Duration {
 		return slideNightSky(dc, data, use24h, useMetric, loc, fonts)
@@ -2478,6 +2559,12 @@ func windColor(speed float64) [3]float64 {
 // NewSlideWeeklyHighLow returns a SlideFunc that renders a range-bar chart of
 // daily high and low temperatures.
 func NewSlideWeeklyHighLow(use24h, useMetric bool, loc *time.Location, fonts *fontSet) SlideFunc {
+	if fonts == nil {
+		fonts = defaultFonts
+	}
+	if loc == nil {
+		loc = time.Local
+	}
 
 	return func(dc *gg.Context, data *weather.WeatherData, _, _ time.Duration) time.Duration {
 		return slideWeeklyHighLow(dc, data, use24h, useMetric, loc, fonts)
@@ -2764,6 +2851,12 @@ func convertTemp(t float64, unit string, useMetric bool) float64 {
 // NewSlideWindForecast returns a SlideFunc that renders a 12-hour wind
 // direction/speed chart.
 func NewSlideWindForecast(use24h, useMetric bool, loc *time.Location, fonts *fontSet) SlideFunc {
+	if fonts == nil {
+		fonts = defaultFonts
+	}
+	if loc == nil {
+		loc = time.Local
+	}
 
 	return func(dc *gg.Context, data *weather.WeatherData, _, _ time.Duration) time.Duration {
 		return slideWindForecast(dc, data, use24h, useMetric, loc, fonts)
@@ -2906,6 +2999,12 @@ func windSpeedColor(speed float64, metric bool) (float64, float64, float64) {
 // NewSlideFeelsLike returns a SlideFunc that renders a dual-line chart
 // comparing actual vs feels-like temperature over 12 hours.
 func NewSlideFeelsLike(use24h, useMetric bool, loc *time.Location, fonts *fontSet) SlideFunc {
+	if fonts == nil {
+		fonts = defaultFonts
+	}
+	if loc == nil {
+		loc = time.Local
+	}
 
 	return func(dc *gg.Context, data *weather.WeatherData, _, _ time.Duration) time.Duration {
 		return slideFeelsLike(dc, data, use24h, useMetric, loc, fonts)
@@ -3029,12 +3128,14 @@ func slideFeelsLike(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 		dc.Stroke()
 	}
 
-	// Feels-like line — cyan when cooler (wind chill), red-orange when warmer (heat index).
+	// Feels-like line — yellow when same as actual, cyan when cooler, orange-red when warmer.
 	if n > 1 {
 		dc.SetLineWidth(2.5)
 		for i := 0; i < n-1; i++ {
 			avgDiff := (feelsLike[i] - actuals[i] + feelsLike[i+1] - actuals[i+1]) / 2
-			if avgDiff > 0 {
+			if math.Abs(avgDiff) < 1 {
+				dc.SetRGB(hlR, hlG, hlB) // same as actual — yellow
+			} else if avgDiff > 0 {
 				dc.SetRGB(heatR, 0.4, 0.2) // warm orange-red
 			} else {
 				dc.SetRGB(divR, divG, divB) // cool cyan
@@ -3052,12 +3153,14 @@ func slideFeelsLike(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 		x := xs[i]
 		dc.SetFontFace(fonts.small)
 
-		// Pick feels-like color based on whether it's warmer or cooler.
+		// Pick feels-like color: yellow when same, cyan when cooler, orange-red when warmer.
 		var flR, flG, flB float64
 		if feelsLike[i] > actuals[i]+1 {
 			flR, flG, flB = heatR, 0.4, 0.2 // warm orange-red
-		} else {
+		} else if feelsLike[i] < actuals[i]-1 {
 			flR, flG, flB = divR, divG, divB // cool cyan
+		} else {
+			flR, flG, flB = hlR, hlG, hlB // same as actual — yellow
 		}
 
 		diff := math.Abs(actuals[i] - feelsLike[i])
@@ -3166,6 +3269,12 @@ func feelsLikeDiffers(data *weather.WeatherData, threshold float64) bool {
 // NewSlideSunMoon returns a SlideFunc that shows sunrise/sunset, day length,
 // golden hour, and a compact solar weather summary.
 func NewSlideSunMoon(use24h, useMetric bool, loc *time.Location, fonts *fontSet) SlideFunc {
+	if fonts == nil {
+		fonts = defaultFonts
+	}
+	if loc == nil {
+		loc = time.Local
+	}
 
 	cache := &solarImageCache{}
 	return func(dc *gg.Context, data *weather.WeatherData, _, _ time.Duration) time.Duration {
@@ -3353,6 +3462,12 @@ func slideSunMoon(dc *gg.Context, data *weather.WeatherData, use24h, useMetric b
 // NewSlideUVIndex returns a SlideFunc that renders a UV index gauge and
 // 12-hour UV forecast curve.
 func NewSlideUVIndex(use24h, useMetric bool, loc *time.Location, fonts *fontSet) SlideFunc {
+	if fonts == nil {
+		fonts = defaultFonts
+	}
+	if loc == nil {
+		loc = time.Local
+	}
 
 	return func(dc *gg.Context, data *weather.WeatherData, _, _ time.Duration) time.Duration {
 		return slideUVIndex(dc, data, use24h, useMetric, loc, fonts)
