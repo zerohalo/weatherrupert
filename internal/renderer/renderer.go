@@ -15,6 +15,7 @@ import (
 
 	"git.sr.ht/~sbinet/gg"
 	ann "github.com/zerohalo/weatherrupert/internal/announcements"
+	"github.com/zerohalo/weatherrupert/internal/plog"
 	"github.com/zerohalo/weatherrupert/internal/trivia"
 	"github.com/zerohalo/weatherrupert/internal/weather"
 )
@@ -47,6 +48,7 @@ type Renderer struct {
 	w, h             int
 	frameRate        int
 	label            string // short identifier for log messages (e.g. ZIP code)
+	log              *plog.Logger
 	getSlideDuration func() time.Duration
 	wc               *weather.Client
 	out              io.Writer
@@ -116,6 +118,7 @@ func New(w, h, frameRate int, label string,
 		h:                h,
 		frameRate:        frameRate,
 		label:            label,
+		log:              plog.New("renderer", label),
 		getSlideDuration: getSlideDuration,
 		wc:               wc,
 		out:              out,
@@ -261,7 +264,7 @@ func (r *Renderer) advanceSlide(data *weather.WeatherData) {
 			if e.skip == nil || !e.skip(data) {
 				break
 			}
-			log.Printf("renderer [%s]: skipping slide %q", r.label, e.name)
+			r.log.Printf("skipping slide %q", e.name)
 			r.weatherIdx++
 			if r.weatherIdx >= len(r.weatherSlides) {
 				r.weatherIdx = 0
@@ -297,7 +300,7 @@ func (r *Renderer) Run(ctx context.Context) error {
 			r.slideMu.Unlock()
 			slideTimer.Reset(r.getSlideDuration())
 			slideJustStarted = true
-			log.Printf("renderer [%s]: showing slide %q", r.label, slideName)
+			r.log.Printf("showing slide %q", slideName)
 
 		case <-frameTicker.C:
 			// When nobody is watching, skip writing to FFmpeg stdin entirely.
@@ -418,7 +421,7 @@ func (r *Renderer) writeLoadingFrame() error {
 			return err
 		}
 		r.loadingPix = pix
-		log.Printf("renderer [%s]: loading frame rendered (%d bytes)", r.label, len(pix))
+		r.log.Printf("loading frame rendered (%d bytes)", len(pix))
 	}
 
 	_, err := r.out.Write(r.loadingPix)
@@ -434,7 +437,7 @@ func (r *Renderer) writeFrame(pix []byte) error {
 	_, err := r.out.Write(pix)
 	if d := time.Since(t0); d > 200*time.Millisecond {
 		r.slowFrames.Add(1)
-		log.Printf("renderer [%s]: slow frame write: %v (%d bytes) — FFmpeg may be CPU-starved",
+		r.log.Printf("slow frame write: %v (%d bytes) — FFmpeg may be CPU-starved",
 			r.label, d, len(pix))
 	}
 	if err != nil {

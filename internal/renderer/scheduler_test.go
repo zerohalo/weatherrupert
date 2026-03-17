@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"git.sr.ht/~sbinet/gg"
+	"github.com/zerohalo/weatherrupert/internal/plog"
 	"github.com/zerohalo/weatherrupert/internal/weather"
 )
 
@@ -24,6 +25,7 @@ func newTestRenderer(weatherNames []string, specials []specialSlideEntry) *Rende
 		weatherSlides: ws,
 		specialSlides: specials,
 		slideStart:    time.Now(),
+		log:           plog.New("renderer", "test"),
 	}
 }
 

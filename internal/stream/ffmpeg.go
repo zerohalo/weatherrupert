@@ -4,13 +4,14 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"strconv"
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/zerohalo/weatherrupert/internal/plog"
 )
 
 // FFmpeg manages a running FFmpeg subprocess.
@@ -25,10 +26,11 @@ type FFmpeg struct {
 // The caller should write raw RGBA frames to Stdin() and read MPEG-TS from Stdout().
 // label is a short identifier (e.g. ZIP code) included in log messages.
 func Start(width, height, frameRate int, music *MusicSource, label string, videoMaxRate string) (*FFmpeg, error) {
+	flog := plog.New("ffmpeg", label)
 	args := buildArgs(width, height, frameRate, music, videoMaxRate)
 	cmd := exec.Command("ffmpeg", args...)
 
-	log.Printf("ffmpeg [%s]: args: %v", label, args)
+	flog.Printf("args: %v", args)
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -63,7 +65,7 @@ func Start(width, height, frameRate int, music *MusicSource, label string, video
 		scanner := bufio.NewScanner(stderrPipe)
 		for scanner.Scan() {
 			f.warnings.Add(1)
-			log.Printf("ffmpeg [%s]: %s", label, scanner.Text())
+			flog.Printf("%s", scanner.Text())
 		}
 	}()
 
