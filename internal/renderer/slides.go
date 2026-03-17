@@ -165,6 +165,7 @@ func drawBackgroundTinted(dc *gg.Context, title string, data *weather.WeatherDat
 
 	// Draw all header elements on top of the tint.
 	drawHeaderElements(dc, title, data.Location, use24h, loc, fonts)
+
 	drawHeaderCurrentTemp(dc, data, useMetric, loc, fonts)
 }
 
@@ -201,7 +202,7 @@ func drawHeaderElements(dc *gg.Context, title, location string, use24h bool, loc
 	}
 
 	// Logo: "WEATHER ☀ RUPERT" in a cyan-bordered box, centered in header.
-	dc.SetFontFace(fonts.mediumBold)
+	dc.SetFontFace(fonts.cardBody)
 	word1, word2 := "WEATHER", "RUPERT"
 	tw1, _ := dc.MeasureString(word1)
 	tw2, _ := dc.MeasureString(word2)
@@ -211,11 +212,11 @@ func drawHeaderElements(dc *gg.Context, title, location string, use24h bool, loc
 	logoCX := w / 2
 	logoCY := headerH / 2 // true vertical center of header
 	textLeft := logoCX - totalW/2
-	padX := 12.0
+	padX := 10.0
 	// Box centered on header midpoint.
 	dc.SetRGBA(0.3, 0.75, 0.9, 0.7)
-	dc.SetLineWidth(2.5)
-	boxH := 38.0
+	dc.SetLineWidth(2.0)
+	boxH := 32.0
 	boxL := textLeft - padX
 	boxT := logoCY - boxH/2
 	boxW := totalW + 2*padX
@@ -226,20 +227,19 @@ func drawHeaderElements(dc *gg.Context, title, location string, use24h bool, loc
 	sunCX := textLeft + tw1 + sunGap + sunSize/2
 	sunCY := logoCY
 
-	// Erase rectangle lines where the sun overflows.
-	eraseR := sunSize*0.44 + 3
-	hf := float64(dc.Height() - 1)
-	t := sunCY / hf
-	bgGradR := float64(0x10) * (1.0 - t) / 255
-	bgGradG := (float64(0x20)*(1.0-t) + float64(0x10)*t) / 255
-	bgGradB := (float64(0x80)*(1.0-t) + float64(0x40)*t) / 255
-	dc.SetRGB(bgGradR, bgGradG, bgGradB)
+	// Erase rectangle lines where the sun overflows by sampling the actual
+	// background color at the sun position. This works correctly for both
+	// the plain gradient and the tinted alerts header.
+	eraseR := sunSize*0.44 + 6
+	rgba := dc.Image().(*image.RGBA)
+	px := rgba.RGBAAt(int(sunCX), int(sunCY))
+	dc.SetRGB(float64(px.R)/255, float64(px.G)/255, float64(px.B)/255)
 	dc.DrawCircle(sunCX, sunCY, eraseR)
 	dc.Fill()
 
 	// "WEATHER" text — vertically centered with DrawStringAnchored.
 	word1CX := textLeft + tw1/2
-	dc.SetFontFace(fonts.mediumBold)
+	dc.SetFontFace(fonts.cardBody)
 	dc.SetRGBA(0, 0, 0, 0.6)
 	dc.DrawStringAnchored(word1, word1CX+2, logoCY+2, 0.5, 0.35)
 	dc.SetRGB(0.8, 0.97, 1.0)
@@ -273,7 +273,7 @@ func drawHeaderElements(dc *gg.Context, title, location string, use24h bool, loc
 	dc.Fill()
 	// "RUPERT" text — vertically centered.
 	word2CX := sunCX + sunSize/2 + sunGap + tw2/2
-	dc.SetFontFace(fonts.mediumBold)
+	dc.SetFontFace(fonts.cardBody)
 	dc.SetRGBA(0, 0, 0, 0.6)
 	dc.DrawStringAnchored(word2, word2CX+2, logoCY+2, 0.5, 0.35)
 	dc.SetRGB(0.8, 0.97, 1.0)
