@@ -518,6 +518,7 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 		m.store.Announcements, m.store.AnnouncementDuration, m.store.AnnouncementInterval,
 		m.store.TriviaItems, m.store.TriviaDuration, m.store.TriviaInterval, m.store.TriviaRandomize,
 		m.store.RealisticMoonIcons,
+		m.store.FunSunIcons,
 		use24h, useMetric,
 		tzLoc)
 	go func() {

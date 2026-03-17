@@ -123,8 +123,22 @@ func drawIcon(dc *gg.Context, t iconType, cx, cy, size float64) {
 }
 
 // drawIconWithMoon is like drawIcon but uses a phase-accurate moon disc
-// for night icons when realistic is true.
-func drawIconWithMoon(dc *gg.Context, t iconType, cx, cy, size, moonPhase float64, realistic bool) {
+// for night icons when realistic is true, and a fun rainbow sun when funSun is true.
+func drawIconWithMoon(dc *gg.Context, t iconType, cx, cy, size, moonPhase float64, realistic, funSun bool) {
+	// Handle fun sun for sunny/partly cloudy/mostly cloudy day icons.
+	if funSun {
+		switch t {
+		case iconSunny:
+			drawFunSun(dc, cx, cy, size)
+			return
+		case iconPartlyCloudy:
+			drawPartlyCloudyFunSun(dc, cx, cy, size)
+			return
+		case iconMostlyCloudy:
+			drawMostlyCloudyFunSun(dc, cx, cy, size)
+			return
+		}
+	}
 	if !realistic || (t != iconNightClear && t != iconNightPartlyCloudy && t != iconNightMostlyCloudy) {
 		drawIcon(dc, t, cx, cy, size)
 		return
@@ -301,6 +315,69 @@ func drawSun(dc *gg.Context, cx, cy, size float64) {
 	dc.Fill()
 }
 
+// drawFunSun draws a sun with rainbow-colored rays and a smiley face.
+func drawFunSun(dc *gg.Context, cx, cy, size float64) {
+	r := size * 0.27
+	inner := size * 0.32
+	outer := size * 0.40
+
+	rayColors := [][3]float64{
+		{1.0, 0.3, 0.3}, // red
+		{1.0, 0.6, 0.2}, // orange
+		{1.0, 1.0, 0.3}, // yellow
+		{0.4, 1.0, 0.4}, // green
+		{0.3, 0.8, 1.0}, // cyan
+		{0.4, 0.4, 1.0}, // blue
+		{0.7, 0.3, 1.0}, // purple
+		{1.0, 0.4, 0.7}, // pink
+	}
+	dc.SetLineWidth(size * 0.07)
+	for i := 0; i < 8; i++ {
+		rc := rayColors[i]
+		dc.SetRGB(rc[0], rc[1], rc[2])
+		a := float64(i) * math.Pi / 4
+		dc.DrawLine(
+			cx+inner*math.Cos(a), cy+inner*math.Sin(a),
+			cx+outer*math.Cos(a), cy+outer*math.Sin(a),
+		)
+		dc.Stroke()
+	}
+
+	// Pale yellow disc.
+	dc.SetRGB(1.0, 1.0, 0.6)
+	dc.DrawCircle(cx, cy, r)
+	dc.Fill()
+
+	// Relaxed face — slit eyes in pool blue, gentle smile.
+	eyeY := cy - r*0.15
+	eyeW := r * 0.22
+	eyeH := r * 0.06
+	dc.SetRGB(0.2, 0.7, 0.9) // swimming pool blue
+	// Left eye — horizontal slit.
+	dc.DrawEllipse(cx-r*0.28, eyeY, eyeW, eyeH)
+	dc.Fill()
+	// Right eye — horizontal slit.
+	dc.DrawEllipse(cx+r*0.28, eyeY, eyeW, eyeH)
+	dc.Fill()
+	// Gentle relaxed smile — shallow arc.
+	dc.SetRGB(0.6, 0.4, 0.0)
+	dc.SetLineWidth(r * 0.08)
+	smileR := r * 0.4
+	smileY := cy + r*0.15
+	dc.NewSubPath()
+	for i := 0; i <= 32; i++ {
+		a := math.Pi*0.25 + math.Pi*0.5*float64(i)/32
+		x := cx + smileR*math.Cos(a)
+		y := smileY + smileR*0.5*math.Sin(a) // flattened arc
+		if i == 0 {
+			dc.MoveTo(x, y)
+		} else {
+			dc.LineTo(x, y)
+		}
+	}
+	dc.Stroke()
+}
+
 // drawMoon draws a white crescent moon by tracing only the crescent path,
 // leaving the background untouched where the dark side would be.
 func drawMoon(dc *gg.Context, cx, cy, size float64) {
@@ -384,6 +461,22 @@ func drawCloudShape(dc *gg.Context, cx, cy, size float64, r, g, b float64) {
 	dc.QuadraticTo(rectL, rectBot, rectL, rectBot-corner)
 	dc.ClosePath()
 	dc.Fill()
+}
+
+// drawPartlyCloudyFunSun draws a fun rainbow sun peeking behind a cloud.
+func drawPartlyCloudyFunSun(dc *gg.Context, cx, cy, size float64) {
+	bx := cx + size*0.12
+	by := cy - size*0.12
+	drawFunSun(dc, bx, by, size*0.44)
+	drawCloudShape(dc, cx-size*0.10, cy+size*0.08, size*0.76, 1, 1, 1)
+}
+
+// drawMostlyCloudyFunSun draws a large gray cloud with a fun sun peeking from the top-right.
+func drawMostlyCloudyFunSun(dc *gg.Context, cx, cy, size float64) {
+	peekX := cx + size*0.22
+	peekY := cy - size*0.15
+	drawFunSun(dc, peekX, peekY, size*0.30)
+	drawCloudShape(dc, cx-size*0.04, cy+size*0.07, size*0.90, 0.78, 0.80, 0.84)
 }
 
 // drawPartlyCloudy draws a sun or moon peeking behind a cloud.
@@ -832,7 +925,77 @@ func RenderRealisticIconSheet(path string) error {
 		cx := float64(col)*cellW + cellW/2
 		cy := float64(row)*cellH + cellH/2 - 20
 
-		drawIconWithMoon(dc, e.icon, cx, cy, iconSize, moonPhase, true)
+		drawIconWithMoon(dc, e.icon, cx, cy, iconSize, moonPhase, true, false)
+
+		dc.SetRGB(textR, textG, textB)
+		dc.SetFontFace(defaultFonts.small)
+		dc.DrawStringAnchored(e.label, cx, cy+iconSize/2+20, 0.5, 0.5)
+	}
+
+	f, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("create %s: %w", path, err)
+	}
+	defer f.Close()
+	if err := png.Encode(f, dc.Image()); err != nil {
+		return fmt.Errorf("encode: %w", err)
+	}
+	fmt.Printf("wrote %s (%dx%d)\n", path, int(w), int(h))
+	return nil
+}
+
+// RenderFunSunIconSheet draws all weather icons with fun sun (rainbow rays + smiley)
+// and phase-accurate moon rendering, and saves to path.
+func RenderFunSunIconSheet(path string) error {
+	type entry struct {
+		icon  iconType
+		label string
+	}
+	icons := []entry{
+		{iconSunny, "Sunny"},
+		{iconNightClear, "Night Clear"},
+		{iconPartlyCloudy, "Partly Cloudy"},
+		{iconNightPartlyCloudy, "Night Partly Cloudy"},
+		{iconMostlyCloudy, "Mostly Cloudy"},
+		{iconNightMostlyCloudy, "Night Mostly Cloudy"},
+		{iconCloudy, "Cloudy"},
+		{iconRain, "Rain"},
+		{iconThunderstorm, "Thunderstorm"},
+		{iconSnow, "Snow"},
+		{iconSleet, "Sleet"},
+		{iconFog, "Fog"},
+		{iconWindy, "Windy"},
+		{iconHail, "Hail"},
+		{iconTornado, "Tornado"},
+	}
+
+	cols := 4
+	rows := (len(icons) + cols - 1) / cols
+	cellW, cellH := 320.0, 280.0
+	w := float64(cols) * cellW
+	h := float64(rows) * cellH
+
+	dc := gg.NewContext(int(w), int(h))
+
+	for y := 0; y < int(h); y++ {
+		t := float64(y) / h
+		r := 0.063*(1-t) + 0.0*t
+		g := 0.125*(1-t) + 0.063*t
+		b := 0.502*(1-t) + 0.251*t
+		dc.SetRGB(r, g, b)
+		dc.DrawRectangle(0, float64(y), w, 1)
+		dc.Fill()
+	}
+
+	iconSize := 160.0
+	moonPhase := 0.15
+	for i, e := range icons {
+		col := i % cols
+		row := i / cols
+		cx := float64(col)*cellW + cellW/2
+		cy := float64(row)*cellH + cellH/2 - 20
+
+		drawIconWithMoon(dc, e.icon, cx, cy, iconSize, moonPhase, true, true)
 
 		dc.SetRGB(textR, textG, textB)
 		dc.SetFontFace(defaultFonts.small)

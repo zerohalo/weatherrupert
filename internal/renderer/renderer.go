@@ -103,6 +103,7 @@ func New(w, h, frameRate int, label string,
 	getAnnouncements func() []ann.Announcement, getAnnDuration func() time.Duration, getAnnInterval func() int,
 	getTriviaItems func() []trivia.TriviaItem, getTriviaDuration func() time.Duration, getTriviaInterval func() int, getTriviaRandomize func() bool,
 	getRealisticMoon func() bool,
+	getFunSun func() bool,
 	use24h bool, useMetric bool,
 	loc *time.Location,
 ) *Renderer {
@@ -121,9 +122,9 @@ func New(w, h, frameRate int, label string,
 		fonts:            fonts,
 		weatherSlides: []weatherSlideEntry{
 			{name: "alerts", fn: NewSlideAlerts(use24h, useMetric, loc, fonts), skip: func(d *weather.WeatherData) bool { return len(activeAlerts(d.Alerts)) == 0 }},
-			{name: "current-conditions", fn: NewSlideCurrentConditions(use24h, useMetric, loc, getRealisticMoon, fonts)},
-			{name: "hourly-forecast", fn: NewSlideHourlyForecast(use24h, useMetric, loc, getRealisticMoon, fonts)},
-			{name: "precipitation", fn: NewSlidePrecipitation(use24h, useMetric, loc, getRealisticMoon, fonts), skip: func() func(*weather.WeatherData) bool {
+			{name: "current-conditions", fn: NewSlideCurrentConditions(use24h, useMetric, loc, getRealisticMoon, getFunSun, fonts)},
+			{name: "hourly-forecast", fn: NewSlideHourlyForecast(use24h, useMetric, loc, getRealisticMoon, getFunSun, fonts)},
+			{name: "precipitation", fn: NewSlidePrecipitation(use24h, useMetric, loc, getRealisticMoon, getFunSun, fonts), skip: func() func(*weather.WeatherData) bool {
 				noPrecipCount := 0
 				return func(d *weather.WeatherData) bool {
 					// Check if any hourly period has precipitation probability > 0.
@@ -147,7 +148,7 @@ func New(w, h, frameRate int, label string,
 			{name: "feels-like", fn: NewSlideFeelsLike(use24h, useMetric, loc, fonts), skip: func(d *weather.WeatherData) bool {
 				return !feelsLikeDiffers(d, 3)
 			}},
-			{name: "extended-forecast", fn: NewSlideExtendedForecast(use24h, useMetric, loc, getRealisticMoon, fonts)},
+			{name: "extended-forecast", fn: NewSlideExtendedForecast(use24h, useMetric, loc, getRealisticMoon, getFunSun, fonts)},
 			{name: "weekly-high-low", fn: NewSlideWeeklyHighLow(use24h, useMetric, loc, fonts), skip: func(d *weather.WeatherData) bool { return len(d.DailyPeriods) == 0 }},
 			{name: "sun-solar", fn: NewSlideSunMoon(use24h, useMetric, loc, fonts)},
 			{name: "moon-tides", fn: NewSlideMoonTides(use24h, useMetric, loc, fonts)},

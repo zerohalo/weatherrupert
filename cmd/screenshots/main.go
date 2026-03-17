@@ -57,9 +57,9 @@ func main() {
 		tweak func(*weather.WeatherData)
 	}{
 		{"alerts", renderer.NewSlideAlerts(false, false, nil, nil), nil},
-		{"local-conditions", renderer.NewSlideCurrentConditions(false, false, nil, realisticMoon, nil), nil},
-		{"hourly-forecast", renderer.NewSlideHourlyForecast(false, false, nil, realisticMoon, nil), nil},
-		{"precipitation", renderer.NewSlidePrecipitation(false, false, nil, realisticMoon, nil), nil},
+		{"local-conditions", renderer.NewSlideCurrentConditions(false, false, nil, realisticMoon, nil, nil), nil},
+		{"hourly-forecast", renderer.NewSlideHourlyForecast(false, false, nil, realisticMoon, nil, nil), nil},
+		{"precipitation", renderer.NewSlidePrecipitation(false, false, nil, realisticMoon, nil, nil), nil},
 		{"wind-forecast", renderer.NewSlideWindForecast(false, false, nil, nil), func(d *weather.WeatherData) {
 			// Vary wind data for a more interesting screenshot.
 			winds := []string{"5 mph", "8 mph", "12 mph", "15 mph", "18 mph", "22 mph", "20 mph", "16 mph", "12 mph", "10 mph", "8 mph", "6 mph"}
@@ -88,7 +88,7 @@ func main() {
 				}
 			}
 		}},
-		{"extended-forecast", renderer.NewSlideExtendedForecast(false, false, nil, realisticMoon, nil), nil},
+		{"extended-forecast", renderer.NewSlideExtendedForecast(false, false, nil, realisticMoon, nil, nil), nil},
 		{"weekly-high-low", renderer.NewSlideWeeklyHighLow(false, false, nil, nil), nil},
 		{"sun-solar", renderer.NewSlideSunMoon(false, false, nil, nil), func(d *weather.WeatherData) {
 			d.Sun = makeSunData(now)

@@ -21,6 +21,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	funSunPath := "screenshots/icon-reference-funsun.png"
+	if err := renderer.RenderFunSunIconSheet(funSunPath); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
 	moonPath := "screenshots/moon-phase-reference.png"
 	if err := renderer.RenderMoonPhaseSheet(moonPath); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
