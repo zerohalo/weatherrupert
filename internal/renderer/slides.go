@@ -1962,16 +1962,16 @@ func slideAlerts(dc *gg.Context, data *weather.WeatherData, use24h, useMetric bo
 	for i, a := range pageAlerts {
 		slotTop := y + float64(i)*slotH
 
-		// Event name — bold yellow
-		dc.SetFontFace(fonts.title)
-		drawShadowText(dc, strings.ToUpper(a.Event), 60, slotTop+36, titleR, titleG, titleB)
+		// Event name — bold, large
+		dc.SetFontFace(fonts.cardTitle)
+		drawShadowText(dc, strings.ToUpper(a.Event), 60, slotTop+42, titleR, titleG, titleB)
 
-		// Headline — white, wrapped
+		// Headline — white, wrapped, medium size
 		if a.Headline != "" {
-			lines := truncateLines(wrapText(strings.ToUpper(a.Headline), 60), 3)
-			dc.SetFontFace(fonts.small)
+			lines := truncateLines(wrapText(strings.ToUpper(a.Headline), 46), 3)
+			dc.SetFontFace(fonts.medium)
 			for j, line := range lines {
-				drawShadowText(dc, line, 60, slotTop+72+float64(j)*26, textR, textG, textB)
+				drawShadowText(dc, line, 60, slotTop+82+float64(j)*34, textR, textG, textB)
 			}
 		}
 
