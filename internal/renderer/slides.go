@@ -2690,7 +2690,7 @@ func slideWeeklyHighLow(dc *gg.Context, data *weather.WeatherData, use24h, useMe
 	contentTop := headerH + 20.0
 	contentH := h - contentTop - 20.0
 	rowH := contentH / float64(len(cards))
-	labelW := 160.0
+	labelW := 200.0
 	barLeft := labelW + 20.0
 	barRight := w - 80.0
 	barW := barRight - barLeft
