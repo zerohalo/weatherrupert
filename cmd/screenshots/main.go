@@ -90,7 +90,7 @@ func main() {
 		}},
 		{"extended-forecast", renderer.NewSlideExtendedForecast(false, false, nil, realisticMoon, nil, nil), nil},
 		{"weekly-high-low", renderer.NewSlideWeeklyHighLow(false, false, nil, nil), nil},
-		{"sun-solar", renderer.NewSlideSunMoon(false, false, nil, nil), func(d *weather.WeatherData) {
+		{"sun-solar", renderer.NewSlideSunMoon(false, false, nil, nil, nil), func(d *weather.WeatherData) {
 			d.Sun = makeSunData(now)
 			d.Solar = makeSolarData()
 		}},

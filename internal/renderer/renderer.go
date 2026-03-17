@@ -150,7 +150,7 @@ func New(w, h, frameRate int, label string,
 			}},
 			{name: "extended-forecast", fn: NewSlideExtendedForecast(use24h, useMetric, loc, getRealisticMoon, getFunSun, fonts)},
 			{name: "weekly-high-low", fn: NewSlideWeeklyHighLow(use24h, useMetric, loc, fonts), skip: func(d *weather.WeatherData) bool { return len(d.DailyPeriods) == 0 }},
-			{name: "sun-solar", fn: NewSlideSunMoon(use24h, useMetric, loc, fonts)},
+			{name: "sun-solar", fn: NewSlideSunMoon(use24h, useMetric, loc, getFunSun, fonts)},
 			{name: "moon-tides", fn: NewSlideMoonTides(use24h, useMetric, loc, fonts)},
 			{name: "uv-index", fn: NewSlideUVIndex(use24h, useMetric, loc, fonts), skip: func(d *weather.WeatherData) bool {
 				if d.UVIndex < 1 {

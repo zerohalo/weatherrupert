@@ -3354,21 +3354,24 @@ func feelsLikeDiffers(data *weather.WeatherData, threshold float64) bool {
 
 // NewSlideSunMoon returns a SlideFunc that shows sunrise/sunset, day length,
 // golden hour, and a compact solar weather summary.
-func NewSlideSunMoon(use24h, useMetric bool, loc *time.Location, fonts *fontSet) SlideFunc {
+func NewSlideSunMoon(use24h, useMetric bool, loc *time.Location, getFunSun func() bool, fonts *fontSet) SlideFunc {
 	if fonts == nil {
 		fonts = defaultFonts
 	}
 	if loc == nil {
 		loc = time.Local
 	}
+	if getFunSun == nil {
+		getFunSun = func() bool { return false }
+	}
 
 	cache := &solarImageCache{}
 	return func(dc *gg.Context, data *weather.WeatherData, _, _ time.Duration) time.Duration {
-		return slideSunMoon(dc, data, use24h, useMetric, loc, cache, fonts)
+		return slideSunMoon(dc, data, use24h, useMetric, loc, getFunSun, cache, fonts)
 	}
 }
 
-func slideSunMoon(dc *gg.Context, data *weather.WeatherData, use24h, useMetric bool, loc *time.Location, cache *solarImageCache, fonts *fontSet) time.Duration {
+func slideSunMoon(dc *gg.Context, data *weather.WeatherData, use24h, useMetric bool, loc *time.Location, getFunSun func() bool, cache *solarImageCache, fonts *fontSet) time.Duration {
 	drawBackgroundWithData(dc, "SUN & SOLAR", data, use24h, useMetric, loc, fonts)
 
 	w := float64(dc.Width())
@@ -3439,7 +3442,11 @@ func slideSunMoon(dc *gg.Context, data *weather.WeatherData, use24h, useMetric b
 
 		// Only draw sun dot if currently daytime.
 		if dayFrac > 0 && dayFrac < 1 {
-			drawSun(dc, sunX, sunY, 36)
+			if getFunSun() {
+				drawFunSun(dc, sunX, sunY, 36)
+			} else {
+				drawSun(dc, sunX, sunY, 36)
+			}
 		}
 
 		// Labels below the arc.
