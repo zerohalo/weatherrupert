@@ -205,7 +205,7 @@ func drawHeaderElements(dc *gg.Context, title, location string, use24h bool, loc
 	word1, word2 := "WEATHER", "RUPERT"
 	tw1, _ := dc.MeasureString(word1)
 	tw2, _ := dc.MeasureString(word2)
-	sunSize := 24.0
+	sunSize := 30.0
 	sunGap := 8.0 // space on each side of the sun
 	totalW := tw1 + sunGap + sunSize + sunGap + tw2
 	logoCX := w / 2
@@ -244,6 +244,30 @@ func drawHeaderElements(dc *gg.Context, title, location string, use24h bool, loc
 	}
 	dc.DrawCircle(sunCX, sunCY, sunR)
 	dc.Fill()
+	// Smiley face on the sun.
+	dc.SetRGB(0.7, 0.5, 0.0)
+	eyeR := sunR * 0.12
+	eyeY := sunCY - sunR*0.2
+	dc.DrawCircle(sunCX-sunR*0.3, eyeY, eyeR)
+	dc.Fill()
+	dc.DrawCircle(sunCX+sunR*0.3, eyeY, eyeR)
+	dc.Fill()
+	// Smile arc.
+	dc.SetLineWidth(sunR * 0.1)
+	smileR := sunR * 0.45
+	smileY := sunCY + sunR*0.05
+	dc.NewSubPath()
+	for j := 0; j <= 32; j++ {
+		a := math.Pi*0.15 + math.Pi*0.7*float64(j)/32
+		x := sunCX + smileR*math.Cos(a)
+		y := smileY + smileR*math.Sin(a)
+		if j == 0 {
+			dc.MoveTo(x, y)
+		} else {
+			dc.LineTo(x, y)
+		}
+	}
+	dc.Stroke()
 	// "RUPERT" text.
 	word2Left := sunCX + sunSize/2 + sunGap
 	dc.SetFontFace(fonts.mediumBold)
