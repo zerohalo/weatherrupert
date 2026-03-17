@@ -206,31 +206,28 @@ func drawHeaderElements(dc *gg.Context, title, location string, use24h bool, loc
 	tw1, _ := dc.MeasureString(word1)
 	tw2, _ := dc.MeasureString(word2)
 	sunSize := 56.0
-	sunGap := 8.0 // space on each side of the sun
+	sunGap := 8.0
 	totalW := tw1 + sunGap + sunSize + sunGap + tw2
 	logoCX := w / 2
-	textBaseline := headerH/2 + 8
+	logoCY := headerH / 2 // true vertical center of header
 	textLeft := logoCX - totalW/2
-	padX, padY := 10.0, 7.0
-	boxTop := textBaseline - 22
-	boxBot := textBaseline + 6
-	// Box border — lighter cyan.
+	padX := 12.0
+	// Box centered on header midpoint.
 	dc.SetRGBA(0.3, 0.75, 0.9, 0.7)
 	dc.SetLineWidth(2.5)
+	boxH := 38.0
 	boxL := textLeft - padX
-	boxT := boxTop - padY
+	boxT := logoCY - boxH/2
 	boxW := totalW + 2*padX
-	boxH := (boxBot - boxTop) + 2*padY
 	dc.DrawRoundedRectangle(boxL, boxT, boxW, boxH, 4)
 	dc.Stroke()
 
-	// Sun position — larger than the box so it breaks through the border.
+	// Sun position — centered vertically in header.
 	sunCX := textLeft + tw1 + sunGap + sunSize/2
-	sunCY := textBaseline - 8
+	sunCY := logoCY
 
-	// Erase the rectangle lines where the sun overflows by drawing a
-	// gradient-matched circle to restore the background behind the sun area.
-	eraseR := sunSize*0.44 + 3 // slightly larger than the outer ray tips
+	// Erase rectangle lines where the sun overflows.
+	eraseR := sunSize*0.44 + 3
 	hf := float64(dc.Height() - 1)
 	t := sunCY / hf
 	bgGradR := float64(0x10) * (1.0 - t) / 255
@@ -240,12 +237,13 @@ func drawHeaderElements(dc *gg.Context, title, location string, use24h bool, loc
 	dc.DrawCircle(sunCX, sunCY, eraseR)
 	dc.Fill()
 
-	// "WEATHER" text.
+	// "WEATHER" text — vertically centered with DrawStringAnchored.
+	word1CX := textLeft + tw1/2
 	dc.SetFontFace(fonts.mediumBold)
 	dc.SetRGBA(0, 0, 0, 0.6)
-	dc.DrawString(word1, textLeft+2, textBaseline+2)
+	dc.DrawStringAnchored(word1, word1CX+2, logoCY+2, 0.5, 0.35)
 	dc.SetRGB(0.8, 0.97, 1.0)
-	dc.DrawString(word1, textLeft, textBaseline)
+	dc.DrawStringAnchored(word1, word1CX, logoCY, 0.5, 0.35)
 	sunR := sunSize * 0.27
 	inner := sunSize * 0.32
 	outer := sunSize * 0.40
@@ -273,13 +271,13 @@ func drawHeaderElements(dc *gg.Context, title, location string, use24h bool, loc
 	dc.SetRGB(1.0, 1.0, 0.6)
 	dc.DrawCircle(sunCX, sunCY, sunR)
 	dc.Fill()
-	// "RUPERT" text.
-	word2Left := sunCX + sunSize/2 + sunGap
+	// "RUPERT" text — vertically centered.
+	word2CX := sunCX + sunSize/2 + sunGap + tw2/2
 	dc.SetFontFace(fonts.mediumBold)
 	dc.SetRGBA(0, 0, 0, 0.6)
-	dc.DrawString(word2, word2Left+2, textBaseline+2)
+	dc.DrawStringAnchored(word2, word2CX+2, logoCY+2, 0.5, 0.35)
 	dc.SetRGB(0.8, 0.97, 1.0)
-	dc.DrawString(word2, word2Left, textBaseline)
+	dc.DrawStringAnchored(word2, word2CX, logoCY, 0.5, 0.35)
 
 	// Date + time — right-aligned, vertically centred in the header band.
 	now := time.Now().In(loc)
