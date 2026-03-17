@@ -2716,9 +2716,11 @@ func slideWeeklyHighLow(dc *gg.Context, data *weather.WeatherData, use24h, useMe
 		y := contentTop + float64(i)*rowH
 		cy := y + rowH/2
 
-		// Day name.
+		// Day name — strip "This " prefix for compactness.
+		dayName := c.name
+		dayName = strings.TrimPrefix(dayName, "This ")
 		dc.SetFontFace(fonts.medium)
-		drawShadowTextAnchored(dc, strings.ToUpper(c.name), labelW-10, cy, 1.0, 0.5, titleR, titleG, titleB)
+		drawShadowTextAnchored(dc, strings.ToUpper(dayName), labelW-10, cy, 1.0, 0.5, titleR, titleG, titleB)
 
 		lo := convertTemp(float64(c.lowTemp), c.lowUnit, useMetric)
 		hi := convertTemp(float64(c.highTemp), c.highUnit, useMetric)
