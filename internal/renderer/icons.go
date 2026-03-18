@@ -1144,32 +1144,51 @@ func drawHolidayShamrock(dc *gg.Context, cx, cy, size float64) {
 
 // drawHolidayChampagne draws a champagne flute with bubbles (New Year's Day).
 func drawHolidayChampagne(dc *gg.Context, cx, cy, size float64) {
-	// Flute — tall narrow glass, slight taper.
-	topW := size * 0.08
-	botW := size * 0.05
-	fluteTop := cy - size*0.3
-	fluteBot := cy + size*0.02
-	// Glass outline.
+	// Champagne flute — bottom portion of a narrow ellipse (top cut off at the rim).
+	fluteTop := cy - size*0.28
+	fluteBot := cy + size*0.04
+	fluteH := fluteBot - fluteTop
+	eRx := size * 0.08             // horizontal radius of the ellipse
+	eRy := fluteH * 0.7            // vertical radius — taller than visible portion
+	eCY := fluteTop - eRy + fluteH // ellipse center below the rim
+	// Draw the visible lower arc of the ellipse (from rim down around the bottom and back).
 	dc.SetRGBA(0.8, 0.88, 1.0, 0.45)
-	dc.MoveTo(cx-topW, fluteTop)
-	dc.LineTo(cx+topW, fluteTop)
-	dc.LineTo(cx+botW, fluteBot)
-	dc.LineTo(cx-botW, fluteBot)
+	dc.NewSubPath()
+	// Find the angle at the rim (where the ellipse intersects fluteTop).
+	rimAngle := math.Asin((fluteTop - eCY) / eRy)
+	for j := 0; j <= 40; j++ {
+		a := rimAngle + (math.Pi-2*rimAngle)*float64(j)/40
+		px := cx + eRx*math.Cos(a)
+		py := eCY + eRy*math.Sin(a)
+		if j == 0 {
+			dc.MoveTo(px, py)
+		} else {
+			dc.LineTo(px, py)
+		}
+	}
 	dc.ClosePath()
 	dc.Fill()
-	// Rim — thin line at top.
+	// Rim line.
+	rimW := eRx * math.Cos(rimAngle)
 	dc.SetRGBA(0.9, 0.92, 1.0, 0.7)
 	dc.SetLineWidth(size * 0.01)
-	dc.DrawLine(cx-topW, fluteTop, cx+topW, fluteTop)
+	dc.DrawLine(cx-rimW, fluteTop, cx+rimW, fluteTop)
 	dc.Stroke()
-	// Champagne liquid — fills lower 60%.
-	liquidTop := fluteTop + (fluteBot-fluteTop)*0.4
-	lTopW := topW - (topW-botW)*0.4
+	// Champagne liquid — fills lower 55%.
+	liquidTop := fluteTop + fluteH*0.45
+	liquidAngle := math.Asin((liquidTop - eCY) / eRy)
 	dc.SetRGBA(1.0, 0.85, 0.3, 0.7)
-	dc.MoveTo(cx-lTopW, liquidTop)
-	dc.LineTo(cx+lTopW, liquidTop)
-	dc.LineTo(cx+botW, fluteBot)
-	dc.LineTo(cx-botW, fluteBot)
+	dc.NewSubPath()
+	for j := 0; j <= 40; j++ {
+		a := liquidAngle + (math.Pi-2*liquidAngle)*float64(j)/40
+		px := cx + eRx*math.Cos(a)
+		py := eCY + eRy*math.Sin(a)
+		if j == 0 {
+			dc.MoveTo(px, py)
+		} else {
+			dc.LineTo(px, py)
+		}
+	}
 	dc.ClosePath()
 	dc.Fill()
 	// Thin stem.
@@ -1353,12 +1372,30 @@ func drawHolidayTurkey(dc *gg.Context, cx, cy, size float64) {
 		{0.8, 0.2, 0.1}, {1.0, 0.5, 0.1}, {1.0, 0.8, 0.2},
 		{0.6, 0.3, 0.1}, {0.9, 0.3, 0.2},
 	}
+	bodyCY := cy + r*0.3
 	for i, fc := range featherColors {
-		a := -math.Pi/2 + float64(i-2)*math.Pi/8
+		a := -math.Pi/2 + float64(i-2)*math.Pi/6
 		fx := cx + r*1.5*math.Cos(a)
-		fy := cy + r*1.5*math.Sin(a) + r*0.2
+		fy := bodyCY + r*1.5*math.Sin(a)
 		dc.SetRGB(fc[0], fc[1], fc[2])
-		dc.DrawEllipse(fx, fy, r*0.35, r*0.9)
+		// Rotated ellipse — long axis radiates outward from body center.
+		eW := r * 0.35       // short axis (width)
+		eH := r * 0.9        // long axis (height, pointing outward)
+		rot := a + math.Pi/2 // rotate so long axis points radially outward
+		dc.NewSubPath()
+		for j := 0; j <= 32; j++ {
+			t := 2 * math.Pi * float64(j) / 32
+			lx := eW * math.Cos(t)
+			ly := eH * math.Sin(t)
+			px := fx + lx*math.Cos(rot) - ly*math.Sin(rot)
+			py := fy + lx*math.Sin(rot) + ly*math.Cos(rot)
+			if j == 0 {
+				dc.MoveTo(px, py)
+			} else {
+				dc.LineTo(px, py)
+			}
+		}
+		dc.ClosePath()
 		dc.Fill()
 	}
 	dc.SetRGB(0.5, 0.3, 0.15)
@@ -1650,21 +1687,27 @@ func drawHolidayTools(dc *gg.Context, cx, cy, size float64) {
 	dc.DrawLine(wx1, wy1, wx2, wy2)
 	dc.Stroke()
 
-	// Wrench head at top-left — U-shape open jaw.
+	// Wrench head at top-left — U-shaped open jaw.
 	perp := wAngle + math.Pi/2
-	jawW := s * 0.18
-	jawDepth := s * 0.2
-	// Two prongs of the jaw.
+	jawW := s * 0.16
+	jawDepth := s * 0.25
 	dc.SetLineWidth(size * 0.025)
-	p1x := wx1 + jawW*math.Cos(perp)
-	p1y := wy1 + jawW*math.Sin(perp)
-	p2x := wx1 - jawW*math.Cos(perp)
-	p2y := wy1 - jawW*math.Sin(perp)
-	tipX := wx1 - jawDepth*math.Cos(wAngle)
-	tipY := wy1 - jawDepth*math.Sin(wAngle)
-	dc.DrawLine(p1x, p1y, tipX+jawW*math.Cos(perp), tipY+jawW*math.Sin(perp))
-	dc.Stroke()
-	dc.DrawLine(p2x, p2y, tipX-jawW*math.Cos(perp), tipY-jawW*math.Sin(perp))
+	// Start at the shaft end, draw the U: right prong, semicircle, left prong.
+	dc.NewSubPath()
+	// Right prong.
+	dc.MoveTo(wx1+jawW*math.Cos(perp), wy1+jawW*math.Sin(perp))
+	tipRX := wx1 - jawDepth*math.Cos(wAngle) + jawW*math.Cos(perp)
+	tipRY := wy1 - jawDepth*math.Sin(wAngle) + jawW*math.Sin(perp)
+	dc.LineTo(tipRX, tipRY)
+	// Semicircle connecting the prongs at the end.
+	uCX := wx1 - jawDepth*math.Cos(wAngle)
+	uCY := wy1 - jawDepth*math.Sin(wAngle)
+	for j := 0; j <= 16; j++ {
+		ua := perp - math.Pi*float64(j)/16
+		dc.LineTo(uCX+jawW*math.Cos(ua), uCY+jawW*math.Sin(ua))
+	}
+	// Left prong back to shaft.
+	dc.LineTo(wx1-jawW*math.Cos(perp), wy1-jawW*math.Sin(perp))
 	dc.Stroke()
 
 	// Wrench closed end at bottom-right — small circle.
@@ -1806,23 +1849,25 @@ func RenderHolidayIconSheet(path string) error {
 	type entry struct {
 		draw  func(dc *gg.Context, cx, cy, size float64)
 		label string
+		scale float64 // size multiplier (1.0 = default)
+		dy    float64 // vertical offset as fraction of size
 	}
 	holidays := []entry{
-		{drawHolidayChampagne, "New Year's Day\nJan 1"},
-		{drawHolidayDove, "MLK Day\n3rd Mon Jan"},
-		{drawHolidayShield, "Presidents' Day\n3rd Mon Feb"},
-		{drawHolidayHeart, "Valentine's Day\nFeb 14"},
-		{drawHolidayShamrock, "St. Patrick's Day\nMar 17"},
-		{drawHolidayEgg, "Easter\n(variable)"},
-		{drawHolidayPoppy, "Memorial Day\nLast Mon May"},
-		{drawHolidayJuneteenth, "Juneteenth\nJun 19"},
-		{drawHolidayFirework, "Independence Day\nJul 4"},
-		{drawHolidayTools, "Labor Day\n1st Mon Sep"},
-		{drawHolidayFeather, "Indigenous Peoples'\n2nd Mon Oct"},
-		{drawHolidayPumpkin, "Halloween\nOct 31"},
-		{drawHolidayMedal, "Veterans Day\nNov 11"},
-		{drawHolidayTurkey, "Thanksgiving\n(variable)"},
-		{drawHolidayTree, "Christmas\nDec 25"},
+		{drawHolidayChampagne, "New Year's Day\nJan 1", 1.3, -0.05},
+		{drawHolidayDove, "MLK Day\n3rd Mon Jan", 1.1, 0.05},
+		{drawHolidayShield, "Presidents' Day\n3rd Mon Feb", 0.9, 0},
+		{drawHolidayHeart, "Valentine's Day\nFeb 14", 0.85, 0},
+		{drawHolidayShamrock, "St. Patrick's Day\nMar 17", 1.0, -0.03},
+		{drawHolidayEgg, "Easter\n(variable)", 1.1, 0},
+		{drawHolidayPoppy, "Memorial Day\nLast Mon May", 1.1, -0.05},
+		{drawHolidayJuneteenth, "Juneteenth\nJun 19", 1.0, 0},
+		{drawHolidayFirework, "Independence Day\nJul 4", 1.0, 0},
+		{drawHolidayTools, "Labor Day\n1st Mon Sep", 1.0, 0},
+		{drawHolidayFeather, "Indigenous Peoples'\n2nd Mon Oct", 1.1, 0},
+		{drawHolidayPumpkin, "Halloween\nOct 31", 0.9, 0},
+		{drawHolidayMedal, "Veterans Day\nNov 11", 1.0, 0},
+		{drawHolidayTurkey, "Thanksgiving\n(variable)", 1.0, 0},
+		{drawHolidayTree, "Christmas\nDec 25", 1.1, 0},
 	}
 
 	cols := 4
@@ -1850,7 +1895,11 @@ func RenderHolidayIconSheet(path string) error {
 		cx := float64(col)*cellW + cellW/2
 		cy := float64(row)*cellH + cellH/2 - 30
 
-		e.draw(dc, cx, cy, iconSize)
+		s := e.scale
+		if s == 0 {
+			s = 1
+		}
+		e.draw(dc, cx, cy+e.dy*iconSize, iconSize*s)
 
 		dc.SetRGB(textR, textG, textB)
 		dc.SetFontFace(defaultFonts.small)
