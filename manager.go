@@ -116,9 +116,11 @@ func (m *Manager) ActivePipelines() []admin.PipelineInfo {
 	for _, p := range pipelines {
 		// Hub.ClientCount() includes the HLS segmenter when subscribed, so
 		// subtract it to get direct MPEG-TS stream viewers only.
-		hlsActive := p.seg.ClientCount()
+		hlsSegSub := p.seg.ClientCount()
 		hubClients := p.hub.ClientCount()
-		totalViewers := hubClients - hlsActive + hlsActive // direct + HLS
+		directViewers := hubClients - hlsSegSub
+		hlsViewers := p.seg.ViewerCount()
+		totalViewers := directViewers + hlsViewers
 		totalViews := p.hub.TotalViews() - p.seg.HubSubscriptions() + p.seg.TotalViews()
 		var lastSeen time.Time
 		if totalViewers > 0 {
@@ -149,9 +151,9 @@ func (m *Manager) ActivePipelines() []admin.PipelineInfo {
 			ClockFormat:      p.clockFormat,
 			Units:            p.units,
 			Alerts:           alertCount,
-			Viewers:          hubClients - hlsActive,
+			Viewers:          directViewers,
 			Views:            p.hub.TotalViews() - p.seg.HubSubscriptions(),
-			HLSViewers:       hlsActive,
+			HLSViewers:       hlsViewers,
 			HLSViews:         p.seg.TotalViews(),
 			MusicStream:      musicStream,
 			ViewTime:         p.hub.TotalViewTime() - p.seg.HubSubscriptionTime(),

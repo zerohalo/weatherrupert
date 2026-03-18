@@ -31,7 +31,7 @@ type PipelineInfo struct {
 	Alerts      int           // number of active weather alerts
 	Viewers     int           // current direct MPEG-TS stream viewers
 	Views       int           // total direct stream connections since pipeline started
-	HLSViewers  int           // current HLS viewers (0 or 1 when segmenter is subscribed)
+	HLSViewers  int           // current active HLS viewers
 	HLSViews    int           // total HLS viewer sessions
 	MusicStream string        // display name of the music source in use
 	ViewTime    time.Duration // cumulative direct stream viewing time

@@ -526,6 +526,13 @@ func (s *HLSSegmenter) HubSubscriptionTime() time.Duration {
 	return total
 }
 
+// ViewerCount returns the number of currently active HLS viewers.
+func (s *HLSSegmenter) ViewerCount() int {
+	s.viewMu.Lock()
+	defer s.viewMu.Unlock()
+	return len(s.activeViewers)
+}
+
 // TotalViews returns the total number of HLS viewer sessions.
 func (s *HLSSegmenter) TotalViews() int {
 	s.viewMu.Lock()
