@@ -201,6 +201,20 @@ func drawHeaderElements(dc *gg.Context, title, location string, use24h bool, loc
 		drawShadowText(dc, truncate(strings.ToUpper(location), 42), 60, 80, textR, textG, textB)
 	}
 
+	// Holiday icons — drawn to the left of the logo.
+	holidays := ActiveHolidays(time.Now().In(loc))
+	if len(holidays) > 0 {
+		holidaySize := 70.0
+		holidayGap := 8.0
+		// Position to the left of center, so icons sit left of the logo.
+		totalHW := float64(len(holidays))*(holidaySize+holidayGap) - holidayGap
+		hStartX := w/2 - totalHW/2 - 180 // left of logo center
+		for i, h := range holidays {
+			hx := hStartX + float64(i)*(holidaySize+holidayGap) + holidaySize/2
+			h.Draw(dc, hx, headerH/2, holidaySize)
+		}
+	}
+
 	// Logo: "WEATHER ☀ RUPERT" in a cyan-bordered box, centered in header.
 	dc.SetFontFace(fonts.cardBody)
 	word1, word2 := "WEATHER", "RUPERT"
@@ -290,8 +304,8 @@ func drawHeaderElements(dc *gg.Context, title, location string, use24h bool, loc
 	drawShadowTextAnchored(dc, now.Format(timeFmt+" MST"), w-50, 64, 1.0, 0.5, textR, textG, textB)
 }
 
-// drawHeaderCurrentTemp draws a small current-condition icon and temperature
-// in the header, to the left of the date/time display. Call after drawBackground.
+// drawHeaderCurrentTemp draws a small current-condition icon, temperature,
+// and alert indicator in the header to the left of the date/time display.
 func drawHeaderCurrentTemp(dc *gg.Context, data *weather.WeatherData, useMetric bool, loc *time.Location, fonts *fontSet) {
 	if data == nil || data.Current.TempF == nil {
 		return
@@ -307,23 +321,19 @@ func drawHeaderCurrentTemp(dc *gg.Context, data *weather.WeatherData, useMetric 
 	}
 	tempLabel := fmt.Sprintf("%.0f%s", temp, unit)
 
-	// Position: to the left of the date/time block.
-	// Date/time right edge is at w-50; the date text is ~120px wide.
 	tempX := w - 240
 	tempY := headerH / 2
-
-	// Small condition icon.
-	isDaytime := currentIsDaytime(data, loc)
-	icon := conditionIcon(data.Current.Description, isDaytime)
 	iconSize := 34.0
 	iconX := tempX - 20
 
-	// Alert indicator — warning triangle to the left of the condition icon,
-	// spaced the same distance as the icon is from the temperature text.
+	// Alert indicator.
 	if len(activeAlerts(data.Alerts)) > 0 {
 		drawAlertIndicator(dc, iconX-iconSize/2-28, tempY+3, 26.0, data.Alerts)
 	}
 
+	// Condition icon.
+	isDaytime := currentIsDaytime(data, loc)
+	icon := conditionIcon(data.Current.Description, isDaytime)
 	drawIcon(dc, icon, iconX, tempY+3, iconSize)
 
 	// Temperature text.
