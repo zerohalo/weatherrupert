@@ -2,6 +2,7 @@ package renderer
 
 import (
 	"fmt"
+	"image"
 	"image/png"
 	"math"
 	"os"
@@ -1849,25 +1850,23 @@ func RenderHolidayIconSheet(path string) error {
 	type entry struct {
 		draw  func(dc *gg.Context, cx, cy, size float64)
 		label string
-		scale float64 // size multiplier (1.0 = default)
-		dy    float64 // vertical offset as fraction of size
 	}
 	holidays := []entry{
-		{drawHolidayChampagne, "New Year's Day\nJan 1", 1.3, -0.05},
-		{drawHolidayDove, "MLK Day\n3rd Mon Jan", 1.1, 0.05},
-		{drawHolidayShield, "Presidents' Day\n3rd Mon Feb", 0.9, 0},
-		{drawHolidayHeart, "Valentine's Day\nFeb 14", 0.85, 0},
-		{drawHolidayShamrock, "St. Patrick's Day\nMar 17", 1.0, -0.03},
-		{drawHolidayEgg, "Easter\n(variable)", 1.1, 0},
-		{drawHolidayPoppy, "Memorial Day\nLast Mon May", 1.1, -0.05},
-		{drawHolidayJuneteenth, "Juneteenth\nJun 19", 1.0, 0},
-		{drawHolidayFirework, "Independence Day\nJul 4", 1.0, 0},
-		{drawHolidayTools, "Labor Day\n1st Mon Sep", 1.0, 0},
-		{drawHolidayFeather, "Indigenous Peoples'\n2nd Mon Oct", 1.1, 0},
-		{drawHolidayPumpkin, "Halloween\nOct 31", 0.9, 0},
-		{drawHolidayMedal, "Veterans Day\nNov 11", 1.0, 0},
-		{drawHolidayTurkey, "Thanksgiving\n(variable)", 1.0, 0},
-		{drawHolidayTree, "Christmas\nDec 25", 1.1, 0},
+		{drawHolidayChampagne, "New Year's Day\nJan 1"},
+		{drawHolidayDove, "MLK Day\n3rd Mon Jan"},
+		{drawHolidayShield, "Presidents' Day\n3rd Mon Feb"},
+		{drawHolidayHeart, "Valentine's Day\nFeb 14"},
+		{drawHolidayShamrock, "St. Patrick's Day\nMar 17"},
+		{drawHolidayEgg, "Easter\n(variable)"},
+		{drawHolidayPoppy, "Memorial Day\nLast Mon May"},
+		{drawHolidayJuneteenth, "Juneteenth\nJun 19"},
+		{drawHolidayFirework, "Independence Day\nJul 4"},
+		{drawHolidayTools, "Labor Day\n1st Mon Sep"},
+		{drawHolidayFeather, "Indigenous Peoples'\n2nd Mon Oct"},
+		{drawHolidayPumpkin, "Halloween\nOct 31"},
+		{drawHolidayMedal, "Veterans Day\nNov 11"},
+		{drawHolidayTurkey, "Thanksgiving\n(variable)"},
+		{drawHolidayTree, "Christmas\nDec 25"},
 	}
 
 	cols := 4
@@ -1889,17 +1888,58 @@ func RenderHolidayIconSheet(path string) error {
 	}
 
 	iconSize := 160.0
+	// Render each icon to a temp canvas, measure its bounding box,
+	// then draw it scaled and centered into the target area.
+	tmpSize := 400
+	target := iconSize * 0.8 // target bounding box for normalized icons
 	for i, e := range holidays {
 		col := i % cols
 		row := i / cols
 		cx := float64(col)*cellW + cellW/2
 		cy := float64(row)*cellH + cellH/2 - 30
 
-		s := e.scale
-		if s == 0 {
-			s = 1
+		// Render to temp canvas to measure bounds.
+		tmp := gg.NewContext(tmpSize, tmpSize)
+		tc := float64(tmpSize) / 2
+		e.draw(tmp, tc, tc, float64(tmpSize)*0.8)
+		img := tmp.Image().(*image.RGBA)
+
+		// Measure bounding box of non-transparent pixels.
+		minX, minY, maxX, maxY := tmpSize, tmpSize, 0, 0
+		for py := 0; py < tmpSize; py++ {
+			for px := 0; px < tmpSize; px++ {
+				if img.RGBAAt(px, py).A > 10 {
+					if px < minX {
+						minX = px
+					}
+					if py < minY {
+						minY = py
+					}
+					if px > maxX {
+						maxX = px
+					}
+					if py > maxY {
+						maxY = py
+					}
+				}
+			}
 		}
-		e.draw(dc, cx, cy+e.dy*iconSize, iconSize*s)
+
+		if maxX > minX && maxY > minY {
+			bw := float64(maxX - minX)
+			bh := float64(maxY - minY)
+			// Scale to fit target, maintaining aspect ratio.
+			scale := target / math.Max(bw, bh)
+			// Center of the bounding box in tmp coords.
+			bcx := float64(minX) + bw/2
+			bcy := float64(minY) + bh/2
+			// Offset from tmp center.
+			offX := (bcx - tc) * scale
+			offY := (bcy - tc) * scale
+			e.draw(dc, cx-offX, cy-offY, float64(tmpSize)*0.8*scale)
+		} else {
+			e.draw(dc, cx, cy, iconSize)
+		}
 
 		dc.SetRGB(textR, textG, textB)
 		dc.SetFontFace(defaultFonts.small)
