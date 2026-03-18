@@ -21,8 +21,10 @@ type Logger struct {
 }
 
 // New creates a Logger that prefixes every message with "component [id]: ".
+// The component name is left-padded to 8 characters so that the [id] column
+// lines up across different components (e.g. ffmpeg, weather, pipeline).
 func New(component, id string) *Logger {
-	return &Logger{prefix: fmt.Sprintf("%s [%s]: ", component, id)}
+	return &Logger{prefix: fmt.Sprintf("%-8s [%s]: ", component, id)}
 }
 
 // Printf logs a formatted message with the baked-in prefix.
