@@ -211,15 +211,8 @@ func (s *HLSSegmenter) ingestChunk(chunk []byte) {
 	// Scan newly appended data for a keyframe to split on.
 	kf := findKeyframe(s.accumBuf, prevLen)
 	if kf < 0 {
-		if len(s.accumBuf)%10000 < len(chunk) { // log periodically
-			s.log.Printf("no keyframe yet, accumBuf=%d bytes, elapsed=%v, prevLen=%d",
-				s.zip, len(s.accumBuf), elapsed, prevLen)
-		}
 		return // no keyframe yet, keep accumulating
 	}
-
-	s.log.Printf("splitting segment at keyframe offset %d, accumBuf=%d bytes, elapsed=%v",
-		s.zip, kf, len(s.accumBuf), elapsed)
 
 	// Split: everything before the keyframe is the segment,
 	// the keyframe and beyond starts the next segment.
@@ -415,7 +408,10 @@ func (s *HLSSegmenter) ServePlaylist(w http.ResponseWriter, r *http.Request) {
 		playlist += "#EXT-X-ENDLIST\n"
 	}
 
-	s.log.Printf("serving playlist with %d segment(s), mediaSeq=%d", len(segments), mediaSeq)
+	// Log only every 10th playlist request to reduce noise.
+	if s.playlistReqs.Load()%10 == 1 {
+		s.log.Printf("serving playlist with %d segment(s), mediaSeq=%d", len(segments), mediaSeq)
+	}
 	w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
 	w.Header().Set("Cache-Control", "no-cache, no-store")
 	w.Write([]byte(playlist))
@@ -454,7 +450,10 @@ func (s *HLSSegmenter) ServeSegment(w http.ResponseWriter, r *http.Request) {
 					break
 				}
 			}
-			s.log.Printf("serving segment seq=%d (%d bytes, lag=%d)", seq, len(seg.Data), lag)
+			// Only log segment serves when lag > 0 (falling behind).
+			if lag > 0 {
+				s.log.Printf("serving segment seq=%d (%d bytes, lag=%d)", seq, len(seg.Data), lag)
+			}
 			w.Header().Set("Content-Type", "video/mp2t")
 			w.Header().Set("Cache-Control", "max-age=3")
 			w.Write(seg.Data)
