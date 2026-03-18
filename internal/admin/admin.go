@@ -1187,11 +1187,17 @@ func (s *Store) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var musicCell string
-	if len(musicStreams) == 0 {
+	var enabledStreams []StreamEntry
+	for _, e := range musicStreams {
+		if !e.Disabled {
+			enabledStreams = append(enabledStreams, e)
+		}
+	}
+	if len(enabledStreams) == 0 {
 		musicCell = `<span style="color:#668">none configured</span>`
 	} else {
 		var names []string
-		for _, e := range musicStreams {
+		for _, e := range enabledStreams {
 			names = append(names, htmlEscape(e.DisplayName()))
 		}
 		musicCell = `<span style="color:#FFFF00">` + strings.Join(names, `</span>, <span style="color:#FFFF00">`) + `</span>`
