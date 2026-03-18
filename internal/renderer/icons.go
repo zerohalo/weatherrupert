@@ -1083,56 +1083,105 @@ func drawHolidayHeart(dc *gg.Context, cx, cy, size float64) {
 
 // drawHolidayShamrock draws a green four-leaf clover (St. Patrick's Day).
 func drawHolidayShamrock(dc *gg.Context, cx, cy, size float64) {
-	// Draw each leaf as a heart shape rotated toward center.
-	lr := size * 0.07       // lobe radius (smaller for definition)
-	leafDist := size * 0.11 // distance from center to leaf center
-	leafAngles := []float64{
-		-math.Pi / 2, // top
-		0,            // right
-		math.Pi / 2,  // bottom
-		math.Pi,      // left
-	}
-	// Alternating dark/light greens for contrast between adjacent leaves.
-	leafColors := [][3]float64{
-		{0.02, 0.45, 0.08}, // top - dark
-		{0.18, 0.78, 0.3},  // right - light
-		{0.02, 0.45, 0.08}, // bottom - dark
-		{0.18, 0.78, 0.3},  // left - light
-	}
+	// Reuse the proven Valentine heart bezier, but rotated for each leaf.
+	// The heart path is defined with the point at bottom and lobes at top,
+	// then we rotate so each leaf's point faces the center and lobes face out.
+	//
+	// In local coords (before rotation): point at (0, +s*0.8), lobes at top.
+	// We rotate so the point faces toward (cx,cy) and lobes face outward.
+	drawHeartLeaf := func(angle, s float64, r, g, b, a float64) {
+		// angle = direction the leaf points OUTWARD from center.
+		// The heart template has its point at (0, +s*0.8) pointing down.
+		// We rotate so the point faces inward (toward center) and lobes face out.
+		rot := angle + math.Pi/2
+		cos, sin := math.Cos(rot), math.Sin(rot)
 
-	for i, la := range leafAngles {
-		lc := leafColors[i]
-		dc.SetRGB(lc[0], lc[1], lc[2])
-		// Leaf center position.
-		lx := cx + leafDist*math.Cos(la)
-		ly := cy + leafDist*math.Sin(la)
-		// The two lobes sit perpendicular to the leaf direction.
-		perp := la + math.Pi/2
-		lobeOff := lr * 0.6
-		// Lobe 1.
-		dc.DrawCircle(lx+lobeOff*math.Cos(perp), ly+lobeOff*math.Sin(perp), lr)
-		dc.Fill()
-		// Lobe 2.
-		dc.DrawCircle(lx-lobeOff*math.Cos(perp), ly-lobeOff*math.Sin(perp), lr)
-		dc.Fill()
-		// V-point toward center.
-		tipDist := lr * 1.6
-		tipX := lx + tipDist*math.Cos(la+math.Pi)
-		tipY := ly + tipDist*math.Sin(la+math.Pi)
-		wingDist := lr * 1.1
-		dc.MoveTo(lx+wingDist*math.Cos(perp), ly+wingDist*math.Sin(perp))
-		dc.LineTo(tipX, tipY)
-		dc.LineTo(lx-wingDist*math.Cos(perp), ly-wingDist*math.Sin(perp))
+		// Transform local point to world. We squish the X axis (perpendicular
+		// to the leaf) to make each leaf narrower/more elongated like a real clover.
+		// Offset so the heart's point (local 0, s*0.8) lands at (cx,cy) —
+		// lobes extend outward, point sits at center.
+		ws := 0.78 // width scale
+		offX := s * 0.8 * math.Cos(angle)
+		offY := s * 0.8 * math.Sin(angle)
+		p := func(lx, ly float64) (float64, float64) {
+			slx := lx * ws
+			return cx + offX + slx*cos - ly*sin, cy + offY + slx*sin + ly*cos
+		}
+
+		// Heart bezier path (same proven shape as drawHolidayHeart).
+		bx, by := p(0, s*0.8) // bottom point (will become the center-facing tip)
+		dc.NewSubPath()
+		dc.MoveTo(bx, by)
+		// Left side.
+		c1x, c1y := p(-s*1.0, s*0.1)
+		c2x, c2y := p(-s*1.0, -s*0.6)
+		ex, ey := p(-s*0.5, -s*0.75)
+		dc.CubicTo(c1x, c1y, c2x, c2y, ex, ey)
+		// Top-left bump to center dip.
+		c3x, c3y := p(-s*0.15, -s*0.85)
+		c4x, c4y := p(0, -s*0.55)
+		dx, dy := p(0, -s*0.4)
+		dc.CubicTo(c3x, c3y, c4x, c4y, dx, dy)
+		// Center dip to top-right bump.
+		c5x, c5y := p(0, -s*0.55)
+		c6x, c6y := p(s*0.15, -s*0.85)
+		fx, fy := p(s*0.5, -s*0.75)
+		dc.CubicTo(c5x, c5y, c6x, c6y, fx, fy)
+		// Right side.
+		c7x, c7y := p(s*1.0, -s*0.6)
+		c8x, c8y := p(s*1.0, s*0.1)
+		dc.CubicTo(c7x, c7y, c8x, c8y, bx, by)
 		dc.ClosePath()
+		if a >= 1.0 {
+			dc.SetRGB(r, g, b)
+		} else {
+			dc.SetRGBA(r, g, b, a)
+		}
 		dc.Fill()
-
-		// Dark line down the center of each leaf for definition.
-		dc.SetRGBA(0.0, 0.25, 0.02, 0.6)
-		dc.SetLineWidth(size * 0.01)
-		dc.DrawLine(lx-lr*0.3*math.Cos(la), ly-lr*0.3*math.Sin(la),
-			tipX, tipY)
-		dc.Stroke()
 	}
+
+	s := size * 0.16 // leaf size (scale factor for the heart template)
+
+	// Four leaves at 90° intervals, tilted ~15° clockwise like the emoji.
+	tilt := -0.25 // slight clockwise tilt of the whole clover
+	leafAngles := []float64{
+		-math.Pi*3/4 + tilt, // upper-left
+		-math.Pi/4 + tilt,   // upper-right
+		math.Pi/4 + tilt,    // lower-right
+		math.Pi*3/4 + tilt,  // lower-left
+	}
+	outerColors := [][3]float64{
+		{0.13, 0.52, 0.13},
+		{0.06, 0.38, 0.06},
+		{0.13, 0.52, 0.13},
+		{0.06, 0.38, 0.06},
+	}
+	innerColors := [][3]float64{
+		{0.25, 0.65, 0.22},
+		{0.18, 0.55, 0.15},
+		{0.25, 0.65, 0.22},
+		{0.18, 0.55, 0.15},
+	}
+
+	// Draw back leaves first for overlap.
+	drawOrder := []int{2, 3, 0, 1}
+	for _, i := range drawOrder {
+		oc := outerColors[i]
+		drawHeartLeaf(leafAngles[i], s, oc[0], oc[1], oc[2], 1.0)
+		// Inner marking: smaller heart, offset outward along the leaf axis.
+		ic := innerColors[i]
+		off := s * 0.35
+		savedCx, savedCy := cx, cy
+		cx += off * math.Cos(leafAngles[i])
+		cy += off * math.Sin(leafAngles[i])
+		drawHeartLeaf(leafAngles[i], s*0.45, ic[0], ic[1], ic[2], 0.85)
+		cx, cy = savedCx, savedCy
+	}
+
+	// Light center dot.
+	dc.SetRGBA(0.45, 0.78, 0.40, 0.55)
+	dc.DrawCircle(cx, cy, size*0.018)
+	dc.Fill()
 }
 
 // drawHolidayChampagne draws a champagne flute with bubbles (New Year's Day).
