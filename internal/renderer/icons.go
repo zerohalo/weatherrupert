@@ -185,8 +185,8 @@ func drawMoonPhase(dc *gg.Context, cx, cy, size, phase float64) {
 		dc.SetRGBA(0.18, 0.20, 0.30, 0.65)
 		dc.DrawCircle(cx, cy, r)
 		dc.Fill()
-		dc.SetRGBA(0.5, 0.5, 0.55, 0.35)
-		dc.SetLineWidth(1.5)
+		dc.SetRGBA(0.55, 0.55, 0.6, 0.45)
+		dc.SetLineWidth(2.0)
 		dc.DrawCircle(cx, cy, r)
 		dc.Stroke()
 		return
