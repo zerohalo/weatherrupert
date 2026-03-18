@@ -3061,13 +3061,30 @@ func slideWindForecast(dc *gg.Context, data *weather.WeatherData, use24h, useMet
 
 	cl.DrawDots(dc, divR, divG, divB, 4)
 
-	// Wind arrows and labels at each point.
-	arrowSize := 18.0
+	// Wind direction labels, arrows, and speed labels at each point.
+	arrowSize := 16.0
 	for i := range periods {
 		x, y := cl.Xs[i], cl.Ys[i]
 
-		// Wind direction arrow above the graph.
-		arrowY := cl.PlotTop - 30
+		// Cardinal direction text above the graph (e.g. "N", "NNW").
+		dc.SetFontFace(fonts.small)
+		dirLabel := periods[i].WindDirection
+		drawShadowTextAnchored(dc, dirLabel, x, cl.PlotTop-30, 0.5, 1.0, textR, textG, textB)
+
+		// Speed label above the plot line.
+		dc.SetFontFace(fonts.small)
+		labelY := y - 40
+		if labelY < cl.PlotTop+10 {
+			labelY = cl.PlotTop + 10
+		}
+		sr, sg, sb := windSpeedColor(speeds[i], useMetric)
+		drawShadowTextAnchored(dc, fmt.Sprintf("%.0f", speeds[i]), x, labelY, 0.5, 1.0, sr, sg, sb)
+
+		// Wind direction arrow just above the speed label.
+		arrowY := labelY - 18
+		if arrowY < cl.PlotTop+10 {
+			arrowY = cl.PlotTop + 10
+		}
 		angle := dirs[i] * math.Pi / 180
 		drawAngle := angle + math.Pi
 		dc.SetRGB(textR, textG, textB)
@@ -3084,15 +3101,6 @@ func slideWindForecast(dc *gg.Context, data *weather.WeatherData, use24h, useMet
 		dc.MoveTo(tipX, tipY)
 		dc.LineTo(tipX-headLen*math.Sin(drawAngle+headAngle), tipY+headLen*math.Cos(drawAngle+headAngle))
 		dc.Stroke()
-
-		// Speed label above the plot line.
-		dc.SetFontFace(fonts.small)
-		labelY := y - 40
-		if labelY < cl.PlotTop+10 {
-			labelY = cl.PlotTop + 10
-		}
-		sr, sg, sb := windSpeedColor(speeds[i], useMetric)
-		drawShadowTextAnchored(dc, fmt.Sprintf("%.0f", speeds[i]), x, labelY, 0.5, 1.0, sr, sg, sb)
 	}
 
 	cl.DrawTimeLabels(dc, periods, use24h, loc, fonts)
