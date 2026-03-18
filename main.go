@@ -56,6 +56,7 @@ func main() {
 		defaultStreams,
 		cfg.TriviaAPI, cfg.TriviaAPIAmount, cfg.TriviaAPICategory,
 		cfg.TriviaAPIDifficulty, cfg.TriviaAPIRefresh, cfg.TriviaBuiltin)
+	store.SetLocalMusicFiles(fallbackMusic.FileCount)
 
 	// Derive the NWS API hostname so a custom proxy URL is classified correctly.
 	nwsHost := "api.weather.gov"

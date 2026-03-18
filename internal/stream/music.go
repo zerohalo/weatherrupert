@@ -30,6 +30,7 @@ var audioExtensions = map[string]bool{
 // are empty, FFmpegArgs returns a silent audio source.
 type MusicSource struct {
 	HasMusic     bool
+	FileCount    int      // number of local audio files found (0 if using stream/silence)
 	PlaylistPath string   // path to FFmpeg concat demuxer playlist file (local files)
 	StreamURL    string   // URL of an HTTP/Icecast audio stream (direct connection)
 	RelayPipe    *os.File // read end of a MusicRelay pipe (shared stream via fd 3)
@@ -114,7 +115,7 @@ func ScanMusicDir(dir string) (*MusicSource, error) {
 		return nil, fmt.Errorf("music: building playlist: %w", err)
 	}
 
-	return &MusicSource{HasMusic: true, PlaylistPath: playlistPath}, nil
+	return &MusicSource{HasMusic: true, FileCount: len(files), PlaylistPath: playlistPath}, nil
 }
 
 // buildConcatPlaylist writes an FFmpeg concat demuxer playlist to /tmp.

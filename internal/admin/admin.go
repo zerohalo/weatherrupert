@@ -153,6 +153,7 @@ type Store struct {
 	clockFormat          string              // default clock format: "12" or "24"
 	unitSystem           string              // default unit system: "imperial" or "metric"
 	streams              []StreamEntry       // music streams; one is chosen at random per pipeline
+	localMusicFiles      int                 // number of local audio files found in MUSIC_DIR
 
 	startedAt time.Time // container start time for uptime display
 
@@ -732,6 +733,13 @@ func (s *Store) AllStreams() []StreamEntry {
 	return cp
 }
 
+// SetLocalMusicFiles records how many local audio files were found in MUSIC_DIR.
+func (s *Store) SetLocalMusicFiles(n int) {
+	s.mu.Lock()
+	s.localMusicFiles = n
+	s.mu.Unlock()
+}
+
 // ── HTTP admin interface ───────────────────────────────────────────────────────
 
 // RegisterRoutes adds the admin handlers to mux under /admin/.
@@ -1174,6 +1182,7 @@ func (s *Store) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	realisticMoon := s.realisticMoonIcons
 	funSun := s.funSunIcons
 	satProd := s.satelliteProduct
+	localMusicFiles := s.localMusicFiles
 	s.mu.RUnlock()
 
 	fmtInterval := func(n int) string {
@@ -1194,13 +1203,18 @@ func (s *Store) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(enabledStreams) == 0 {
-		musicCell = `<span style="color:#668">none configured</span>`
+		musicCell = `<span style="color:#668">none</span>`
 	} else {
 		var names []string
 		for _, e := range enabledStreams {
 			names = append(names, htmlEscape(e.DisplayName()))
 		}
 		musicCell = `<span style="color:#FFFF00">` + strings.Join(names, `</span>, <span style="color:#FFFF00">`) + `</span>`
+	}
+
+	localFilesCell := fmt.Sprintf(`<span style="color:#FFFF00">%d</span>`, localMusicFiles)
+	if localMusicFiles == 0 {
+		localFilesCell = `<span style="color:#668">none</span>`
 	}
 
 	yn := func(b bool) string {
@@ -1293,7 +1307,8 @@ func (s *Store) handleDashboard(w http.ResponseWriter, r *http.Request) {
 <tr><td>Built-in</td><td style="color:#FFFF00">%s</td></tr>
 <tr><td>API</td><td style="color:#FFFF00">%s</td></tr>
 <tr><td colspan="2" style="color:#FFFF00; letter-spacing:1px; padding:10px 0 2px"><b>MUSIC</b></td></tr>
-<tr><td>Music streams</td><td>%s</td></tr>
+<tr><td>Streams enabled</td><td>%s</td></tr>
+<tr><td>Local files</td><td>%s</td></tr>
 </table>
 </div>
 <div>
@@ -1322,7 +1337,7 @@ setInterval(function() {
 		clockDisplay, unitDisplay, satDisplay, yn(realisticMoon), yn(funSun), slide,
 		na, annD, fmtInterval(annInt),
 		nt, ntAPIMatched, ntAPICached, trivD, fmtInterval(trivInt), yn(trivRand), yn(trivBuiltin), trivAPIDetail,
-		musicCell,
+		musicCell, localFilesCell,
 		apiStatsHTML,
 		pipelineHTML)
 	writePage(w, "DASHBOARD", body)
