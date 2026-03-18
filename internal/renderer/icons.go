@@ -1083,28 +1083,21 @@ func drawHolidayHeart(dc *gg.Context, cx, cy, size float64) {
 
 // drawHolidayShamrock draws a green four-leaf clover (St. Patrick's Day).
 func drawHolidayShamrock(dc *gg.Context, cx, cy, size float64) {
-	// Stem drawn first so leaves cover it.
-	dc.SetRGB(0.05, 0.5, 0.1)
-	dc.SetLineWidth(size * 0.03)
-	dc.MoveTo(cx, cy+size*0.02)
-	dc.CubicTo(cx+size*0.04, cy+size*0.18, cx-size*0.03, cy+size*0.28, cx+size*0.02, cy+size*0.38)
-	dc.Stroke()
-
 	// Draw each leaf as a heart shape rotated toward center.
-	// Each leaf: two lobes + a V-point aimed at center.
-	lr := size * 0.085      // lobe radius
-	leafDist := size * 0.12 // distance from center to leaf center
+	lr := size * 0.07       // lobe radius (smaller for definition)
+	leafDist := size * 0.11 // distance from center to leaf center
 	leafAngles := []float64{
 		-math.Pi / 2, // top
 		0,            // right
 		math.Pi / 2,  // bottom
 		math.Pi,      // left
 	}
+	// Alternating dark/light greens for contrast between adjacent leaves.
 	leafColors := [][3]float64{
-		{0.1, 0.72, 0.22},
-		{0.08, 0.68, 0.18},
-		{0.12, 0.74, 0.24},
-		{0.08, 0.66, 0.2},
+		{0.02, 0.45, 0.08}, // top - dark
+		{0.18, 0.78, 0.3},  // right - light
+		{0.02, 0.45, 0.08}, // bottom - dark
+		{0.18, 0.78, 0.3},  // left - light
 	}
 
 	for i, la := range leafAngles {
@@ -1134,12 +1127,11 @@ func drawHolidayShamrock(dc *gg.Context, cx, cy, size float64) {
 		dc.Fill()
 
 		// Dark line down the center of each leaf for definition.
-		dc.SetRGBA(0.03, 0.4, 0.08, 0.5)
-		dc.SetLineWidth(size * 0.008)
+		dc.SetRGBA(0.0, 0.25, 0.02, 0.6)
+		dc.SetLineWidth(size * 0.01)
 		dc.DrawLine(lx-lr*0.3*math.Cos(la), ly-lr*0.3*math.Sin(la),
 			tipX, tipY)
 		dc.Stroke()
-		dc.SetRGB(lc[0], lc[1], lc[2])
 	}
 }
 
