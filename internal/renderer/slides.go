@@ -3073,8 +3073,12 @@ func slideWindForecast(dc *gg.Context, data *weather.WeatherData, use24h, useMet
 
 	cl.DrawDots(dc, divR, divG, divB, 4)
 
+	// "FROM" axis label for the cardinal direction row.
+	dc.SetFontFace(fonts.small)
+	drawShadowTextAnchored(dc, "FROM", cl.PlotLeft-15, cl.PlotTop-30, 1.0, 1.0, divR, divG, divB)
+
 	// Wind direction labels, arrows, and speed labels at each point.
-	arrowSize := 16.0
+	arrowSize := 22.0
 	for i := range periods {
 		x, y := cl.Xs[i], cl.Ys[i]
 
