@@ -335,18 +335,18 @@ func drawHeaderCurrentTemp(dc *gg.Context, data *weather.WeatherData, useMetric 
 
 	tempX := w - 240
 	tempY := headerH / 2
-	iconSize := 34.0
-	iconX := tempX - 20
+	iconSize := 40.0
+	iconX := tempX - 22
 
 	// Alert indicator.
 	if len(activeAlerts(data.Alerts)) > 0 {
-		drawAlertIndicator(dc, iconX-iconSize/2-28, tempY+3, 26.0, data.Alerts)
+		drawAlertIndicator(dc, iconX-iconSize/2-28, tempY, 26.0, data.Alerts)
 	}
 
 	// Condition icon (respects realistic moon phase setting).
 	isDaytime := currentIsDaytime(data, loc)
 	icon := conditionIcon(data.Current.Description, isDaytime)
-	drawIconWithMoon(dc, icon, iconX, tempY+3, iconSize, data.MoonPhase.Phase, realisticMoon, funSun)
+	drawIconWithMoon(dc, icon, iconX, tempY, iconSize, data.MoonPhase.Phase, realisticMoon, funSun)
 
 	// Temperature text.
 	dc.SetFontFace(fonts.small)
