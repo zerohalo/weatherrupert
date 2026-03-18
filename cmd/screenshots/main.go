@@ -56,11 +56,11 @@ func main() {
 		slide renderer.SlideFunc
 		tweak func(*weather.WeatherData)
 	}{
-		{"alerts", renderer.NewSlideAlerts(false, false, nil, nil), nil},
+		{"alerts", renderer.NewSlideAlerts(false, false, nil, realisticMoon, nil), nil},
 		{"local-conditions", renderer.NewSlideCurrentConditions(false, false, nil, realisticMoon, nil, nil), nil},
 		{"hourly-forecast", renderer.NewSlideHourlyForecast(false, false, nil, realisticMoon, nil, nil), nil},
 		{"precipitation", renderer.NewSlidePrecipitation(false, false, nil, realisticMoon, nil, nil), nil},
-		{"wind-forecast", renderer.NewSlideWindForecast(false, false, nil, nil), func(d *weather.WeatherData) {
+		{"wind-forecast", renderer.NewSlideWindForecast(false, false, nil, realisticMoon, nil), func(d *weather.WeatherData) {
 			// Vary wind data for a more interesting screenshot.
 			winds := []string{"5 mph", "8 mph", "12 mph", "15 mph", "18 mph", "22 mph", "20 mph", "16 mph", "12 mph", "10 mph", "8 mph", "6 mph"}
 			windDirs := []string{"N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW"}
@@ -71,7 +71,7 @@ func main() {
 				}
 			}
 		}},
-		{"feels-like", renderer.NewSlideFeelsLike(false, false, nil, nil), func(d *weather.WeatherData) {
+		{"feels-like", renderer.NewSlideFeelsLike(false, false, nil, realisticMoon, nil), func(d *weather.WeatherData) {
 			// Mix of heat index (hot/humid) and wind chill (cold/windy) to
 			// show both label orientations.
 			for i := range d.HourlyPeriods {
@@ -89,28 +89,28 @@ func main() {
 			}
 		}},
 		{"extended-forecast", renderer.NewSlideExtendedForecast(false, false, nil, realisticMoon, nil, nil), nil},
-		{"weekly-high-low", renderer.NewSlideWeeklyHighLow(false, false, nil, nil), nil},
-		{"sun-solar", renderer.NewSlideSunMoon(false, false, nil, nil, nil), func(d *weather.WeatherData) {
+		{"weekly-high-low", renderer.NewSlideWeeklyHighLow(false, false, nil, realisticMoon, nil), nil},
+		{"sun-solar", renderer.NewSlideSunMoon(false, false, nil, realisticMoon, nil, nil), func(d *weather.WeatherData) {
 			d.Sun = makeSunData(now)
 			d.Solar = makeSolarData()
 		}},
-		{"moon-tides", renderer.NewSlideMoonTides(false, false, nil, nil), func(d *weather.WeatherData) {
+		{"moon-tides", renderer.NewSlideMoonTides(false, false, nil, realisticMoon, nil), func(d *weather.WeatherData) {
 			d.TideData = makeTideData(now)
 		}},
-		{"moon-phase", renderer.NewSlideMoonTides(false, false, nil, nil), func(d *weather.WeatherData) {
+		{"moon-phase", renderer.NewSlideMoonTides(false, false, nil, realisticMoon, nil), func(d *weather.WeatherData) {
 			d.TideData = nil
 		}},
-		{"uv-index", renderer.NewSlideUVIndex(false, false, nil, nil), func(d *weather.WeatherData) {
+		{"uv-index", renderer.NewSlideUVIndex(false, false, nil, realisticMoon, nil), func(d *weather.WeatherData) {
 			d.UVIndex = 6.5
 			d.HourlyUV = []float64{6.5, 5.8, 4.5, 3.2, 2.0, 1.0, 0.3, 0, 0, 0, 0, 0}
 		}},
-		{"night-sky", renderer.NewSlideNightSky(false, false, nil, nil), func(d *weather.WeatherData) {
+		{"night-sky", renderer.NewSlideNightSky(false, false, nil, realisticMoon, nil), func(d *weather.WeatherData) {
 			d.Planets = makePlanetData(now)
 		}},
-		{"satellite", renderer.NewSlideSatellite(false, false, nil, nil), func(d *weather.WeatherData) {
+		{"satellite", renderer.NewSlideSatellite(false, false, nil, realisticMoon, nil), func(d *weather.WeatherData) {
 			d.SatelliteFrames = makeSatelliteFrames()
 		}},
-		{"radar", renderer.NewSlideRadar(false, false, nil, nil), func(d *weather.WeatherData) {
+		{"radar", renderer.NewSlideRadar(false, false, nil, realisticMoon, nil), func(d *weather.WeatherData) {
 			d.RadarFrames = makeRadarFrames()
 		}},
 	}
@@ -142,7 +142,7 @@ func main() {
 	for _, ts := range triviaScreenshots {
 		item := ts.item
 		getItems := func() []trivia.TriviaItem { return []trivia.TriviaItem{item} }
-		slide := renderer.NewSlideTrivia(getItems, getTrivDur, func() bool { return false }, false, false, nil, nil)
+		slide := renderer.NewSlideTrivia(getItems, getTrivDur, func() bool { return false }, false, false, nil, realisticMoon, nil)
 
 		dc := gg.NewContext(1280, 720)
 		slide(dc, data, ts.elapsed, triviaDur)

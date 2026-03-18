@@ -242,18 +242,18 @@ func BenchmarkSlideExtendedForecast(b *testing.B) {
 
 func BenchmarkSlideMoonTides(b *testing.B) {
 	data := mockData()
-	benchSlide(b, NewSlideMoonTides(false, false, nil, defaultFonts), data)
+	benchSlide(b, NewSlideMoonTides(false, false, nil, nil, defaultFonts), data)
 }
 
 func BenchmarkSlideMoonPhase(b *testing.B) {
 	data := mockData()
 	data.TideData = nil
-	benchSlide(b, NewSlideMoonTides(false, false, nil, defaultFonts), data)
+	benchSlide(b, NewSlideMoonTides(false, false, nil, nil, defaultFonts), data)
 }
 
 func BenchmarkSlideAlerts(b *testing.B) {
 	data := mockData()
-	benchSlide(b, NewSlideAlerts(false, false, nil, defaultFonts), data)
+	benchSlide(b, NewSlideAlerts(false, false, nil, nil, defaultFonts), data)
 }
 
 func BenchmarkSlideAnnouncements(b *testing.B) {
@@ -265,7 +265,7 @@ func BenchmarkSlideAnnouncements(b *testing.B) {
 		func() []ann.Announcement { return anns },
 		func() time.Duration { return 10 * time.Second },
 		false, false,
-		nil,
+		nil, nil,
 		defaultFonts,
 	)
 	benchSlide(b, slide, data)
@@ -281,7 +281,7 @@ func BenchmarkSlideTrivia(b *testing.B) {
 		func() time.Duration { return 20 * time.Second },
 		func() bool { return false },
 		false, false,
-		nil,
+		nil, nil,
 		defaultFonts,
 	)
 	benchSlide(b, slide, data)
