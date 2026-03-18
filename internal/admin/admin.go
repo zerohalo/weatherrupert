@@ -1478,15 +1478,33 @@ function addRow() {
 			filterNote = fmt.Sprintf(" (%d match current category/difficulty filters)", filteredCount)
 		}
 		apiSection.WriteString(fmt.Sprintf(`<p style="color:#aab">%d cached questions from Open Trivia Database%s</p>`, len(apiItems), filterNote))
-		apiSection.WriteString(`<table style="color:#aab"><thead><tr><th style="width:40%%">Question</th><th style="width:18%%">Answer</th><th style="width:30%%">Choices</th><th style="width:12%%">Type</th></tr></thead><tbody>`)
+		catMap := map[int]string{
+			9: "General Knowledge", 10: "Books", 11: "Film",
+			12: "Music", 13: "Musicals", 14: "Television",
+			15: "Video Games", 16: "Board Games", 17: "Science &amp; Nature",
+			18: "Computers", 19: "Mathematics", 20: "Mythology",
+			21: "Sports", 22: "Geography", 23: "History",
+			24: "Politics", 25: "Art", 26: "Celebrities",
+			27: "Animals", 28: "Vehicles", 29: "Comics",
+			30: "Gadgets", 31: "Anime &amp; Manga", 32: "Cartoons",
+		}
+		apiSection.WriteString(`<table style="color:#aab"><thead><tr><th style="width:32%%">Question</th><th style="width:14%%">Answer</th><th style="width:24%%">Choices</th><th style="width:5%%">Type</th><th style="width:15%%">Category</th><th style="width:10%%">Difficulty</th></tr></thead><tbody>`)
 		for _, item := range apiItems {
 			choices := strings.Join(item.Choices, " / ")
 			qtype := "MC"
 			if len(item.Choices) == 2 {
 				qtype = "TF"
 			}
-			apiSection.WriteString(fmt.Sprintf(`<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>`,
-				htmlEscape(item.Question), htmlEscape(item.Answer), htmlEscape(choices), qtype))
+			cat := "—"
+			if name, ok := catMap[item.CategoryID]; ok {
+				cat = name
+			}
+			diff := "—"
+			if item.Difficulty != "" {
+				diff = item.Difficulty
+			}
+			apiSection.WriteString(fmt.Sprintf(`<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>`,
+				htmlEscape(item.Question), htmlEscape(item.Answer), htmlEscape(choices), qtype, cat, diff))
 		}
 		apiSection.WriteString(`</tbody></table>`)
 	}
