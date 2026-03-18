@@ -59,8 +59,9 @@ type PipelineInfo struct {
 // StreamEntry is a named music stream URL.
 // Name is optional; the URL is used as the display label when Name is empty.
 type StreamEntry struct {
-	Name string `json:"name,omitempty"`
-	URL  string `json:"url"`
+	Name     string `json:"name,omitempty"`
+	URL      string `json:"url"`
+	Disabled bool   `json:"disabled,omitempty"`
 }
 
 // DisplayName returns the Name if set, otherwise the URL.
@@ -693,22 +694,37 @@ func (s *Store) UnitSystem() string {
 	return s.unitSystem
 }
 
-// StreamURLs returns just the URLs from the configured stream list.
+// StreamURLs returns just the URLs from the enabled stream entries.
 // Used by the manager to pick a random stream when starting a new pipeline.
 func (s *Store) StreamURLs() []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	urls := make([]string, 0, len(s.streams))
 	for _, e := range s.streams {
-		if e.URL != "" {
+		if e.URL != "" && !e.Disabled {
 			urls = append(urls, e.URL)
 		}
 	}
 	return urls
 }
 
-// Streams returns a point-in-time copy of the full stream entry list.
+// Streams returns a point-in-time copy of enabled stream entries only.
+// Used by the manager to pick a random stream when starting a new pipeline.
 func (s *Store) Streams() []StreamEntry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	cp := make([]StreamEntry, 0, len(s.streams))
+	for _, e := range s.streams {
+		if !e.Disabled {
+			cp = append(cp, e)
+		}
+	}
+	return cp
+}
+
+// AllStreams returns a point-in-time copy of all stream entries including disabled ones.
+// Used by the admin settings page to render the full list.
+func (s *Store) AllStreams() []StreamEntry {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	cp := make([]StreamEntry, len(s.streams))
@@ -1628,13 +1644,23 @@ func (s *Store) handleSettingsGet(w http.ResponseWriter, r *http.Request) {
 
 	var streamRows strings.Builder
 	for _, e := range streams {
+		checked := " checked"
+		enabledVal := "1"
+		if e.Disabled {
+			checked = ""
+			enabledVal = "0"
+		}
 		streamRows.WriteString(fmt.Sprintf(
 			`<tr>`+
+				`<td style="text-align:center">`+
+				`<input type="hidden" name="streamEnabled" value="%s" class="stream-enabled-hidden">`+
+				`<input type="checkbox"%s style="accent-color:#FFFF00" onchange="this.previousElementSibling.value=this.checked?'1':'0'">`+
+				`</td>`+
 				`<td><input type="text" name="streamName" value="%s" placeholder="e.g. Secret Agent"></td>`+
 				`<td><input type="text" name="streamURL" value="%s" placeholder="https://..."></td>`+
 				`<td><button type="button" class="btn-del" onclick="this.closest('tr').remove()">✕</button></td>`+
 				`</tr>`,
-			htmlEscape(e.Name), htmlEscape(e.URL)))
+			enabledVal, checked, htmlEscape(e.Name), htmlEscape(e.URL)))
 	}
 
 	body := fmt.Sprintf(`%s
@@ -1764,8 +1790,9 @@ func (s *Store) handleSettingsGet(w http.ResponseWriter, r *http.Request) {
 <button type="button" class="btn-add" onclick="addStreamRow()">+ Add Stream</button>
 <table id="stream-table" style="margin-top:10px">
 <thead><tr>
-  <th style="width:28%%">Name (optional)</th>
-  <th style="width:65%%">Stream URL</th>
+  <th style="width:5%%">On</th>
+  <th style="width:25%%">Name (optional)</th>
+  <th style="width:63%%">Stream URL</th>
   <th style="width:7%%"></th>
 </tr></thead>
 <tbody>%s</tbody>
@@ -1779,11 +1806,15 @@ func (s *Store) handleSettingsGet(w http.ResponseWriter, r *http.Request) {
 function addStreamRow() {
   var tbody = document.querySelector('#stream-table tbody');
   var tr = document.createElement('tr');
-  tr.innerHTML = '<td><input type="text" name="streamName" placeholder="e.g. Secret Agent"></td>'
+  tr.innerHTML = '<td style="text-align:center">'
+    + '<input type="hidden" name="streamEnabled" value="1" class="stream-enabled-hidden">'
+    + '<input type="checkbox" checked style="accent-color:#FFFF00" onchange="this.previousElementSibling.value=this.checked?\'1\':\'0\'">'
+    + '</td>'
+    + '<td><input type="text" name="streamName" placeholder="e.g. Secret Agent"></td>'
     + '<td><input type="text" name="streamURL" placeholder="https://..."></td>'
     + '<td><button type="button" class="btn-del" onclick="this.closest(\'tr\').remove()">&#x2715;</button></td>';
   tbody.appendChild(tr);
-  tr.querySelector('input').focus();
+  tr.querySelectorAll('input[type=text]')[0].focus();
 }
 </script>`, flash, clock24Checked, clock12Checked, unitsImperialChecked, unitsMetricChecked, realisticMoonChecked, funSunChecked, satIRChecked, satVISChecked, satAutoChecked, slide, annD, annInt, trivD, trivInt, trivRandChecked, trivBuiltinChecked, trivAPIChecked, trivAPIAmount, categoryOptions.String(), difficultyOptions.String(), trivAPIRefresh, trivAPICacheMax, trivAPICacheCount, trivAPICacheExpiry, streamRows.String())
 	writePage(w, "SETTINGS", body)
@@ -1815,7 +1846,8 @@ func (s *Store) handleSettingsPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Pair streamName + streamURL slices; require a valid http(s) URL to keep the entry.
+	// Pair streamEnabled + streamName + streamURL slices; require a valid http(s) URL to keep the entry.
+	enabled := r.Form["streamEnabled"]
 	names := r.Form["streamName"]
 	urls := r.Form["streamURL"]
 	newStreams := []StreamEntry{}
@@ -1828,7 +1860,11 @@ func (s *Store) handleSettingsPost(w http.ResponseWriter, r *http.Request) {
 		if i < len(names) {
 			name = strings.TrimSpace(names[i])
 		}
-		newStreams = append(newStreams, StreamEntry{Name: name, URL: u})
+		disabled := false
+		if i < len(enabled) {
+			disabled = enabled[i] != "1"
+		}
+		newStreams = append(newStreams, StreamEntry{Name: name, URL: u, Disabled: disabled})
 	}
 
 	trivRand := r.FormValue("triviaRandomize") == "1"
