@@ -1582,90 +1582,85 @@ func drawHolidayPoppy(dc *gg.Context, cx, cy, size float64) {
 	dc.Fill()
 }
 
-// drawHolidayJuneteenth draws an open birdcage with a bird flying free (Juneteenth).
+// drawHolidayJuneteenth draws the Juneteenth flag — blue background, red arc,
+// white star burst, and a 5-pointed star in the center.
 func drawHolidayJuneteenth(dc *gg.Context, cx, cy, size float64) {
-	s := size * 0.28
+	s := size * 0.35
 
-	// Cage centered below, bird above.
-	cageX := cx
-	cageTop := cy + s*0.05
-	cageBot := cageTop + s*1.4
-	cageW := s * 0.8
+	// Blue background — rounded rectangle for flag shape.
+	dc.SetRGB(0.11, 0.19, 0.38) // #1C3160
+	dc.DrawRoundedRectangle(cx-s*1.0, cy-s*0.67, s*2.0, s*1.34, s*0.05)
+	dc.Fill()
 
-	dc.SetRGB(0.5, 0.5, 0.55)
-	lw := size * 0.013
-	dc.SetLineWidth(lw)
-
-	// Cage dome — smooth arc connecting to sides.
+	// Red curved bottom — arc from left to right across the lower portion.
+	dc.SetRGB(0.82, 0.13, 0.16) // #D0202A
 	dc.NewSubPath()
-	dc.MoveTo(cageX-cageW/2, cageBot)
-	dc.LineTo(cageX-cageW/2, cageTop+s*0.3)
-	dc.CubicTo(cageX-cageW/2, cageTop-s*0.2, cageX+cageW/2, cageTop-s*0.2, cageX+cageW/2, cageTop+s*0.3)
-	dc.LineTo(cageX+cageW/2, cageBot)
-	dc.Stroke()
-
-	// Bottom bar.
-	dc.DrawLine(cageX-cageW/2, cageBot, cageX+cageW/2, cageBot)
-	dc.Stroke()
-
-	// Vertical bars.
-	for i := -1; i <= 1; i++ {
-		bx := cageX + float64(i)*cageW*0.3
-		// Bar from dome curve down to bottom.
-		barTop := cageTop + s*0.1 - float64((2-i*i))*s*0.08
-		dc.DrawLine(bx, barTop, bx, cageBot)
-		dc.Stroke()
-	}
-
-	// Hook/ring at top.
-	dc.DrawCircle(cageX, cageTop-s*0.3, s*0.1)
-	dc.Stroke()
-	dc.DrawLine(cageX, cageTop-s*0.2, cageX, cageTop-s*0.05)
-	dc.Stroke()
-
-	// Open door — right side, swung open.
-	dc.SetLineWidth(lw * 0.9)
-	doorTop := cageTop + s*0.35
-	doorBot := doorTop + s*0.55
-	dc.MoveTo(cageX+cageW/2, doorTop)
-	dc.LineTo(cageX+cageW/2+s*0.35, doorTop-s*0.15)
-	dc.LineTo(cageX+cageW/2+s*0.35, doorBot-s*0.15)
-	dc.LineTo(cageX+cageW/2, doorBot)
-	dc.Stroke()
-
-	// Bird — flying up and to the right, above the cage.
-	birdX := cx + s*0.5
-	birdY := cy - s*0.7
-	dc.SetRGB(1.0, 0.82, 0.2) // golden yellow
-
-	// Bird body — filled path for a clean silhouette.
-	dc.NewSubPath()
-	dc.MoveTo(birdX+s*0.25, birdY)                                                                // beak tip
-	dc.CubicTo(birdX+s*0.15, birdY-s*0.08, birdX+s*0.05, birdY-s*0.1, birdX-s*0.05, birdY-s*0.05) // head
-	dc.CubicTo(birdX-s*0.15, birdY, birdX-s*0.25, birdY+s*0.05, birdX-s*0.3, birdY+s*0.02)        // back
-	dc.CubicTo(birdX-s*0.35, birdY+s*0.08, birdX-s*0.4, birdY+s*0.12, birdX-s*0.45, birdY+s*0.05) // tail
-	dc.CubicTo(birdX-s*0.35, birdY+s*0.12, birdX-s*0.15, birdY+s*0.12, birdX, birdY+s*0.08)       // belly
-	dc.CubicTo(birdX+s*0.1, birdY+s*0.05, birdX+s*0.2, birdY+s*0.02, birdX+s*0.25, birdY)         // chest to beak
+	dc.MoveTo(cx-s*1.0, cy+s*0.67) // bottom-left
+	dc.LineTo(cx+s*1.0, cy+s*0.67) // bottom-right
+	// Arc upward across the flag.
+	dc.LineTo(cx+s*1.0, cy+s*0.1)
+	dc.CubicTo(cx+s*0.5, cy-s*0.15, cx-s*0.5, cy-s*0.15, cx-s*1.0, cy+s*0.1)
 	dc.ClosePath()
 	dc.Fill()
 
-	// Wings — two curved strokes spreading upward.
-	dc.SetLineWidth(size * 0.018)
-	dc.SetRGB(1.0, 0.85, 0.3)
-	// Left wing.
+	// White 12-pointed star outline centered on the flag.
+	dc.SetRGB(1.0, 1.0, 1.0)
+	starCY := cy - s*0.05
+	outerR := s * 0.5
+	innerR := s * 0.25
+	// Outer 12-pointed star.
 	dc.NewSubPath()
-	dc.MoveTo(birdX-s*0.1, birdY)
-	dc.CubicTo(birdX-s*0.3, birdY-s*0.3, birdX-s*0.5, birdY-s*0.4, birdX-s*0.6, birdY-s*0.25)
-	dc.Stroke()
-	// Right wing.
-	dc.NewSubPath()
-	dc.MoveTo(birdX+s*0.05, birdY-s*0.03)
-	dc.CubicTo(birdX+s*0.1, birdY-s*0.3, birdX+s*0.25, birdY-s*0.4, birdX+s*0.35, birdY-s*0.3)
-	dc.Stroke()
+	for i := 0; i < 24; i++ {
+		a := float64(i)*math.Pi/12 - math.Pi/2
+		r := outerR
+		if i%2 == 1 {
+			r = innerR
+		}
+		x := cx + r*math.Cos(a)
+		y := starCY + r*math.Sin(a)
+		if i == 0 {
+			dc.MoveTo(x, y)
+		} else {
+			dc.LineTo(x, y)
+		}
+	}
+	dc.ClosePath()
+	// Inner cutout — smaller 12-pointed star to make it an outline.
+	cutOuterR := outerR * 0.75
+	cutInnerR := innerR * 0.75
+	// Draw inner path in reverse to create a hole.
+	for i := 23; i >= 0; i-- {
+		a := float64(i)*math.Pi/12 - math.Pi/2
+		r := cutOuterR
+		if i%2 == 1 {
+			r = cutInnerR
+		}
+		x := cx + r*math.Cos(a)
+		y := starCY + r*math.Sin(a)
+		dc.LineTo(x, y)
+	}
+	dc.ClosePath()
+	dc.Fill()
 
-	// Eye.
-	dc.SetRGB(0.2, 0.15, 0.1)
-	dc.DrawCircle(birdX+s*0.13, birdY-s*0.04, s*0.025)
+	// White 5-pointed filled star in the center.
+	star5R := s * 0.15
+	star5Inner := star5R * 0.4
+	dc.NewSubPath()
+	for i := 0; i < 10; i++ {
+		a := float64(i)*math.Pi/5 - math.Pi/2
+		r := star5R
+		if i%2 == 1 {
+			r = star5Inner
+		}
+		x := cx + r*math.Cos(a)
+		y := starCY + r*math.Sin(a)
+		if i == 0 {
+			dc.MoveTo(x, y)
+		} else {
+			dc.LineTo(x, y)
+		}
+	}
+	dc.ClosePath()
 	dc.Fill()
 }
 
