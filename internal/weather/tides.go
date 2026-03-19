@@ -27,7 +27,7 @@ type TidePrediction struct {
 
 // TideHiLo represents a single high or low tide event with its exact time.
 type TideHiLo struct {
-	Type  string    // "H" (high) or "L" (low)
+	Type  string // "H" (high) or "L" (low)
 	Time  time.Time
 	Level float64
 }
@@ -115,7 +115,7 @@ func findNearestStation(stations []TideStation, lat, lon, maxMiles float64) (*Ti
 func fetchTidePredictions(ctx context.Context, client *http.Client, stationID string, date time.Time) ([]TidePrediction, error) {
 	dateStr := date.Format("20060102")
 	url := fmt.Sprintf(
-		"%s?product=predictions&datum=MLLW&station=%s&time_zone=lst_ldt&units=english&interval=h&format=json&begin_date=%s&range=24&application=weatherrupert",
+		"%s?product=predictions&datum=MLLW&station=%s&time_zone=lst_ldt&units=english&interval=h&format=json&begin_date=%s&range=48&application=weatherrupert",
 		apiurl.TidePredictions, stationID, dateStr,
 	)
 
@@ -168,7 +168,7 @@ type noaaHiLoResp struct {
 func fetchTideHiLo(ctx context.Context, client *http.Client, stationID string, date time.Time) ([]TideHiLo, error) {
 	dateStr := date.Format("20060102")
 	url := fmt.Sprintf(
-		"%s?product=predictions&datum=MLLW&station=%s&time_zone=lst_ldt&units=english&interval=hilo&format=json&begin_date=%s&range=24&application=weatherrupert",
+		"%s?product=predictions&datum=MLLW&station=%s&time_zone=lst_ldt&units=english&interval=hilo&format=json&begin_date=%s&range=48&application=weatherrupert",
 		apiurl.TideHiLo, stationID, dateStr,
 	)
 

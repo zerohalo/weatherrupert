@@ -1723,9 +1723,17 @@ func slideMoonTides(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 		dc.DrawRectangle(midX, contentTop, 2, h-contentTop-20)
 		dc.Fill()
 
-		// Right column: tide chart (full 24-hour prediction)
+		// Right column: tide chart (24-hour window starting ~1h ago).
+		// Predictions may span 48h, so trim to a useful 24h view.
 		td := data.TideData
-		preds := td.Predictions
+		chartStart := now.Add(-1 * time.Hour)
+		chartEnd := chartStart.Add(24 * time.Hour)
+		var preds []weather.TidePrediction
+		for _, p := range td.Predictions {
+			if !p.Time.Before(chartStart) && !p.Time.After(chartEnd) {
+				preds = append(preds, p)
+			}
+		}
 
 		// Station name
 		dc.SetFontFace(fonts.small)
