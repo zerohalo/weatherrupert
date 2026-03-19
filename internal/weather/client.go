@@ -301,8 +301,10 @@ func (c *Client) Run(ctx context.Context, interval time.Duration, hasClients fun
 	// Try to load cached data from a previous run. If the cache is fresh
 	// enough (within the normal refresh interval), use it and skip the
 	// initial fetch — avoids unnecessary API calls during restarts.
+	cacheHit := false
 	if cached := c.loadCache(interval); cached != nil {
 		c.data.Store(cached)
+		cacheHit = true
 		tempLog := "n/a"
 		if cached.Current.TempF != nil {
 			tempLog = fmt.Sprintf("%.1f°F", *cached.Current.TempF)
@@ -339,6 +341,12 @@ func (c *Client) Run(ctx context.Context, interval time.Duration, hasClients fun
 			len(data.HourlyPeriods), len(data.DailyPeriods),
 			len(data.RadarFrames), len(data.SatelliteFrames),
 			len(data.Alerts), tideLog, data.UVIndex)
+	}
+
+	// If no cache was loaded, do an immediate initial fetch so we have data
+	// and can save the cache for the next restart.
+	if !cacheHit {
+		doFetch()
 	}
 
 	// Initialize to now so the wake guard correctly skips redundant fetches
