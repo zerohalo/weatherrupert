@@ -144,12 +144,13 @@ func drawBackgroundWithData(dc *gg.Context, title string, data *weather.WeatherD
 		funSun = getFunSun()
 	}
 	drawBackground(dc, title, data.Location, use24h, loc, fonts)
-	drawHeaderCurrentTemp(dc, data, useMetric, loc, realistic, funSun, fonts)
+	drawHeaderCurrentTemp(dc, data, useMetric, loc, realistic, funSun, false, fonts)
 }
 
 // drawBackgroundTinted is like drawBackgroundWithData but overlays a color tint
 // on the header band (e.g. for alerts). The tint is drawn between the gradient
-// and the header elements so text/icons remain untinted.
+// and the header elements so text/icons remain untinted. The alert indicator
+// is drawn with a white highlight background for visual contrast.
 func drawBackgroundTinted(dc *gg.Context, title string, data *weather.WeatherData, use24h, useMetric bool, loc *time.Location, fonts *fontSet, getRealisticMoon, getFunSun func() bool, tintR, tintG, tintB, tintA float64) {
 	if fonts == nil {
 		fonts = defaultFonts
@@ -178,7 +179,7 @@ func drawBackgroundTinted(dc *gg.Context, title string, data *weather.WeatherDat
 	// Draw all header elements on top of the tint.
 	drawHeaderElements(dc, title, data.Location, use24h, loc, fonts)
 
-	drawHeaderCurrentTemp(dc, data, useMetric, loc, realistic, funSun, fonts)
+	drawHeaderCurrentTemp(dc, data, useMetric, loc, realistic, funSun, true, fonts)
 }
 
 // drawBackground fills the gradient and renders the header common to all slides:
@@ -318,7 +319,7 @@ func drawHeaderElements(dc *gg.Context, title, location string, use24h bool, loc
 
 // drawHeaderCurrentTemp draws a small current-condition icon, temperature,
 // and alert indicator in the header to the left of the date/time display.
-func drawHeaderCurrentTemp(dc *gg.Context, data *weather.WeatherData, useMetric bool, loc *time.Location, realisticMoon, funSun bool, fonts *fontSet) {
+func drawHeaderCurrentTemp(dc *gg.Context, data *weather.WeatherData, useMetric bool, loc *time.Location, realisticMoon, funSun, alertHighlight bool, fonts *fontSet) {
 	if data == nil || data.Current.TempF == nil {
 		return
 	}
@@ -340,7 +341,7 @@ func drawHeaderCurrentTemp(dc *gg.Context, data *weather.WeatherData, useMetric 
 
 	// Alert indicator.
 	if len(activeAlerts(data.Alerts)) > 0 {
-		drawAlertIndicator(dc, iconX-iconSize/2-28, tempY, 26.0, data.Alerts)
+		drawAlertIndicator(dc, iconX-iconSize/2-28, tempY, 26.0, data.Alerts, alertHighlight)
 	}
 
 	// Condition icon (respects realistic moon phase setting).
@@ -356,7 +357,9 @@ func drawHeaderCurrentTemp(dc *gg.Context, data *weather.WeatherData, useMetric 
 // drawAlertIndicator draws a warning triangle icon at (cx, cy).
 // Color matches the highest severity alert. Uses the ⚠ glyph style:
 // filled triangle with a filled exclamation mark inside.
-func drawAlertIndicator(dc *gg.Context, cx, cy, size float64, alerts []weather.Alert) {
+// When highlight is true, the triangle is filled white instead of the
+// severity color for visual contrast (used on the alerts slide).
+func drawAlertIndicator(dc *gg.Context, cx, cy, size float64, alerts []weather.Alert, highlight bool) {
 	maxSev := "Minor"
 	for _, a := range activeAlerts(alerts) {
 		if severityRank(a.Severity) > severityRank(maxSev) {
@@ -367,7 +370,12 @@ func drawAlertIndicator(dc *gg.Context, cx, cy, size float64, alerts []weather.A
 	h := size * 0.9
 
 	// Outlined triangle with rounded corners for clean anti-aliasing.
-	dc.SetRGB(r, g, b)
+	// When highlight is true (alert slide), fill white instead of severity color.
+	if highlight {
+		dc.SetRGB(1, 1, 1)
+	} else {
+		dc.SetRGB(r, g, b)
+	}
 	dc.SetLineWidth(2)
 	dc.NewSubPath()
 	dc.MoveTo(cx, cy-h/2)
