@@ -255,8 +255,13 @@ func (c *Client) runSolarRefresh(ctx context.Context, hasClients func() bool) {
 		}
 	}
 
-	// Initial fetch (always, regardless of viewers).
-	doFetch()
+	// Skip the initial fetch if we already have fresh solar data (e.g. from cache).
+	if existing := c.solarData.Load(); existing != nil && time.Since(existing.FetchedAt) < solarRefreshInterval {
+		c.log.Printf("solar data already fresh (%.0fm old), skipping initial fetch",
+			time.Since(existing.FetchedAt).Minutes())
+	} else {
+		doFetch()
+	}
 
 	ticker := time.NewTicker(solarRefreshInterval)
 	defer ticker.Stop()
