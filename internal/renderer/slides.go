@@ -3672,8 +3672,8 @@ func slideUVIndex(dc *gg.Context, data *weather.WeatherData, use24h, useMetric b
 
 	// ── Left panel: UV gauge ──
 	gaugeCX := midX/2 + 20
-	gaugeCY := contentTop + 260
-	gaugeR := 140.0
+	gaugeCY := contentTop + 230
+	gaugeR := 115.0
 
 	// Draw gauge background arc (semicircle, green→yellow→orange→red→purple).
 	segments := []struct {
@@ -3735,6 +3735,63 @@ func slideUVIndex(dc *gg.Context, data *weather.WeatherData, use24h, useMetric b
 	dc.SetFontFace(fonts.small)
 	drawShadowTextAnchored(dc, "0", gaugeCX-gaugeR-16, gaugeCY+4, 0.5, 0.5, subR, subG, subB)
 	drawShadowTextAnchored(dc, "11+", gaugeCX+gaugeR+16, gaugeCY+4, 0.5, 0.5, subR, subG, subB)
+
+	// ── Info items below the gauge ──
+	infoY := gaugeCY + 155.0
+	dc.SetFontFace(fonts.small)
+
+	// Protection recommendation.
+	var protip string
+	switch {
+	case uvi < 3:
+		protip = "No protection needed"
+	case uvi < 6:
+		protip = "Wear sunscreen SPF 30+"
+	case uvi < 8:
+		protip = "Sunscreen, hat & sunglasses"
+	case uvi < 11:
+		protip = "Avoid midday sun exposure"
+	default:
+		protip = "Stay indoors if possible"
+	}
+	drawShadowTextAnchored(dc, protip, gaugeCX, infoY, 0.5, 0.5, subR, subG, subB)
+	infoY += 28.0
+
+	// Estimated burn time for unprotected fair skin.
+	// Formula: burn time (min) ≈ 200 / (3 × UVI) for skin type II.
+	if uvi >= 1 {
+		burnMin := 200.0 / (3.0 * uvi)
+		var burnLabel string
+		if burnMin < 60 {
+			burnLabel = fmt.Sprintf("Burn time: ~%.0f min", burnMin)
+		} else {
+			burnLabel = fmt.Sprintf("Burn time: ~%.0fh %02.0fm", math.Floor(burnMin/60), math.Mod(burnMin, 60))
+		}
+		drawShadowTextAnchored(dc, burnLabel, gaugeCX, infoY, 0.5, 0.5, subR, subG, subB)
+		infoY += 28.0
+	}
+
+	// Peak UV time — scan hourly data to find when UV is highest.
+	if len(data.HourlyUV) > 0 && len(data.HourlyPeriods) > 0 {
+		peakIdx := 0
+		peakVal := 0.0
+		for i, v := range data.HourlyUV {
+			if v > peakVal {
+				peakVal = v
+				peakIdx = i
+			}
+		}
+		if peakVal >= 1 && peakIdx < len(data.HourlyPeriods) {
+			if t, err := time.Parse(time.RFC3339, data.HourlyPeriods[peakIdx].StartTime); err == nil {
+				timeFmt := "3 PM"
+				if use24h {
+					timeFmt = "15:04"
+				}
+				peakLabel := fmt.Sprintf("Peak: UV %.0f at %s", peakVal, t.In(loc).Format(timeFmt))
+				drawShadowTextAnchored(dc, peakLabel, gaugeCX, infoY, 0.5, 0.5, subR, subG, subB)
+			}
+		}
+	}
 
 	// ── Divider ──
 	dc.SetRGBA(1, 1, 1, 0.15)
