@@ -303,6 +303,14 @@ func (c *Client) Run(ctx context.Context, interval time.Duration, hasClients fun
 	// initial fetch — avoids unnecessary API calls during restarts.
 	if cached := c.loadCache(interval); cached != nil {
 		c.data.Store(cached)
+		tempLog := "n/a"
+		if cached.Current.TempF != nil {
+			tempLog = fmt.Sprintf("%.1f°F", *cached.Current.TempF)
+		}
+		c.log.Printf("using cached data for %s (%s, %s) — %.0fm old, next refresh in %.0fm",
+			cached.Location, tempLog, cached.Current.Description,
+			time.Since(cached.FetchedAt).Minutes(),
+			(interval - time.Since(cached.FetchedAt)).Minutes())
 	}
 
 	ticker := time.NewTicker(interval)

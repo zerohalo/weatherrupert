@@ -90,6 +90,11 @@ func (c *Client) loadCache(maxAge time.Duration) *WeatherData {
 
 	b, err := os.ReadFile(c.cachePath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			c.log.Printf("cache: no cache file found at %s", c.cachePath)
+		} else {
+			c.log.Printf("cache: read failed: %v", err)
+		}
 		return nil
 	}
 
