@@ -89,9 +89,8 @@ func (c *Client) saveCache(data *WeatherData) {
 	c.log.Printf("cache: saved to %s (%d bytes)", c.cachePath, len(b))
 }
 
-// loadCache reads cached weather data from disk. Returns nil if the cache
-// is missing, unreadable, or older than maxAge.
-func (c *Client) loadCache(maxAge time.Duration) *WeatherData {
+// readCache reads and parses the cache file. Returns nil if missing or unreadable.
+func (c *Client) readCache() *weatherCache {
 	if c.cachePath == "" {
 		return nil
 	}
@@ -112,14 +111,29 @@ func (c *Client) loadCache(maxAge time.Duration) *WeatherData {
 		return nil
 	}
 
-	age := time.Since(cache.FetchedAt)
-	if age > maxAge {
-		c.log.Printf("cache: stale (%.0fm old, max %.0fm), will fetch fresh data", age.Minutes(), maxAge.Minutes())
-		return nil
+	c.log.Printf("cache: read %d bytes from %s", len(b), c.cachePath)
+	return &cache
+}
+
+// RestoreFromCache attempts to load a cache and restore state per-component:
+//
+//   - Bootstrap state (grid, stations) — always restored if present (never stale).
+//   - Weather data — restored if within weatherMaxAge; used as stale fallback
+//     otherwise (better than nothing while fresh data is fetched).
+//   - Solar data — restored if within solarRefreshInterval (1 hour).
+//
+// Returns true if bootstrap can be skipped (bootstrap state was restored).
+// The caller should still check whether weather data needs a fresh fetch.
+func (c *Client) RestoreFromCache(weatherMaxAge time.Duration) bool {
+	c.log.Printf("cache: checking for cached data")
+	cache := c.readCache()
+	if cache == nil {
+		return false
 	}
 
-	// Restore bootstrap state so fetch() can work without re-bootstrapping.
-	if cache.GridID != "" {
+	// Always restore bootstrap state — grid/station info doesn't go stale.
+	bootstrapOK := false
+	if cache.GridID != "" && len(cache.StationIDs) > 0 {
 		c.gridID = cache.GridID
 		c.gridX = cache.GridX
 		c.gridY = cache.GridY
@@ -130,7 +144,14 @@ func (c *Client) loadCache(maxAge time.Duration) *WeatherData {
 		c.locationMu.Lock()
 		c.location = cache.Location
 		c.locationMu.Unlock()
+		bootstrapOK = true
+		c.log.Printf("cache: restored bootstrap state (grid %s/%d,%d, %d stations)",
+			c.gridID, c.gridX, c.gridY, len(c.stationIDs))
 	}
+
+	// Restore weather data. Even if stale, it's better than a blank screen.
+	weatherAge := time.Since(cache.FetchedAt)
+	weatherFresh := weatherAge <= weatherMaxAge
 
 	data := &WeatherData{
 		FetchedAt:       cache.FetchedAt,
@@ -150,37 +171,32 @@ func (c *Client) loadCache(maxAge time.Duration) *WeatherData {
 		Sun:             cache.Sun,
 		UVIndex:         cache.UVIndex,
 		HourlyUV:        cache.HourlyUV,
-		Solar:           cache.Solar,
 	}
 
-	c.log.Printf("cache: loaded from %s (%d bytes, %.0fm old)", c.cachePath, len(b), age.Minutes())
-	return data
-}
+	// Restore solar data if within its own refresh interval.
+	if cache.Solar != nil && time.Since(cache.Solar.FetchedAt) <= solarRefreshInterval {
+		data.Solar = cache.Solar
+		c.solarData.Store(cache.Solar)
+		c.log.Printf("cache: solar data fresh (%.0fm old)", time.Since(cache.Solar.FetchedAt).Minutes())
+	} else if cache.Solar != nil {
+		c.log.Printf("cache: solar data stale (%.0fm old, max %.0fm), will re-fetch",
+			time.Since(cache.Solar.FetchedAt).Minutes(), solarRefreshInterval.Minutes())
+	}
 
-// RestoreFromCache attempts to load a fresh cache and fully restore both
-// bootstrap state and weather data. Returns true if successful, meaning
-// Bootstrap() and the initial fetch can be skipped entirely.
-func (c *Client) RestoreFromCache(maxAge time.Duration) bool {
-	c.log.Printf("cache: checking for cached data (max age %.0fm)", maxAge.Minutes())
-	data := c.loadCache(maxAge)
-	if data == nil {
-		return false
-	}
-	// Verify bootstrap state was restored (gridID is required for fetch).
-	if c.gridID == "" || len(c.stationIDs) == 0 {
-		c.log.Printf("cache: missing bootstrap state, will bootstrap normally")
-		return false
-	}
 	c.data.Store(data)
-	if data.Solar != nil {
-		c.solarData.Store(data.Solar)
+
+	if weatherFresh {
+		tempLog := "n/a"
+		if data.Current.TempF != nil {
+			tempLog = fmt.Sprintf("%.1f°F", *data.Current.TempF)
+		}
+		c.log.Printf("cache: weather data fresh for %s (%s, %s) — %.0fm old",
+			data.Location, tempLog, data.Current.Description, weatherAge.Minutes())
+	} else {
+		c.log.Printf("cache: weather data stale (%.0fm old, max %.0fm) — using as fallback, will refresh",
+			weatherAge.Minutes(), weatherMaxAge.Minutes())
 	}
-	tempLog := "n/a"
-	if data.Current.TempF != nil {
-		tempLog = fmt.Sprintf("%.1f°F", *data.Current.TempF)
-	}
-	c.log.Printf("restored from cache for %s (%s, %s) — %.0fm old, skipping bootstrap",
-		data.Location, tempLog, data.Current.Description,
-		time.Since(data.FetchedAt).Minutes())
-	return true
+
+	c.weatherFresh = weatherFresh
+	return bootstrapOK
 }

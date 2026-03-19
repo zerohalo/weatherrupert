@@ -67,6 +67,11 @@ type Client struct {
 	// Empty means no caching. Set via SetCachePath before calling Run.
 	cachePath string
 
+	// weatherFresh is set by RestoreFromCache to indicate whether the cached
+	// weather data is within the refresh interval. Run() uses this to decide
+	// whether an immediate fetch is needed.
+	weatherFresh bool
+
 	// log is the per-pipeline logger.
 	log *plog.Logger
 }
@@ -331,6 +336,13 @@ func (c *Client) Run(ctx context.Context, interval time.Duration, hasClients fun
 			len(data.HourlyPeriods), len(data.DailyPeriods),
 			len(data.RadarFrames), len(data.SatelliteFrames),
 			len(data.Alerts), tideLog, data.UVIndex)
+	}
+
+	// If cache was loaded but weather data was stale, fetch fresh data now.
+	// Bootstrap was already skipped (restored from cache), so fetch() works.
+	if c.data.Load() != nil && !c.weatherFresh {
+		c.log.Printf("cached weather data is stale, fetching fresh data")
+		doFetch()
 	}
 
 	// Initialize to now so the wake guard correctly skips redundant fetches
