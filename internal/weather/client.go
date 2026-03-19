@@ -227,6 +227,7 @@ func (c *Client) bootstrap(ctx context.Context) error {
 		return fmt.Errorf("initial fetch: %w", err)
 	}
 	c.data.Store(data)
+	c.saveCache(data)
 	return nil
 }
 
@@ -243,10 +244,11 @@ func (c *Client) runSolarRefresh(ctx context.Context, hasClients func() bool) {
 				hasImages, solar.KpIndex, solar.XRayFlux)
 			// Patch the current WeatherData snapshot so slides see solar
 			// data immediately without waiting for the next weather refresh.
-			if cur := c.data.Load(); cur != nil && cur.Solar == nil {
+			if cur := c.data.Load(); cur != nil {
 				patched := *cur
 				patched.Solar = solar
 				c.data.Store(&patched)
+				c.saveCache(&patched)
 			}
 		} else {
 			c.log.Printf("solar data fetch failed entirely")
@@ -298,23 +300,6 @@ func (c *Client) Run(ctx context.Context, interval time.Duration, hasClients fun
 	// Start background solar refresh (skips fetches when no viewers connected).
 	go c.runSolarRefresh(ctx, hasClients)
 
-	// Try to load cached data from a previous run. If the cache is fresh
-	// enough (within the normal refresh interval), use it and skip the
-	// initial fetch — avoids unnecessary API calls during restarts.
-	cacheHit := false
-	if cached := c.loadCache(interval); cached != nil {
-		c.data.Store(cached)
-		cacheHit = true
-		tempLog := "n/a"
-		if cached.Current.TempF != nil {
-			tempLog = fmt.Sprintf("%.1f°F", *cached.Current.TempF)
-		}
-		c.log.Printf("using cached data for %s (%s, %s) — %.0fm old, next refresh in %.0fm",
-			cached.Location, tempLog, cached.Current.Description,
-			time.Since(cached.FetchedAt).Minutes(),
-			(interval - time.Since(cached.FetchedAt)).Minutes())
-	}
-
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -343,14 +328,8 @@ func (c *Client) Run(ctx context.Context, interval time.Duration, hasClients fun
 			len(data.Alerts), tideLog, data.UVIndex)
 	}
 
-	// If no cache was loaded, do an immediate initial fetch so we have data
-	// and can save the cache for the next restart.
-	if !cacheHit {
-		doFetch()
-	}
-
 	// Initialize to now so the wake guard correctly skips redundant fetches
-	// immediately after bootstrap (which already did an initial fetch).
+	// immediately after bootstrap/cache restore (which already has data).
 	lastFetch := time.Now()
 
 	for {

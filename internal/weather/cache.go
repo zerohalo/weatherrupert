@@ -2,14 +2,24 @@ package weather
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"time"
 )
 
 // weatherCache is the on-disk representation of cached weather data.
-// All fields are included so a restart can fully restore the previous state
-// without any API calls. Binary data (images) is base64-encoded by json.Marshal.
+// Includes bootstrap state (grid, stations, tides) so a restart with fresh
+// cache can skip all API calls. Binary data is base64-encoded by json.Marshal.
 type weatherCache struct {
+	// Bootstrap state.
+	GridID        string       `json:"gridID"`
+	GridX         int          `json:"gridX"`
+	GridY         int          `json:"gridY"`
+	StationIDs    []string     `json:"stationIDs,omitempty"`
+	NearestTide   *TideStation `json:"nearestTide,omitempty"`
+	TideDistMiles float64      `json:"tideDistMiles,omitempty"`
+
+	// Weather data.
 	FetchedAt       time.Time         `json:"fetchedAt"`
 	Location        string            `json:"location"`
 	Current         CurrentConditions `json:"current"`
@@ -30,13 +40,22 @@ type weatherCache struct {
 	Solar           *SolarData        `json:"solar,omitempty"`
 }
 
-// saveCache writes WeatherData to disk as JSON.
+// saveCache writes WeatherData and bootstrap state to disk as JSON.
 func (c *Client) saveCache(data *WeatherData) {
 	if c.cachePath == "" || data == nil {
 		return
 	}
 
 	cache := weatherCache{
+		// Bootstrap state.
+		GridID:        c.gridID,
+		GridX:         c.gridX,
+		GridY:         c.gridY,
+		StationIDs:    c.stationIDs,
+		NearestTide:   c.nearestTide,
+		TideDistMiles: c.tideDistMiles,
+
+		// Weather data.
 		FetchedAt:       data.FetchedAt,
 		Location:        data.Location,
 		Current:         data.Current,
@@ -99,6 +118,20 @@ func (c *Client) loadCache(maxAge time.Duration) *WeatherData {
 		return nil
 	}
 
+	// Restore bootstrap state so fetch() can work without re-bootstrapping.
+	if cache.GridID != "" {
+		c.gridID = cache.GridID
+		c.gridX = cache.GridX
+		c.gridY = cache.GridY
+		c.stationIDs = cache.StationIDs
+		c.nearestTide = cache.NearestTide
+		c.tideDistMiles = cache.TideDistMiles
+		c.staticMap = cache.StaticMap
+		c.locationMu.Lock()
+		c.location = cache.Location
+		c.locationMu.Unlock()
+	}
+
 	data := &WeatherData{
 		FetchedAt:       cache.FetchedAt,
 		Location:        cache.Location,
@@ -122,4 +155,31 @@ func (c *Client) loadCache(maxAge time.Duration) *WeatherData {
 
 	c.log.Printf("cache: loaded from %s (%d bytes, %.0fm old)", c.cachePath, len(b), age.Minutes())
 	return data
+}
+
+// RestoreFromCache attempts to load a fresh cache and fully restore both
+// bootstrap state and weather data. Returns true if successful, meaning
+// Bootstrap() and the initial fetch can be skipped entirely.
+func (c *Client) RestoreFromCache(maxAge time.Duration) bool {
+	data := c.loadCache(maxAge)
+	if data == nil {
+		return false
+	}
+	// Verify bootstrap state was restored (gridID is required for fetch).
+	if c.gridID == "" || len(c.stationIDs) == 0 {
+		c.log.Printf("cache: missing bootstrap state, will bootstrap normally")
+		return false
+	}
+	c.data.Store(data)
+	if data.Solar != nil {
+		c.solarData.Store(data.Solar)
+	}
+	tempLog := "n/a"
+	if data.Current.TempF != nil {
+		tempLog = fmt.Sprintf("%.1f°F", *data.Current.TempF)
+	}
+	c.log.Printf("restored from cache for %s (%s, %s) — %.0fm old, skipping bootstrap",
+		data.Location, tempLog, data.Current.Description,
+		time.Since(data.FetchedAt).Minutes())
+	return true
 }
