@@ -431,14 +431,17 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 	}
 
 	// Bootstrap + refresh loop (background — stream shows loading slide until ready).
+	// If a fresh cache exists, restore from it and skip bootstrap entirely.
 	// locationReady is closed on exit (success or failure) so Location() never hangs.
 	go func() {
 		defer close(locationReady)
-		if err := wc.Bootstrap(ctx); err != nil {
-			if ctx.Err() == nil {
-				pl.Printf("bootstrap failed: %v", err)
+		if !wc.RestoreFromCache(m.cfg.WeatherRefresh) {
+			if err := wc.Bootstrap(ctx); err != nil {
+				if ctx.Err() == nil {
+					pl.Printf("bootstrap failed: %v", err)
+				}
+				return
 			}
-			return
 		}
 		pl.Printf("weather ready (%s)", wc.Location())
 		go wc.Run(ctx, m.cfg.WeatherRefresh, func() bool { return hub.ClientCount() > 0 })

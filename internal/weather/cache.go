@@ -161,6 +161,7 @@ func (c *Client) loadCache(maxAge time.Duration) *WeatherData {
 // bootstrap state and weather data. Returns true if successful, meaning
 // Bootstrap() and the initial fetch can be skipped entirely.
 func (c *Client) RestoreFromCache(maxAge time.Duration) bool {
+	c.log.Printf("cache: checking for cached data (max age %.0fm)", maxAge.Minutes())
 	data := c.loadCache(maxAge)
 	if data == nil {
 		return false
