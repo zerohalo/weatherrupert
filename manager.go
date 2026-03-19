@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -329,6 +330,8 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 		return prod
 	}
 	wc := weather.NewClient(m.cfg.WeatherAPIURL, loc.Lat, loc.Lon, cityLabel, loc.ZipCode, m.cfg.Frames, m.cfg.Radius, getSatProduct, m.httpClient, tzLoc)
+	cacheDir := filepath.Dir(m.cfg.AdminDataPath)
+	wc.SetCachePath(filepath.Join(cacheDir, fmt.Sprintf("weather_cache_%s.json", loc.ZipCode)))
 
 	// Resolve the music source for this pipeline:
 	//   1. MUSIC_STREAM_URL env var (single-URL pin) takes priority.

@@ -63,6 +63,10 @@ type Client struct {
 	// wake is signalled to trigger an immediate refresh (e.g. when a viewer connects).
 	wake chan struct{}
 
+	// cachePath is the optional path for persisting weather data across restarts.
+	// Empty means no caching. Set via SetCachePath before calling Run.
+	cachePath string
+
 	// log is the per-pipeline logger.
 	log *plog.Logger
 }
@@ -97,6 +101,13 @@ func NewClient(baseURL string, lat, lon float64, location string, zip string, fr
 		wake:                make(chan struct{}, 1),
 		log:                 plog.New("weather", zip),
 	}
+}
+
+// SetCachePath sets the file path used to persist weather data across restarts.
+// Must be called before Run. When set, Run will attempt to load cached data on
+// startup and save after each successful fetch.
+func (c *Client) SetCachePath(path string) {
+	c.cachePath = path
 }
 
 // Bootstrap resolves the NWS grid coordinates and observation station.
@@ -287,6 +298,13 @@ func (c *Client) Run(ctx context.Context, interval time.Duration, hasClients fun
 	// Start background solar refresh (skips fetches when no viewers connected).
 	go c.runSolarRefresh(ctx, hasClients)
 
+	// Try to load cached data from a previous run. If the cache is fresh
+	// enough (within the normal refresh interval), use it and skip the
+	// initial fetch — avoids unnecessary API calls during restarts.
+	if cached := c.loadCache(interval); cached != nil {
+		c.data.Store(cached)
+	}
+
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -299,6 +317,7 @@ func (c *Client) Run(ctx context.Context, interval time.Duration, hasClients fun
 			return
 		}
 		c.data.Store(data)
+		c.saveCache(data)
 		tempLog := "n/a"
 		if data.Current.TempF != nil {
 			tempLog = fmt.Sprintf("%.1f°F", *data.Current.TempF)
