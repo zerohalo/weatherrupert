@@ -7,6 +7,24 @@ import (
 	"time"
 )
 
+// LoadSolarFromCache reads a weather cache file and returns the SolarData
+// if present and fresh (within the solar refresh interval). Used at startup
+// to pre-seed the shared solar pointer before any pipeline loads.
+func LoadSolarFromCache(path string) *SolarData {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var cache weatherCache
+	if err := json.Unmarshal(b, &cache); err != nil {
+		return nil
+	}
+	if cache.Solar == nil || time.Since(cache.Solar.FetchedAt) > SolarRefreshInterval {
+		return nil
+	}
+	return cache.Solar
+}
+
 // weatherCache is the on-disk representation of cached weather data.
 // Includes bootstrap state (grid, stations, tides) so a restart with fresh
 // cache can skip all API calls. Binary data is base64-encoded by json.Marshal.

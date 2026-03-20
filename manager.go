@@ -88,7 +88,19 @@ func NewManager(rootCtx context.Context, cfg *config.Config, music *stream.Music
 
 // StartSolarRefresh starts the shared solar data refresh goroutine.
 // Called once at application startup. Solar data is shared across all pipelines.
+// Pre-seeds from any existing pipeline cache so we skip the initial fetch if fresh.
 func (m *Manager) StartSolarRefresh() {
+	// Scan for an existing weather cache to pre-seed solar data.
+	cacheDir := filepath.Dir(m.cfg.AdminDataPath)
+	entries, _ := os.ReadDir(cacheDir)
+	for _, e := range entries {
+		if !e.IsDir() && len(e.Name()) > 14 && e.Name()[:14] == "weather_cache_" {
+			if solar := weather.LoadSolarFromCache(filepath.Join(cacheDir, e.Name())); solar != nil {
+				m.solarData.Store(solar)
+				break
+			}
+		}
+	}
 	go weather.RunSolarRefresh(m.rootCtx, m.httpClient, &m.solarData, m.HasViewers)
 }
 
