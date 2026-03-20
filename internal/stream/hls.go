@@ -358,13 +358,15 @@ func (s *HLSSegmenter) ServePlaylist(w http.ResponseWriter, r *http.Request) {
 	ready := s.touchPoll()
 	s.playlistReqs.Add(1)
 
-	// Track this viewer.
+	// Track this viewer by remoteAddr. Each HLS client polls the playlist
+	// every few seconds on the same connection/port. Stale entries (clients
+	// that stopped polling) are evicted by ViewerCount().
 	addr := r.RemoteAddr
 	s.viewMu.Lock()
 	if _, ok := s.activeViewers[addr]; !ok {
-		s.activeViewers[addr] = time.Now()
 		s.viewCount++
 	}
+	s.activeViewers[addr] = time.Now() // update timestamp on every poll
 	s.viewMu.Unlock()
 
 	// Wait for at least one segment to be available (bootstrap delay).
@@ -530,6 +532,15 @@ func (s *HLSSegmenter) HubSubscriptionTime() time.Duration {
 func (s *HLSSegmenter) ViewerCount() int {
 	s.viewMu.Lock()
 	defer s.viewMu.Unlock()
+	// Evict viewers that haven't polled recently. HLS clients poll every
+	// segment duration (~3s), so 30s of silence means they disconnected.
+	now := time.Now()
+	for addr, lastPoll := range s.activeViewers {
+		if now.Sub(lastPoll) > 30*time.Second {
+			s.viewTotal += now.Sub(lastPoll)
+			delete(s.activeViewers, addr)
+		}
+	}
 	return len(s.activeViewers)
 }
 
