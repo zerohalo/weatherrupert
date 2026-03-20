@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/zerohalo/weatherrupert/internal/plog"
 	"time"
@@ -36,8 +38,53 @@ const solarImageTimeout = 60 * time.Second
 // solarImageRetries is the maximum number of attempts per image fetch.
 const solarImageRetries = 3
 
-// solarRefreshInterval is how often the background solar goroutine refreshes.
-const solarRefreshInterval = 1 * time.Hour
+// SolarRefreshInterval is how often the background solar goroutine refreshes.
+const SolarRefreshInterval = 1 * time.Hour
+
+// solarRefreshInterval is kept as an alias for internal use.
+const solarRefreshInterval = SolarRefreshInterval
+
+// RunSolarRefresh fetches solar data immediately then refreshes every hour.
+// Blocks until ctx is cancelled. The data pointer is shared across all pipelines.
+// hasViewers is called to skip fetches when nobody is watching.
+func RunSolarRefresh(ctx context.Context, httpClient *http.Client, data *atomic.Pointer[SolarData], hasViewers func() bool) {
+	slog := plog.New("solar", "shared")
+
+	doFetch := func() {
+		log.Printf("solar   : fetching solar data (images may take ~60s)...")
+		solar := fetchSolar(ctx, httpClient, slog)
+		if solar != nil {
+			data.Store(solar)
+			hasImages := solar.SunspotImage != nil || solar.CoronaImage != nil
+			log.Printf("solar   : refreshed (images=%v, kp=%.1f, xray=%s)",
+				hasImages, solar.KpIndex, solar.XRayFlux)
+		} else {
+			log.Printf("solar   : fetch failed entirely")
+		}
+	}
+
+	// Skip initial fetch if data already loaded (e.g. from cache).
+	if existing := data.Load(); existing != nil && time.Since(existing.FetchedAt) < SolarRefreshInterval {
+		log.Printf("solar   : already fresh (%.0fm old), skipping initial fetch",
+			time.Since(existing.FetchedAt).Minutes())
+	} else {
+		doFetch()
+	}
+
+	ticker := time.NewTicker(SolarRefreshInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if hasViewers != nil && !hasViewers() {
+				continue
+			}
+			doFetch()
+		}
+	}
+}
 
 // fetchSolar fetches solar activity data from NOAA SWPC and NASA SDO.
 // All sources are fetched in parallel. Image fetches use a 1-minute timeout

@@ -172,7 +172,7 @@ func TestRenderPreviewRace(t *testing.T) {
 	data := mockData()
 
 	// Minimal mock weather client that returns canned data.
-	wc := weather.NewClient("http://localhost", 40.0, -105.0, "Test, CO", "80301", 4, 120, nil, nil, nil)
+	wc := weather.NewClient("http://localhost", 40.0, -105.0, "Test, CO", "80301", 4, 120, nil, nil, nil, nil)
 	// Store data via the exported test helper.
 	wc.StoreData(data)
 

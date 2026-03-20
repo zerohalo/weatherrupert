@@ -76,6 +76,7 @@ func main() {
 	}
 
 	mgr := NewManager(ctx, cfg, fallbackMusic, store, trackedClient, streamTrackedClient, classifier)
+	mgr.StartSolarRefresh()
 
 	if store.TriviaAPI() {
 		go func() {

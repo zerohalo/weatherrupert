@@ -173,14 +173,12 @@ func (c *Client) RestoreFromCache(weatherMaxAge time.Duration) bool {
 		HourlyUV:        cache.HourlyUV,
 	}
 
-	// Restore solar data if within its own refresh interval.
-	if cache.Solar != nil && time.Since(cache.Solar.FetchedAt) <= solarRefreshInterval {
+	// Include cached solar data in the weather snapshot. The shared solar
+	// pointer is managed by the Manager; we just include it here so slides
+	// have something to show until the shared refresh runs.
+	if cache.Solar != nil {
 		data.Solar = cache.Solar
-		c.solarData.Store(cache.Solar)
-		c.log.Printf("cache: solar data fresh (%.0fm old)", time.Since(cache.Solar.FetchedAt).Minutes())
-	} else if cache.Solar != nil {
-		c.log.Printf("cache: solar data stale (%.0fm old, max %.0fm), will re-fetch",
-			time.Since(cache.Solar.FetchedAt).Minutes(), solarRefreshInterval.Minutes())
+		c.log.Printf("cache: solar data included (%.0fm old)", time.Since(cache.Solar.FetchedAt).Minutes())
 	}
 
 	c.data.Store(data)

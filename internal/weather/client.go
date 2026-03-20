@@ -57,8 +57,8 @@ type Client struct {
 	// Timezone for this pipeline's time display.
 	loc *time.Location
 
-	// Solar weather state (fetched independently on a long interval).
-	solarData atomic.Pointer[SolarData]
+	// getSolar returns the shared solar data (owned by the Manager).
+	getSolar func() *SolarData
 
 	// wake is signalled to trigger an immediate refresh (e.g. when a viewer connects).
 	wake chan struct{}
@@ -77,7 +77,7 @@ type Client struct {
 }
 
 // NewClient creates a new weather client. Bootstrap must be called before Run or Current.
-func NewClient(baseURL string, lat, lon float64, location string, zip string, frames int, radius float64, getSatelliteProduct func(time.Time) string, httpClient *http.Client, loc *time.Location) *Client {
+func NewClient(baseURL string, lat, lon float64, location string, zip string, frames int, radius float64, getSatelliteProduct func(time.Time) string, getSolar func() *SolarData, httpClient *http.Client, loc *time.Location) *Client {
 	if frames <= 0 {
 		frames = 4
 	}
@@ -86,6 +86,9 @@ func NewClient(baseURL string, lat, lon float64, location string, zip string, fr
 	}
 	if getSatelliteProduct == nil {
 		getSatelliteProduct = func(time.Time) string { return config.SatelliteAuto }
+	}
+	if getSolar == nil {
+		getSolar = func() *SolarData { return nil }
 	}
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 15 * time.Second}
@@ -101,6 +104,7 @@ func NewClient(baseURL string, lat, lon float64, location string, zip string, fr
 		frames:              frames,
 		radius:              radius,
 		getSatelliteProduct: getSatelliteProduct,
+		getSolar:            getSolar,
 		http:                httpClient,
 		loc:                 loc,
 		wake:                make(chan struct{}, 1),
@@ -236,53 +240,6 @@ func (c *Client) bootstrap(ctx context.Context) error {
 	return nil
 }
 
-// runSolarRefresh fetches solar data immediately then refreshes every hour.
-// Runs until ctx is cancelled. Skips fetches when no viewers are connected.
-func (c *Client) runSolarRefresh(ctx context.Context, hasClients func() bool) {
-	doFetch := func() {
-		c.log.Printf("fetching solar data (images may take ~60s)...")
-		solar := fetchSolar(ctx, c.http, c.log)
-		if solar != nil {
-			c.solarData.Store(solar)
-			hasImages := solar.SunspotImage != nil || solar.CoronaImage != nil
-			c.log.Printf("solar data refreshed (images=%v, kp=%.1f, xray=%s)",
-				hasImages, solar.KpIndex, solar.XRayFlux)
-			// Patch the current WeatherData snapshot so slides see solar
-			// data immediately without waiting for the next weather refresh.
-			if cur := c.data.Load(); cur != nil {
-				patched := *cur
-				patched.Solar = solar
-				c.data.Store(&patched)
-				c.saveCache(&patched)
-			}
-		} else {
-			c.log.Printf("solar data fetch failed entirely")
-		}
-	}
-
-	// Skip the initial fetch if we already have fresh solar data (e.g. from cache).
-	if existing := c.solarData.Load(); existing != nil && time.Since(existing.FetchedAt) < solarRefreshInterval {
-		c.log.Printf("solar data already fresh (%.0fm old), skipping initial fetch",
-			time.Since(existing.FetchedAt).Minutes())
-	} else {
-		doFetch()
-	}
-
-	ticker := time.NewTicker(solarRefreshInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			if hasClients != nil && !hasClients() {
-				continue
-			}
-			doFetch()
-		}
-	}
-}
-
 // resolveStations returns up to maxStations station IDs sorted by proximity.
 func (c *Client) resolveStations(ctx context.Context, stationsURL string) ([]string, error) {
 	const maxStations = 5
@@ -307,9 +264,6 @@ func (c *Client) resolveStations(ctx context.Context, stationsURL string) ([]str
 // If hasClients is non-nil, refreshes are skipped when no clients are connected.
 // Call Wake() to trigger an immediate refresh (e.g. when a viewer connects).
 func (c *Client) Run(ctx context.Context, interval time.Duration, hasClients func() bool) {
-	// Start background solar refresh (skips fetches when no viewers connected).
-	go c.runSolarRefresh(ctx, hasClients)
-
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -583,7 +537,7 @@ func (c *Client) fetch(ctx context.Context) (*WeatherData, error) {
 		Planets:         planets,
 		TideData:        tideData,
 		Alerts:          alerts,
-		Solar:           c.solarData.Load(),
+		Solar:           c.getSolar(),
 		PrecipTotal24h:  precipMM,
 		SnowTotal24h:    snowMM,
 		Sun:             sunData,

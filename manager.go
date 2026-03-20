@@ -64,9 +64,10 @@ type Manager struct {
 	music        *stream.MusicSource
 	store        *admin.Store
 	rootCtx      context.Context
-	httpClient   *http.Client       // tracked HTTP client for weather APIs
-	streamClient *http.Client       // tracked HTTP client for music streams (no timeout)
-	classifier   *apiurl.Classifier // hostname→label mapper (registers stream names)
+	httpClient   *http.Client                      // tracked HTTP client for weather APIs
+	streamClient *http.Client                      // tracked HTTP client for music streams (no timeout)
+	classifier   *apiurl.Classifier                // hostname→label mapper (registers stream names)
+	solarData    atomic.Pointer[weather.SolarData] // shared across all pipelines
 }
 
 // NewManager creates a Manager. rootCtx should be the application shutdown context.
@@ -83,6 +84,12 @@ func NewManager(rootCtx context.Context, cfg *config.Config, music *stream.Music
 		streamClient: streamClient,
 		classifier:   classifier,
 	}
+}
+
+// StartSolarRefresh starts the shared solar data refresh goroutine.
+// Called once at application startup. Solar data is shared across all pipelines.
+func (m *Manager) StartSolarRefresh() {
+	go weather.RunSolarRefresh(m.rootCtx, m.httpClient, &m.solarData, m.HasViewers)
 }
 
 // HasViewers returns true if any pipeline has at least one connected viewer.
@@ -329,7 +336,7 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 		}
 		return prod
 	}
-	wc := weather.NewClient(m.cfg.WeatherAPIURL, loc.Lat, loc.Lon, cityLabel, loc.ZipCode, m.cfg.Frames, m.cfg.Radius, getSatProduct, m.httpClient, tzLoc)
+	wc := weather.NewClient(m.cfg.WeatherAPIURL, loc.Lat, loc.Lon, cityLabel, loc.ZipCode, m.cfg.Frames, m.cfg.Radius, getSatProduct, m.solarData.Load, m.httpClient, tzLoc)
 	cacheDir := filepath.Dir(m.cfg.AdminDataPath)
 	wc.SetCachePath(filepath.Join(cacheDir, fmt.Sprintf("weather_cache_%s.json", loc.ZipCode)))
 
@@ -441,6 +448,12 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 					pl.Printf("bootstrap failed: %v", err)
 				}
 				return
+			}
+		}
+		// Seed the shared solar pointer from cached data if we don't have any yet.
+		if cur := wc.Current(); cur != nil && cur.Solar != nil {
+			if existing := m.solarData.Load(); existing == nil {
+				m.solarData.Store(cur.Solar)
 			}
 		}
 		pl.Printf("weather ready (%s)", wc.Location())
