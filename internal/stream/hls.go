@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"net"
 	"net/http"
 	"strconv"
 	"sync"
@@ -358,15 +359,19 @@ func (s *HLSSegmenter) ServePlaylist(w http.ResponseWriter, r *http.Request) {
 	ready := s.touchPoll()
 	s.playlistReqs.Add(1)
 
-	// Track this viewer by remoteAddr. Each HLS client polls the playlist
-	// every few seconds on the same connection/port. Stale entries (clients
-	// that stopped polling) are evicted by ViewerCount().
-	addr := r.RemoteAddr
+	// Track this viewer by IP (without port). HLS clients make separate
+	// TCP connections for each playlist/segment request, so using the full
+	// remoteAddr (IP:port) would inflate the count. Viewers behind the same
+	// proxy will collapse to one, which is acceptable for a dashboard count.
+	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+	if ip == "" {
+		ip = r.RemoteAddr
+	}
 	s.viewMu.Lock()
-	if _, ok := s.activeViewers[addr]; !ok {
+	if _, ok := s.activeViewers[ip]; !ok {
 		s.viewCount++
 	}
-	s.activeViewers[addr] = time.Now() // update timestamp on every poll
+	s.activeViewers[ip] = time.Now() // update timestamp on every poll
 	s.viewMu.Unlock()
 
 	// Wait for at least one segment to be available (bootstrap delay).
