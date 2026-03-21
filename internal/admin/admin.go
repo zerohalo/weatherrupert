@@ -937,10 +937,15 @@ func (s *Store) renderPipelinesHTML() string {
 
 	totalStream := 0
 	totalHLS := 0
+	activePipelines := 0
 	for _, p := range pipelines {
 		totalStream += p.Viewers
 		totalHLS += p.HLSViewers
+		if p.Viewers > 0 || p.HLSViewers > 0 {
+			activePipelines++
+		}
 	}
+	pausedPipelines := len(pipelines) - activePipelines
 
 	if len(pipelines) == 0 {
 		return `<p style="color:#668; margin-top:4px">No active streams.</p>`
@@ -1110,7 +1115,7 @@ func (s *Store) renderPipelinesHTML() string {
 </tr></thead>
 <tbody>%s</tbody>
 </table>
-<p style="color:#668; font-size:0.85em; margin-top:6px">%d active pipeline(s) &mdash; %d MPEG-TS + %d HLS viewer(s)</p>
+<p style="color:#668; font-size:0.85em; margin-top:6px">%s</p>
 <div style="color:#556; font-size:0.8em; margin-top:2px; line-height:1.6">
 <b>Now</b> current viewers<br>
 <b>Total</b> connections since pipeline started<br>
@@ -1128,7 +1133,24 @@ func (s *Store) renderPipelinesHTML() string {
 <b>Audio</b> relay chunks dropped (pipe backpressure)<br>
 <b>Hub</b> broadcast chunks dropped (slow HTTP clients)
 </div>`,
-		rows.String(), len(pipelines), totalStream, totalHLS)
+		rows.String(), pipelineSummary(len(pipelines), activePipelines, pausedPipelines, totalStream, totalHLS))
+}
+
+// plural returns "1 thing" or "N things".
+func plural(n int, singular, pluralForm string) string {
+	if n == 1 {
+		return fmt.Sprintf("1 %s", singular)
+	}
+	return fmt.Sprintf("%d %s", n, pluralForm)
+}
+
+func pipelineSummary(total, active, paused, mpegts, hls int) string {
+	return fmt.Sprintf("%s (%s, %s) &mdash; %s + %s",
+		plural(total, "pipeline", "pipelines"),
+		plural(active, "active", "active"),
+		plural(paused, "paused", "paused"),
+		plural(mpegts, "MPEG-TS viewer", "MPEG-TS viewers"),
+		plural(hls, "HLS viewer", "HLS viewers"))
 }
 
 func (s *Store) handlePipelinesJSON(w http.ResponseWriter, r *http.Request) {
