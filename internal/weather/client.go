@@ -31,6 +31,7 @@ type Client struct {
 	baseURL    string
 	http       *http.Client
 	lat, lon   float64
+	zip        string
 	locationMu sync.Mutex
 	location   string
 	gridID     string
@@ -100,6 +101,7 @@ func NewClient(baseURL string, lat, lon float64, location string, zip string, fr
 		baseURL:             baseURL,
 		lat:                 lat,
 		lon:                 lon,
+		zip:                 zip,
 		location:            location,
 		frames:              frames,
 		radius:              radius,
@@ -443,21 +445,32 @@ func (c *Client) fetch(ctx context.Context) (*WeatherData, error) {
 	// Compute sun data (pure function, no API call).
 	sunData := ComputeSunData(now, c.lat, c.lon)
 
-	// Compute UV index from solar position and current conditions.
-	cloudDesc := ""
-	if len(hourly) > 0 {
-		cloudDesc = hourly[0].ShortForecast
-	}
-	uvIndex := ComputeUVIndex(now, c.lat, c.lon, cloudDesc)
-
-	// Compute hourly UV for the forecast graph.
-	hourlyUV := make([]float64, len(hourly))
-	for i, p := range hourly {
-		t, err := time.Parse(time.RFC3339, p.StartTime)
-		if err != nil {
-			t = now.Add(time.Duration(i) * time.Hour)
+	// Fetch UV index from EPA forecast API (best-effort, falls back to computed model).
+	var uvIndex float64
+	var hourlyUV []float64
+	epaCtx, epaCancel := context.WithTimeout(ctx, 10*time.Second)
+	epaUV, epaHourlyUV, epaOK := fetchEPAUV(epaCtx, c.http, c.zip, c.loc, hourly)
+	epaCancel()
+	if epaOK {
+		uvIndex = epaUV
+		hourlyUV = epaHourlyUV
+		c.log.Printf("UV index from EPA forecast: current=%.0f", uvIndex)
+	} else {
+		// Fall back to computed model.
+		cloudDesc := ""
+		if len(hourly) > 0 {
+			cloudDesc = hourly[0].ShortForecast
 		}
-		hourlyUV[i] = ComputeUVIndex(t, c.lat, c.lon, p.ShortForecast)
+		uvIndex = ComputeUVIndex(now, c.lat, c.lon, cloudDesc)
+		hourlyUV = make([]float64, len(hourly))
+		for i, p := range hourly {
+			t, err := time.Parse(time.RFC3339, p.StartTime)
+			if err != nil {
+				t = now.Add(time.Duration(i) * time.Hour)
+			}
+			hourlyUV[i] = ComputeUVIndex(t, c.lat, c.lon, p.ShortForecast)
+		}
+		c.log.Printf("UV index from computed model (EPA unavailable): current=%.1f", uvIndex)
 	}
 
 	// Fetch tide predictions if a nearby station was found (best-effort).

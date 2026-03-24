@@ -12,7 +12,7 @@ const IEMRadar = "https://mesonet.agron.iastate.edu/GIS/radmap.php"
 const (
 	TideStations    = "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json?type=tidepredictions"
 	TidePredictions = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter" // + query params
-	TideHiLo        = TidePredictions                                              // same endpoint, different params
+	TideHiLo        = TidePredictions                                             // same endpoint, different params
 )
 
 // NASA SDO solar images (tried in order; first success wins).
@@ -32,6 +32,9 @@ const (
 	NOAAKpIndex   = "https://services.swpc.noaa.gov/json/planetary_k_index_1m.json"
 	NOAASolarWind = "https://services.swpc.noaa.gov/products/solar-wind/plasma-5-minute.json"
 )
+
+// EPA UV Index forecast.
+const EPAUV = "https://data.epa.gov/efservice/getEnvirofactsUVHOURLY"
 
 // Open Trivia Database.
 const OpenTriviaDB = "https://opentdb.com/api.php"
@@ -75,6 +78,8 @@ func (c *Classifier) Classify(host string) string {
 		return "NASA SDO Solar"
 	case host == "services.swpc.noaa.gov":
 		return "NOAA Space Weather"
+	case host == "data.epa.gov":
+		return "EPA UV Index"
 	case host == "opentdb.com":
 		return "Open Trivia DB"
 	default:

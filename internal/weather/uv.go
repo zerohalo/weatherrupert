@@ -1,9 +1,15 @@
 package weather
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"math"
+	"net/http"
 	"strings"
 	"time"
+
+	"github.com/zerohalo/weatherrupert/internal/apiurl"
 )
 
 // ComputeUVIndex estimates the UV index from solar elevation angle, day of
@@ -18,7 +24,7 @@ func ComputeUVIndex(t time.Time, lat, lon float64, cloudDesc string) float64 {
 	}
 
 	// Clear-sky UV index approximation based on solar zenith angle.
-	// UVI ≈ 12.5 * sin(elevation)^1.3 * ozone_factor
+	// UVI ≈ 10 * sin(elevation)^2 * seasonal/latitude corrections
 	sinElev := math.Sin(deg2rad(alt))
 
 	// Ozone thickness varies with latitude and season — approximate with
@@ -33,7 +39,7 @@ func ComputeUVIndex(t time.Time, lat, lon float64, cloudDesc string) float64 {
 	// Latitude factor: UV is higher at equator, lower at poles.
 	latFactor := 1.0 + 0.15*(1-math.Abs(lat)/90)
 
-	uvi := 12.0 * math.Pow(sinElev, 1.3) * seasonFactor * latFactor
+	uvi := 10.0 * math.Pow(sinElev, 2.0) * seasonFactor * latFactor
 
 	// Cloud attenuation factor based on forecast description.
 	cloudFactor := cloudAttenuationFactor(cloudDesc)
@@ -63,6 +69,84 @@ func cloudAttenuationFactor(desc string) float64 {
 	default:
 		return 1.0 // clear/sunny
 	}
+}
+
+// epaUVHourly is a single entry from the EPA UV hourly forecast API.
+type epaUVHourly struct {
+	Order    int    `json:"ORDER"`
+	DateTime string `json:"DATE_TIME"` // "Mar/24/2026 06 AM"
+	UVValue  int    `json:"UV_VALUE"`
+}
+
+// fetchEPAUV fetches the hourly UV index forecast from the EPA Envirofacts API.
+// Returns (current UV, hourly UV slice aligned to the provided hourly periods, ok).
+// On any error it returns ok=false so the caller can fall back to the computed model.
+func fetchEPAUV(ctx context.Context, client *http.Client, zip string, loc *time.Location, hourlyPeriods []ForecastPeriod) (float64, []float64, bool) {
+	if zip == "" {
+		return 0, nil, false
+	}
+
+	url := fmt.Sprintf("%s/ZIP/%s/JSON", apiurl.EPAUV, zip)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return 0, nil, false
+	}
+	req.Header.Set("User-Agent", userAgent)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, nil, false
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return 0, nil, false
+	}
+
+	var entries []epaUVHourly
+	if err := json.NewDecoder(resp.Body).Decode(&entries); err != nil {
+		return 0, nil, false
+	}
+	if len(entries) == 0 {
+		return 0, nil, false
+	}
+
+	// Parse EPA entries into a map of local hour → UV value.
+	// EPA DATE_TIME format: "Mar/24/2026 06 AM"
+	hourUV := make(map[int]int, len(entries))
+	for _, e := range entries {
+		t, err := time.Parse("Jan/02/2006 03 PM", e.DateTime)
+		if err != nil {
+			continue
+		}
+		hourUV[t.Hour()] = e.UVValue
+	}
+
+	// Find current UV: use the entry matching the current hour.
+	now := time.Now().In(loc)
+	currentUV := float64(hourUV[now.Hour()])
+
+	// Align EPA data to the hourly forecast periods.
+	hourlyUV := make([]float64, len(hourlyPeriods))
+	matched := 0
+	for i, p := range hourlyPeriods {
+		t, err := time.Parse(time.RFC3339, p.StartTime)
+		if err != nil {
+			continue
+		}
+		t = t.In(loc)
+		if uv, ok := hourUV[t.Hour()]; ok {
+			hourlyUV[i] = float64(uv)
+			matched++
+		}
+	}
+
+	// If we matched fewer than 3 hours, the data is too sparse to be useful.
+	if matched < 3 {
+		return 0, nil, false
+	}
+
+	return currentUV, hourlyUV, true
 }
 
 // UVCategory returns the EPA UV index category name.
