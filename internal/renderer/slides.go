@@ -1742,7 +1742,7 @@ func slideMoonTides(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 
 		if len(preds) > 0 {
 			// Chart bounds
-			plotLeft := midX + 70.0
+			plotLeft := midX + 100.0
 			plotRight := w - 30.0
 			plotTop := contentTop + 60.0
 			plotBottom := h - 60.0
@@ -1795,12 +1795,12 @@ func slideMoonTides(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 					unitLabel = "M"
 				}
 				dc.SetFontFace(fonts.small)
-				drawShadowTextAnchored(dc, fmt.Sprintf("%.1f", displayLevel), plotLeft-6, gY, 1.0, 0.5, subR, subG, subB)
+				drawShadowTextAnchored(dc, fmt.Sprintf("%.1f", displayLevel), plotLeft-12, gY, 1.0, 0.5, subR, subG, subB)
 			}
 
 			// Unit label at top of Y-axis
 			dc.SetFontFace(fonts.small)
-			drawShadowTextAnchored(dc, unitLabel, plotLeft-6, plotTop-14, 1.0, 0.5, subR, subG, subB)
+			drawShadowTextAnchored(dc, unitLabel, plotLeft-12, plotTop-26, 1.0, 0.5, subR, subG, subB)
 
 			// Area fill under curve
 			xs := make([]float64, n)
