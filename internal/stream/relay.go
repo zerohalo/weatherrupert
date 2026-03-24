@@ -144,8 +144,14 @@ func (r *MusicRelay) SetActive(pr *os.File, active bool) {
 				// Drain stale audio chunks buffered while this
 				// subscriber was inactive so FFmpeg doesn't encode
 				// old audio on resume.
+				drained := 0
 				for len(c.ch) > 0 {
 					<-c.ch
+					drained++
+				}
+				if drained > 0 {
+					log.Printf("music relay: drained %d stale channel chunks (%d KB) on activate for %s",
+						drained, drained*relayChunkSize/1024, r.url)
 				}
 				c.active = true
 				r.active++

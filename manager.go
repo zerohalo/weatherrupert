@@ -480,15 +480,18 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 		p.activeMu.Lock()
 		defer p.activeMu.Unlock()
 
+		t0 := time.Now()
+
 		// Rotate to a random music stream on each reconnection (only when
 		// using admin-configured streams, not a pinned MUSIC_STREAM_URL).
+		rotated := false
 		if m.cfg.MusicStreamURL == "" && relayPipe != nil {
 			m.rotateRelay(p, ctx)
+			rotated = true
 		}
 
-		// Tell the relay this pipeline has viewers so it stays connected.
-		// Audio connects in the background — video is already flowing
-		// from the warmup phase so we don't block waiting for the relay.
+		tRotate := time.Since(t0)
+
 		p.relayMu.Lock()
 		curRelay, curPipe := p.relay, p.relayPipe
 		p.relayMu.Unlock()
@@ -496,6 +499,25 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 			// Drain stale audio from the OS pipe buffer while FFmpeg is
 			// still frozen (SIGSTOP) so it doesn't play old data on resume.
 			curRelay.DrainPipe(curPipe)
+		}
+
+		tDrain := time.Since(t0)
+
+		hub.ResetFlushWindow()
+		// Resume FFmpeg BEFORE activating audio flow. This way FFmpeg
+		// wakes up to an empty pipe and blocks on read until fresh audio
+		// arrives, instead of immediately consuming stale data that
+		// accumulated between SetActive and Resume.
+		if err := ff.Resume(); err != nil {
+			pl.Printf("ffmpeg resume: %v", err)
+		} else {
+			pl.Printf("ffmpeg resumed (viewer connected) — rotated=%v rotate=%s drain=%s",
+				rotated, tRotate.Round(time.Millisecond), tDrain.Round(time.Millisecond))
+		}
+
+		// Now activate the relay subscriber so fresh audio starts flowing
+		// into the pipe. FFmpeg is already running and will read it immediately.
+		if curRelay != nil && curPipe != nil {
 			curRelay.SetActive(curPipe, true)
 			go func() {
 				waitCtx, waitCancel := context.WithTimeout(ctx, 5*time.Second)
@@ -504,13 +526,6 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 					pl.Printf("music relay wait: %v (audio may be delayed)", err)
 				}
 			}()
-		}
-		hub.ResetFlushWindow()
-		// Resume FFmpeg if it was suspended by OnIdle.
-		if err := ff.Resume(); err != nil {
-			pl.Printf("ffmpeg resume: %v", err)
-		} else {
-			pl.Printf("ffmpeg resumed (viewer connected)")
 		}
 		wc.Wake() // trigger immediate weather refresh with fresh data
 	}

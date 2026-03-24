@@ -37,8 +37,9 @@ type Hub struct {
 	// activatedAt / flushUntil bracket the post-resume discard window.
 	// Chunks arriving before flushUntil are discarded, draining stale
 	// data from FFmpeg's pipe buffer after a SIGCONT resume.
-	activatedAt time.Time
-	flushUntil  time.Time
+	activatedAt   time.Time
+	flushUntil    time.Time
+	flushedChunks int64 // chunks discarded during current flush window
 
 	// OnActive is called (without lock held) when the first client connects.
 	// OnIdle is called (without lock held) when the last client disconnects.
@@ -58,6 +59,7 @@ func (h *Hub) ResetFlushWindow() {
 	h.mu.Lock()
 	h.activatedAt = time.Now()
 	h.flushUntil = h.activatedAt.Add(maxFlushWindow)
+	h.flushedChunks = 0
 	h.mu.Unlock()
 }
 
@@ -137,8 +139,17 @@ func (h *Hub) broadcast(chunk []byte) {
 	// After a resume from suspension, FFmpeg's pipe buffer contains stale
 	// encoded data from before the pause. Discard it so clients don't see
 	// a flash of old frames before fresh content arrives.
-	if !h.flushUntil.IsZero() && time.Now().Before(h.flushUntil) {
-		return
+	if !h.flushUntil.IsZero() {
+		if time.Now().Before(h.flushUntil) {
+			h.flushedChunks++
+			return
+		}
+		// Flush window just closed — log how much stale data was discarded.
+		elapsed := time.Since(h.activatedAt)
+		log.Printf("stream: flush window closed after %s, discarded %d chunks (%d KB)",
+			elapsed.Round(time.Millisecond), h.flushedChunks, h.flushedChunks*chunkSize/1024)
+		h.flushUntil = time.Time{}
+		h.flushedChunks = 0
 	}
 
 	h.chunkCount.Add(1)
