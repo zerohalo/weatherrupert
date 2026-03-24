@@ -48,9 +48,12 @@ type Hub struct {
 }
 
 // maxFlushWindow caps the flush duration at the audio thread queue capacity.
-// Each MP3 packet is ~26ms; AudioThreadQueueSize packets plus 300ms margin
-// for the muxer to flush the interleaved output.
-const maxFlushWindow = time.Duration(AudioThreadQueueSize)*26*time.Millisecond + 300*time.Millisecond
+// Each audio packet is ~26ms; AudioThreadQueueSize packets can be queued
+// internally by FFmpeg before the suspend.  On resume, FFmpeg must drain
+// these stale packets while also encoding video, which can slow processing
+// by 30-50% under CPU pressure (visible as thread_queue_size warnings).
+// The 1500ms margin covers this slowdown plus muxer interleave latency.
+const maxFlushWindow = time.Duration(AudioThreadQueueSize)*26*time.Millisecond + 1500*time.Millisecond
 
 // ResetFlushWindow restarts the flush window from now.  Called right before
 // ff.Resume() so the window starts from the actual resume moment, not the
