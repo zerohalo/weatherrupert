@@ -38,6 +38,7 @@ func main() {
 			WindDir:      "NW",
 			WindSpeedMph: fp(8),
 			WindGustMph:  fp(15),
+			HeatIndexF:   fp(80),
 			PressureInHg: fp(30.12),
 			VisibilityMi: fp(10),
 			UpdatedAt:    now,

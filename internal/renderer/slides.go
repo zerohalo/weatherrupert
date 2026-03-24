@@ -609,8 +609,13 @@ func slideCurrentConditions(dc *gg.Context, data *weather.WeatherData, use24h, u
 	}
 
 	cellW := (w - midX) / 2
-	const cellRowH = 125.0
 	gridStartY := nextY + 25.0
+	// Shrink row height when optional lines (gusts, feels-like) eat vertical space.
+	availableH := h - 20.0 - gridStartY
+	cellRowH := availableH / 2
+	if cellRowH > 125.0 {
+		cellRowH = 125.0
+	}
 
 	for i, c := range cells {
 		col := float64(i % 2)
