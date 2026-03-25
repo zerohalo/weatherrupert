@@ -449,10 +449,8 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 	// viewers reconnect.  This eliminates stale audio: a new FFmpeg process
 	// has no internal queue from a previous stream.
 	hub.OnActive = func() {
-		pl.Printf("OnActive: waiting for lock")
 		p.activeMu.Lock()
 		defer p.activeMu.Unlock()
-		pl.Printf("OnActive: lock acquired")
 
 		// Kill any leftover FFmpeg from a previous cycle.
 		if p.ff != nil {
@@ -515,10 +513,8 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 				}
 			}
 
-			pl.Printf("phase2: waiting for lock")
 			p.activeMu.Lock()
 			defer p.activeMu.Unlock()
-			pl.Printf("phase2: lock acquired")
 
 			if hub.ClientCount() == 0 {
 				relay.Unsubscribe(relayPipe)
@@ -609,18 +605,17 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 		if err := p.rnd.Run(ctx); err != nil && ctx.Err() == nil {
 			pl.Printf("renderer: %v", err)
 		}
-		// Final cleanup on context cancellation (app shutdown).
-		p.activeMu.Lock()
+		// Renderer exited — either context was cancelled (app shutdown)
+		// or an unexpected error.  Clean up FFmpeg and relay without
+		// acquiring activeMu (OnActive/OnIdle may also be running).
 		if p.ff != nil {
 			p.ff.Kill()
-			p.ff = nil
 		}
 		p.relayMu.Lock()
 		r, rp := p.relay, p.relayPipe
 		p.relay = nil
 		p.relayPipe = nil
 		p.relayMu.Unlock()
-		p.activeMu.Unlock()
 		if r != nil && rp != nil {
 			r.Unsubscribe(rp)
 		}
