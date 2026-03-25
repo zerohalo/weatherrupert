@@ -549,30 +549,32 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 	}
 
 	hub.OnIdle = func() {
+		// Snapshot and nil out pipeline state under activeMu, then release
+		// the lock BEFORE doing relay cleanup (which can block waiting for
+		// the writer goroutine).  This ensures the next OnActive can
+		// acquire activeMu promptly.
 		p.activeMu.Lock()
-		defer p.activeMu.Unlock()
-
 		now := time.Now()
 		p.lastSeen.Store(&now)
 
-		// Kill FFmpeg — a fresh process will be started on next connect.
 		if p.ff != nil {
 			p.ff.Kill()
 			p.ff = nil
 			p.rnd.SetOutput(nil)
 			pl.Printf("ffmpeg killed (no viewers)")
 		}
-		// Close all remaining client channels (flushes ghost HTTP
-		// connections) and ensure the next Subscribe triggers OnActive.
 		hub.CloseAllClients()
 		hub.RequestActivation()
 
-		// Clean up relay subscription.
 		p.relayMu.Lock()
 		curRelay, curPipe := p.relay, p.relayPipe
 		p.relay = nil
 		p.relayPipe = nil
 		p.relayMu.Unlock()
+		p.activeMu.Unlock()
+
+		// Relay cleanup runs outside activeMu — Unsubscribe may block
+		// briefly while the writer goroutine drains its pipe.
 		if curRelay != nil && curPipe != nil {
 			curRelay.SetActive(curPipe, false)
 			curRelay.Unsubscribe(curPipe)
