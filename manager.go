@@ -562,8 +562,9 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 			p.rnd.SetOutput(nil)
 			pl.Printf("ffmpeg killed (no viewers)")
 		}
-		// Ensure the next Subscribe triggers OnActive even if the HLS
-		// segmenter is still subscribed to the hub.
+		// Close all remaining client channels (flushes ghost HTTP
+		// connections) and ensure the next Subscribe triggers OnActive.
+		hub.CloseAllClients()
 		hub.RequestActivation()
 
 		// Clean up relay subscription.
