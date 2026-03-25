@@ -444,7 +444,15 @@ func (r *Renderer) writeLoadingFrame() error {
 		return nil
 	}
 	_, err := w.Write(r.loadingPix)
-	return err
+	if err != nil {
+		r.outMu.Lock()
+		if r.out == w {
+			r.out = nil
+		}
+		r.outMu.Unlock()
+		return nil
+	}
+	return nil
 }
 
 // SetOutput swaps the output writer (FFmpeg stdin) atomically.
@@ -474,7 +482,15 @@ func (r *Renderer) writeFrame(pix []byte) error {
 			r.label, d, len(pix))
 	}
 	if err != nil {
-		return fmt.Errorf("renderer: write frame: %w", err)
+		// FFmpeg was killed during a restart — nil out the writer so
+		// subsequent frames are silently skipped until SetOutput provides
+		// the new FFmpeg's stdin.
+		r.outMu.Lock()
+		if r.out == w {
+			r.out = nil
+		}
+		r.outMu.Unlock()
+		return nil
 	}
 	return nil
 }
