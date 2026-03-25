@@ -300,6 +300,9 @@ func (r *MusicRelay) fetch(stopCh chan struct{}) {
 			r.broadcast(data)
 		}
 		if err != nil {
+			if ctx.Err() != nil {
+				return // shutting down (all subscribers removed)
+			}
 			if err != io.EOF {
 				log.Printf("music relay: read error: %v (reconnecting)", err)
 			} else {
