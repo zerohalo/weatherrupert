@@ -52,8 +52,9 @@ type Hub struct {
 // internally by FFmpeg before the suspend.  On resume, FFmpeg must drain
 // these stale packets while also encoding video, which can slow processing
 // by 30-50% under CPU pressure (visible as thread_queue_size warnings).
-// The 1500ms margin covers this slowdown plus muxer interleave latency.
-const maxFlushWindow = time.Duration(AudioThreadQueueSize)*26*time.Millisecond + 1500*time.Millisecond
+// With -max_delay 0 and -flush_packets 1 the muxer adds negligible
+// latency, so a 1s margin covers the CPU slowdown comfortably.
+const maxFlushWindow = time.Duration(AudioThreadQueueSize)*26*time.Millisecond + 1*time.Second
 
 // ResetFlushWindow restarts the flush window from now.  Called right before
 // ff.Resume() so the window starts from the actual resume moment, not the

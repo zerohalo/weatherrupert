@@ -163,7 +163,16 @@ func buildArgs(width, height, frameRate int, music *MusicSource, videoMaxRate st
 		args = append(args, "-c:a", "aac", "-b:a", "128k")
 	}
 
-	args = append(args, "-f", "mpegts", "pipe:1")
+	// Minimize muxer buffering so stale audio drains quickly on resume.
+	// -flush_packets 1: flush each packet to stdout immediately
+	// -max_delay 0: no muxer interleave delay (default 0.7s holds audio)
+	// -max_interleave_delta 0: don't hold packets waiting for other streams
+	args = append(args,
+		"-flush_packets", "1",
+		"-max_delay", "0",
+		"-max_interleave_delta", "0",
+		"-f", "mpegts", "pipe:1",
+	)
 
 	return args
 }
