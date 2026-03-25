@@ -420,7 +420,11 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 		// Wait for the previous hub reader to finish (it exits on EOF
 		// when the old FFmpeg's stdout pipe closes after Kill).
 		if hubReaderDone != nil {
-			<-hubReaderDone
+			select {
+			case <-hubReaderDone:
+			case <-time.After(3 * time.Second):
+				pl.Printf("WARNING: hub reader did not exit in 3s, proceeding anyway")
+			}
 		}
 
 		newFF, err := stream.Start(m.cfg.Width, m.cfg.Height, m.cfg.FrameRate, music, loc.ZipCode, m.cfg.VideoMaxRate)
@@ -431,10 +435,11 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 		if p.rnd != nil {
 			p.rnd.SetOutput(newFF.Stdin())
 		}
-		hubReaderDone = make(chan struct{})
+		done := make(chan struct{})
+		hubReaderDone = done
 		go func() {
 			hub.Run(newFF.Stdout())
-			close(hubReaderDone)
+			close(done)
 		}()
 		pl.Printf("ffmpeg started (%s)", label)
 		return newFF, nil
@@ -557,6 +562,9 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 			p.rnd.SetOutput(nil)
 			pl.Printf("ffmpeg killed (no viewers)")
 		}
+		// Ensure the next Subscribe triggers OnActive even if the HLS
+		// segmenter is still subscribed to the hub.
+		hub.RequestActivation()
 
 		// Clean up relay subscription.
 		p.relayMu.Lock()

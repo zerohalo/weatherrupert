@@ -34,10 +34,25 @@ type Hub struct {
 	bytesTotal    atomic.Int64 // total bytes broadcast
 	lastBroadcast atomic.Int64 // UnixMilli of most recent broadcast
 
-	// OnActive is called (without lock held) when the first client connects.
+	// OnActive is called (without lock held) when a client connects and the
+	// hub needs activation (either first client, or needsActivation was set).
 	// OnIdle is called (without lock held) when the last client disconnects.
 	OnActive func()
 	OnIdle   func()
+
+	// needsActivation is set by RequestActivation() so the next Subscribe
+	// triggers OnActive even if other clients (e.g. HLS segmenter) remain.
+	needsActivation bool
+}
+
+// RequestActivation marks the hub so that the next Subscribe triggers
+// OnActive regardless of current client count.  Called by OnIdle after
+// killing FFmpeg so that the next viewer connection starts a fresh process
+// even if internal subscribers (HLS segmenter) are still present.
+func (h *Hub) RequestActivation() {
+	h.mu.Lock()
+	h.needsActivation = true
+	h.mu.Unlock()
 }
 
 // NewHub creates a ready-to-use Hub.
@@ -72,7 +87,8 @@ func (h *Hub) Subscribe() chan []byte {
 	ch := make(chan []byte, clientBufLen)
 	var activate bool
 	h.mu.Lock()
-	activate = len(h.clients) == 0 && h.OnActive != nil
+	activate = (len(h.clients) == 0 || h.needsActivation) && h.OnActive != nil
+	h.needsActivation = false
 	h.clients[ch] = struct{}{}
 	h.clientDrops[ch] = &atomic.Int64{}
 	h.connectTime[ch] = time.Now()
