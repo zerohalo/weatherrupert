@@ -93,13 +93,19 @@ func (f *FFmpeg) Wait() error { return f.cmd.Wait() }
 // Warnings returns the number of stderr warning lines emitted by FFmpeg.
 func (f *FFmpeg) Warnings() int64 { return f.warnings.Load() }
 
-// Kill terminates the FFmpeg process and waits for it to exit.
-func (f *FFmpeg) Kill() error {
+// Kill terminates the FFmpeg process.  It closes stdin first (so FFmpeg
+// gets EOF on its input), then sends SIGKILL to ensure it exits.
+// The process is reaped in the background; callers should not call Wait
+// after Kill because Wait blocks until all pipe readers have finished.
+func (f *FFmpeg) Kill() {
 	if f.cmd.Process == nil {
-		return nil
+		return
 	}
+	f.stdin.Close()
 	_ = f.cmd.Process.Kill()
-	return f.cmd.Wait()
+	// Reap in the background — cmd.Wait() blocks until hub.Run() finishes
+	// reading stdout, which we don't want to wait for synchronously.
+	go f.cmd.Wait()
 }
 
 func buildArgs(width, height, frameRate int, music *MusicSource, videoMaxRate string) []string {
