@@ -415,7 +415,9 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 			return nil, err
 		}
 		seg.ResetAccumulator()
-		p.rnd.SetOutput(newFF.Stdin())
+		if p.rnd != nil {
+			p.rnd.SetOutput(newFF.Stdin())
+		}
 		go hub.Run(newFF.Stdout())
 		pl.Printf("ffmpeg started (%s)", label)
 		return newFF, nil
