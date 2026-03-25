@@ -10,11 +10,14 @@ import (
 )
 
 // AudioThreadQueueSize is the FFmpeg -thread_queue_size for relay pipe audio.
-// Each MP3 packet is ~26ms, so 64 packets ≈ 1.7s of audio.  This limits how
-// much stale audio accumulates in FFmpeg's internal buffer during a
-// SIGSTOP/SIGCONT cycle (we can drain the OS pipe but not FFmpeg's queue).
-// The Hub's flushWindow is derived from this value.
-const AudioThreadQueueSize = 64
+// Keep this small: it directly controls how much stale audio survives in
+// FFmpeg's internal buffer across a SIGSTOP/SIGCONT cycle (we can drain
+// the OS pipe but not this queue).  8 packets × ~26ms ≈ 200ms — short
+// enough that the Hub's flush window reliably discards it even under CPU
+// pressure.  Backpressure from a small queue is absorbed by the OS pipe
+// buffer (64 KB ≈ 8s of 64 kbps audio) and the relay's channel buffer
+// (1 MB), so normal playback is unaffected.
+const AudioThreadQueueSize = 8
 
 var audioExtensions = map[string]bool{
 	".mp3":  true,
