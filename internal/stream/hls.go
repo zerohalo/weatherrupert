@@ -294,6 +294,16 @@ func (s *HLSSegmenter) subscribe() {
 	s.log.Printf("segmenter subscribed to hub")
 }
 
+// ResetAccumulator clears partial MPEG-TS data accumulated from a previous
+// FFmpeg process.  Call between FFmpeg kill and restart to prevent corrupt
+// segments from mixing old and new stream data.
+func (s *HLSSegmenter) ResetAccumulator() {
+	s.mu.Lock()
+	s.accumBuf = nil
+	s.accumT = time.Time{}
+	s.mu.Unlock()
+}
+
 // unsubscribe disconnects from the Hub if currently subscribed.
 func (s *HLSSegmenter) unsubscribe() {
 	s.mu.Lock()

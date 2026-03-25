@@ -51,6 +51,7 @@ type Renderer struct {
 	log              *plog.Logger
 	getSlideDuration func() time.Duration
 	wc               *weather.Client
+	outMu            sync.Mutex
 	out              io.Writer
 	fonts            *fontSet // per-renderer font faces (not shared across pipelines)
 	weatherSlides    []weatherSlideEntry
@@ -436,8 +437,22 @@ func (r *Renderer) writeLoadingFrame() error {
 		r.log.Printf("loading frame rendered (%d bytes)", len(pix))
 	}
 
-	_, err := r.out.Write(r.loadingPix)
+	r.outMu.Lock()
+	w := r.out
+	r.outMu.Unlock()
+	if w == nil {
+		return nil
+	}
+	_, err := w.Write(r.loadingPix)
 	return err
+}
+
+// SetOutput swaps the output writer (FFmpeg stdin) atomically.
+// Pass nil to suppress writes during an FFmpeg restart.
+func (r *Renderer) SetOutput(w io.Writer) {
+	r.outMu.Lock()
+	r.out = w
+	r.outMu.Unlock()
 }
 
 // writeFrame writes a raw RGBA frame to FFmpeg stdin and logs a warning
@@ -445,8 +460,14 @@ func (r *Renderer) writeLoadingFrame() error {
 // input pipe buffer is full because it can't encode frames fast enough —
 // the most direct indicator of CPU contention.
 func (r *Renderer) writeFrame(pix []byte) error {
+	r.outMu.Lock()
+	w := r.out
+	r.outMu.Unlock()
+	if w == nil {
+		return nil // no FFmpeg running — skip frame
+	}
 	t0 := time.Now()
-	_, err := r.out.Write(pix)
+	_, err := w.Write(pix)
 	if d := time.Since(t0); d > 200*time.Millisecond {
 		r.slowFrames.Add(1)
 		r.log.Printf("slow frame write: %v (%d bytes) — FFmpeg may be CPU-starved",

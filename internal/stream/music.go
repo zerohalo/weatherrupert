@@ -10,14 +10,9 @@ import (
 )
 
 // AudioThreadQueueSize is the FFmpeg -thread_queue_size for relay pipe audio.
-// Keep this small: it directly controls how much stale audio survives in
-// FFmpeg's internal buffer across a SIGSTOP/SIGCONT cycle (we can drain
-// the OS pipe but not this queue).  8 packets × ~26ms ≈ 200ms — short
-// enough that the Hub's flush window reliably discards it even under CPU
-// pressure.  Backpressure from a small queue is absorbed by the OS pipe
-// buffer (64 KB ≈ 8s of 64 kbps audio) and the relay's channel buffer
-// (1 MB), so normal playback is unaffected.
-const AudioThreadQueueSize = 8
+// 64 packets ≈ 1.7s of buffering, which smooths out momentary encoding
+// spikes without starving the muxer.
+const AudioThreadQueueSize = 64
 
 var audioExtensions = map[string]bool{
 	".mp3":  true,
@@ -39,6 +34,11 @@ type MusicSource struct {
 	RelayPipe    *os.File // read end of a MusicRelay pipe (shared stream via fd 3)
 }
 
+// NewSilenceSource returns a MusicSource that generates digital silence.
+func NewSilenceSource() *MusicSource {
+	return &MusicSource{}
+}
+
 // NewStreamSource returns a MusicSource that streams from the given URL.
 func NewStreamSource(url string) *MusicSource {
 	return &MusicSource{HasMusic: true, StreamURL: url}
@@ -50,10 +50,6 @@ func (m *MusicSource) FFmpegArgs() []string {
 	case m.RelayPipe != nil:
 		// Audio arrives via an OS pipe from a shared MusicRelay.
 		// The pipe is passed as ExtraFiles[0] which becomes fd 3.
-		// Keep thread_queue_size modest: a large queue (e.g. 512) means
-		// ~13s of stale audio after a SIGSTOP/SIGCONT cycle because we
-		// can drain the OS pipe but not FFmpeg's internal thread queue.
-		// 64 packets ≈ 1.7s of MP3, enough headroom for encode spikes.
 		return []string{"-thread_queue_size", strconv.Itoa(AudioThreadQueueSize), "-i", "pipe:3"}
 	case m.PlaylistPath != "":
 		return []string{

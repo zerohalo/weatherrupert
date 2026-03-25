@@ -352,68 +352,6 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 	cacheDir := filepath.Dir(m.cfg.AdminDataPath)
 	wc.SetCachePath(filepath.Join(cacheDir, fmt.Sprintf("weather_cache_%s.json", loc.ZipCode)))
 
-	// Resolve the music source for this pipeline:
-	//   1. MUSIC_STREAM_URL env var (single-URL pin) takes priority.
-	//   2. Admin-configured stream URL list — one is chosen at random.
-	//   3. Fallback to local files or silence (m.music).
-	//
-	// Stream URLs use a shared MusicRelay so that multiple pipelines share
-	// a single HTTP connection instead of each opening their own.
-	music := m.music
-	musicName := "Local files"
-	var streamURL string
-	if m.cfg.MusicStreamURL != "" {
-		streamURL = m.cfg.MusicStreamURL
-		musicName = m.cfg.MusicStreamURL
-	} else if entries := m.store.Streams(); len(entries) > 0 {
-		entry := entries[rand.Intn(len(entries))]
-		streamURL = entry.URL
-		musicName = entry.DisplayName()
-	}
-
-	// Register the stream hostname→name so API stats show the stream name.
-	if streamURL != "" && m.classifier != nil {
-		if u, err := url.Parse(streamURL); err == nil && u.Hostname() != "" {
-			m.classifier.RegisterStream(u.Hostname(), musicName)
-		}
-	}
-
-	var relayPipe *os.File
-	var relay *stream.MusicRelay
-	if streamURL != "" {
-		relay = m.relays[streamURL]
-		if relay == nil {
-			relay = stream.NewMusicRelay(streamURL, m.streamClient)
-			m.relays[streamURL] = relay
-		}
-		relayPipe = relay.Subscribe()
-		if relayPipe != nil {
-			music = stream.NewRelaySource(relayPipe)
-			pl.Printf("music via shared relay for %s", streamURL)
-		} else {
-			// Pipe creation failed — fall back to direct connection.
-			pl.Printf("relay pipe failed, using direct connection for %s", streamURL)
-			music = stream.NewStreamSource(streamURL)
-			relay = nil
-		}
-	}
-
-	ff, err := stream.Start(m.cfg.Width, m.cfg.Height, m.cfg.FrameRate, music, loc.ZipCode, m.cfg.VideoMaxRate)
-	if err != nil {
-		if relayPipe != nil {
-			relay.Unsubscribe(relayPipe)
-		}
-		return nil, fmt.Errorf("ffmpeg for ZIP %s: %w", loc.ZipCode, err)
-	}
-
-	// Let FFmpeg run immediately so it can produce HLS segments from
-	// loading frames before the first viewer connects. Activate the
-	// music relay so FFmpeg gets audio input (it can't mux without both
-	// streams). OnIdle will deactivate and suspend when viewers leave.
-	if relay != nil && relayPipe != nil {
-		relay.SetActive(relayPipe, true)
-	}
-
 	hub := stream.NewHub()
 
 	// Derive a child context so this pipeline can be cancelled independently
@@ -437,16 +375,13 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 		zip:           loc.ZipCode,
 		clockFormat:   clockFormat,
 		units:         units,
-		musicStream:   musicName,
+		musicStream:   "Silence",
 		streamURL:     reqURL,
 		wc:            wc,
 		hub:           hub,
 		seg:           seg,
-		ff:            ff,
 		cancel:        cancel,
 		locationReady: locationReady,
-		relayPipe:     relayPipe,
-		relay:         relay,
 	}
 
 	// Bootstrap + refresh loop (background — stream shows loading slide until ready).
@@ -472,92 +407,161 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 		go wc.Run(ctx, m.cfg.WeatherRefresh, func() bool { return hub.ClientCount() > 0 })
 	}()
 
-	// Suspend FFmpeg when no viewers are connected to stop music stream
-	// bandwidth and CPU usage. Resume when the first viewer connects.
+	// startFFmpeg launches a fresh FFmpeg process with the given music source,
+	// wires up the hub reader, and points the renderer at the new stdin.
+	startFFmpeg := func(music *stream.MusicSource, label string) (*stream.FFmpeg, error) {
+		newFF, err := stream.Start(m.cfg.Width, m.cfg.Height, m.cfg.FrameRate, music, loc.ZipCode, m.cfg.VideoMaxRate)
+		if err != nil {
+			return nil, err
+		}
+		seg.ResetAccumulator()
+		p.rnd.SetOutput(newFF.Stdin())
+		go hub.Run(newFF.Stdout())
+		pl.Printf("ffmpeg started (%s)", label)
+		return newFF, nil
+	}
+
+	// Kill FFmpeg when no viewers are connected; start a fresh process when
+	// viewers reconnect.  This eliminates stale audio: a new FFmpeg process
+	// has no internal queue from a previous stream.
 	hub.OnActive = func() {
-		// Serialize with OnIdle and shutdown cleanup to prevent races
-		// on FFmpeg state and relay active counts.
 		p.activeMu.Lock()
 		defer p.activeMu.Unlock()
 
-		t0 := time.Now()
-
-		// Rotate to a random music stream on each reconnection (only when
-		// using admin-configured streams, not a pinned MUSIC_STREAM_URL).
-		rotated := false
-		if m.cfg.MusicStreamURL == "" && relayPipe != nil {
-			m.rotateRelay(p, ctx)
-			rotated = true
+		// Kill any leftover FFmpeg from a previous cycle.
+		if p.ff != nil {
+			p.ff.Kill()
+			p.ff = nil
 		}
 
-		tRotate := time.Since(t0)
-
-		p.relayMu.Lock()
-		curRelay, curPipe := p.relay, p.relayPipe
-		p.relayMu.Unlock()
-		if curRelay != nil && curPipe != nil {
-			// Drain stale audio from the OS pipe buffer while FFmpeg is
-			// still frozen (SIGSTOP) so it doesn't play old data on resume.
-			curRelay.DrainPipe(curPipe)
+		// Phase 1: start FFmpeg with silence so the viewer sees video immediately.
+		silenceFF, err := startFFmpeg(stream.NewSilenceSource(), "silence")
+		if err != nil {
+			pl.Printf("ffmpeg start (silence): %v", err)
+			return
 		}
+		p.ff = silenceFF
 
-		tDrain := time.Since(t0)
+		// Phase 2 (background): connect a music relay, then restart FFmpeg
+		// with the relay pipe so the viewer hears music.
+		go func() {
+			streamURL, musicName := m.pickStream(p)
+			if streamURL == "" {
+				// No stream configured — stay on silence (or local files).
+				return
+			}
 
-		hub.ResetFlushWindow()
-		// Resume FFmpeg BEFORE activating audio flow. This way FFmpeg
-		// wakes up to an empty pipe and blocks on read until fresh audio
-		// arrives, instead of immediately consuming stale data that
-		// accumulated between SetActive and Resume.
-		if err := ff.Resume(); err != nil {
-			pl.Printf("ffmpeg resume: %v", err)
-		} else {
-			pl.Printf("ffmpeg resumed (viewer connected) — rotated=%v rotate=%s drain=%s",
-				rotated, tRotate.Round(time.Millisecond), tDrain.Round(time.Millisecond))
-		}
+			m.mu.Lock()
+			relay := m.relays[streamURL]
+			if relay == nil {
+				relay = stream.NewMusicRelay(streamURL, m.streamClient)
+				m.relays[streamURL] = relay
+			}
+			m.mu.Unlock()
 
-		// Now activate the relay subscriber so fresh audio starts flowing
-		// into the pipe. FFmpeg is already running and will read it immediately.
-		if curRelay != nil && curPipe != nil {
-			curRelay.SetActive(curPipe, true)
-			go func() {
-				waitCtx, waitCancel := context.WithTimeout(ctx, 5*time.Second)
-				defer waitCancel()
-				if err := curRelay.WaitConnected(waitCtx); err != nil {
-					pl.Printf("music relay wait: %v (audio may be delayed)", err)
+			relayPipe := relay.Subscribe()
+			if relayPipe == nil {
+				pl.Printf("relay pipe failed for %s", streamURL)
+				return
+			}
+			relay.SetActive(relayPipe, true)
+
+			// Wait for the relay to actually connect (with timeout).
+			waitCtx, waitCancel := context.WithTimeout(ctx, 10*time.Second)
+			defer waitCancel()
+			// Poll until either the relay is streaming, viewers leave, or timeout.
+			ticker := time.NewTicker(100 * time.Millisecond)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-waitCtx.Done():
+					pl.Printf("music relay connect timeout for %s — staying on silence", streamURL)
+					relay.Unsubscribe(relayPipe)
+					return
+				case <-ticker.C:
 				}
-			}()
-		}
+				if hub.ClientCount() == 0 {
+					relay.Unsubscribe(relayPipe)
+					return // viewer left before music started
+				}
+				if relay.Received(relayPipe) > 0 {
+					break // relay is connected and sending data
+				}
+			}
+
+			p.activeMu.Lock()
+			defer p.activeMu.Unlock()
+
+			if hub.ClientCount() == 0 {
+				relay.Unsubscribe(relayPipe)
+				return
+			}
+
+			// Kill the silence FFmpeg and start a new one with the relay pipe.
+			if p.ff != nil {
+				p.ff.Kill()
+			}
+			musicFF, err := startFFmpeg(stream.NewRelaySource(relayPipe), "music: "+musicName)
+			if err != nil {
+				pl.Printf("ffmpeg start (music): %v", err)
+				relay.Unsubscribe(relayPipe)
+				return
+			}
+			p.ff = musicFF
+			p.relayMu.Lock()
+			p.relay = relay
+			p.relayPipe = relayPipe
+			p.musicStream = musicName
+			p.relayMu.Unlock()
+
+			if m.classifier != nil {
+				if u, err := url.Parse(streamURL); err == nil && u.Hostname() != "" {
+					m.classifier.RegisterStream(u.Hostname(), musicName)
+				}
+			}
+		}()
+
 		wc.Wake() // trigger immediate weather refresh with fresh data
 	}
+
 	hub.OnIdle = func() {
 		p.activeMu.Lock()
 		defer p.activeMu.Unlock()
 
 		now := time.Now()
 		p.lastSeen.Store(&now)
-		// Stop audio flow BEFORE suspending FFmpeg so the relay doesn't
-		// keep pumping data into the pipe while FFmpeg is still reading.
-		// This minimizes stale audio that accumulates in FFmpeg's internal
-		// thread queue before the freeze.
+
+		// Kill FFmpeg — a fresh process will be started on next connect.
+		if p.ff != nil {
+			p.ff.Kill()
+			p.ff = nil
+			p.rnd.SetOutput(nil)
+			pl.Printf("ffmpeg killed (no viewers)")
+		}
+
+		// Clean up relay subscription.
 		p.relayMu.Lock()
 		curRelay, curPipe := p.relay, p.relayPipe
+		p.relay = nil
+		p.relayPipe = nil
 		p.relayMu.Unlock()
 		if curRelay != nil && curPipe != nil {
 			curRelay.SetActive(curPipe, false)
-		}
-		if err := ff.Suspend(); err != nil {
-			pl.Printf("ffmpeg suspend: %v", err)
-		} else {
-			pl.Printf("ffmpeg suspended (no viewers)")
+			curRelay.Unsubscribe(curPipe)
 		}
 	}
 
-	// Broadcast hub reads FFmpeg stdout.
-	go hub.Run(ff.Stdout())
+	// Start initial FFmpeg with silence — the first OnActive will kill it
+	// and start a fresh one.  This lets the HLS segmenter produce segments
+	// from loading frames before any viewer connects.
+	ff, err := startFFmpeg(stream.NewSilenceSource(), "initial silence")
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("ffmpeg for ZIP %s: %w", loc.ZipCode, err)
+	}
+	p.ff = ff
 
 	// Renderer writes frames to FFmpeg stdin.
-	// Only write when someone is watching — FFmpeg blocks on pipe when
-	// nobody is reading, which is fine (near-zero CPU).
 	use24h := clockFormat != config.ClockFormat12h
 	useMetric := units == config.UnitsMetric
 	p.rnd = renderer.New(m.cfg.Width, m.cfg.Height, m.cfg.FrameRate, loc.ZipCode,
@@ -574,16 +578,18 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 		if err := p.rnd.Run(ctx); err != nil && ctx.Err() == nil {
 			pl.Printf("renderer: %v", err)
 		}
-		ff.Stdin().Close()
-		ff.Wait()
-		// Serialize with OnActive/OnIdle so we read the final relay
-		// after any in-flight rotation has completed.
+		// Final cleanup on context cancellation (app shutdown).
 		p.activeMu.Lock()
+		if p.ff != nil {
+			p.ff.Kill()
+			p.ff = nil
+		}
 		p.relayMu.Lock()
 		r, rp := p.relay, p.relayPipe
+		p.relay = nil
+		p.relayPipe = nil
 		p.relayMu.Unlock()
 		p.activeMu.Unlock()
-		// Clean up relay subscription so the writer goroutine and pipe FDs are released.
 		if r != nil && rp != nil {
 			r.Unsubscribe(rp)
 		}
@@ -593,64 +599,16 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 	return p, nil
 }
 
-// rotateRelay picks a new random music stream and switches the pipeline's
-// relay subscription.  Called from OnActive so each viewer session gets a
-// different stream.  No-op when fewer than 2 admin streams are configured.
-func (m *Manager) rotateRelay(p *Pipeline, ctx context.Context) {
+// pickStream selects a music stream URL for the pipeline. Returns empty
+// strings if no stream is configured (local files or silence).
+func (m *Manager) pickStream(p *Pipeline) (streamURL, musicName string) {
+	if m.cfg.MusicStreamURL != "" {
+		return m.cfg.MusicStreamURL, m.cfg.MusicStreamURL
+	}
 	entries := m.store.Streams()
-	if len(entries) < 2 {
-		return // nothing to rotate
+	if len(entries) == 0 {
+		return "", ""
 	}
-
 	entry := entries[rand.Intn(len(entries))]
-	newURL := entry.URL
-	newName := entry.DisplayName()
-
-	p.relayMu.Lock()
-	oldRelay := p.relay
-	oldPipe := p.relayPipe
-	p.relayMu.Unlock()
-
-	if oldRelay == nil || oldPipe == nil {
-		return
-	}
-
-	// Get or create the relay for the new stream URL.
-	m.mu.Lock()
-	newRelay := m.relays[newURL]
-	if newRelay == nil {
-		newRelay = stream.NewMusicRelay(newURL, m.streamClient)
-		m.relays[newURL] = newRelay
-	}
-	m.mu.Unlock()
-
-	// Skip the detach/attach cycle if we picked the same relay
-	// (avoids a brief audio gap for no benefit).
-	if newRelay == oldRelay {
-		return
-	}
-
-	// Detach the pipe from the old relay (stops its writer goroutine
-	// without closing the pipe FDs that FFmpeg is reading from).
-	pw := oldRelay.DetachPipe(oldPipe)
-	if pw == nil {
-		return
-	}
-
-	// Attach the existing pipe to the new relay.
-	newRelay.AttachPipe(oldPipe, pw)
-
-	p.relayMu.Lock()
-	p.relay = newRelay
-	p.musicStream = newName
-	p.relayMu.Unlock()
-
-	// Register the stream hostname so API stats show a friendly name.
-	if m.classifier != nil {
-		if u, err := url.Parse(newURL); err == nil && u.Hostname() != "" {
-			m.classifier.RegisterStream(u.Hostname(), newName)
-		}
-	}
-
-	plog.New("pipeline", p.zip).Printf("rotated music to %s", newName)
+	return entry.URL, entry.DisplayName()
 }

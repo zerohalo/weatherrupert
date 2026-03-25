@@ -93,21 +93,13 @@ func (f *FFmpeg) Wait() error { return f.cmd.Wait() }
 // Warnings returns the number of stderr warning lines emitted by FFmpeg.
 func (f *FFmpeg) Warnings() int64 { return f.warnings.Load() }
 
-// Suspend sends SIGSTOP to the FFmpeg process, pausing it entirely.
-// This stops audio stream decoding and all CPU usage while no viewers are connected.
-func (f *FFmpeg) Suspend() error {
+// Kill terminates the FFmpeg process and waits for it to exit.
+func (f *FFmpeg) Kill() error {
 	if f.cmd.Process == nil {
 		return nil
 	}
-	return f.cmd.Process.Signal(syscall.SIGSTOP)
-}
-
-// Resume sends SIGCONT to the FFmpeg process, resuming it after a Suspend.
-func (f *FFmpeg) Resume() error {
-	if f.cmd.Process == nil {
-		return nil
-	}
-	return f.cmd.Process.Signal(syscall.SIGCONT)
+	_ = f.cmd.Process.Kill()
+	return f.cmd.Wait()
 }
 
 func buildArgs(width, height, frameRate int, music *MusicSource, videoMaxRate string) []string {
@@ -163,16 +155,7 @@ func buildArgs(width, height, frameRate int, music *MusicSource, videoMaxRate st
 		args = append(args, "-c:a", "aac", "-b:a", "128k")
 	}
 
-	// Minimize muxer buffering so stale audio drains quickly on resume.
-	// -flush_packets 1: flush each packet to stdout immediately
-	// -max_delay 0: no muxer interleave delay (default 0.7s holds audio)
-	// -max_interleave_delta 0: don't hold packets waiting for other streams
-	args = append(args,
-		"-flush_packets", "1",
-		"-max_delay", "0",
-		"-max_interleave_delta", "0",
-		"-f", "mpegts", "pipe:1",
-	)
+	args = append(args, "-f", "mpegts", "pipe:1")
 
 	return args
 }
