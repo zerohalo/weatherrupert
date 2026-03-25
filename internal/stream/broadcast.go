@@ -46,12 +46,36 @@ type Hub struct {
 }
 
 // RequestActivation marks the hub so that the next Subscribe triggers
-// OnActive regardless of current client count.  Called by OnIdle after
-// killing FFmpeg so that the next viewer connection starts a fresh process
-// even if internal subscribers (HLS segmenter) are still present.
+// OnActive regardless of current client count.  Called after killing
+// FFmpeg so that the next viewer connection starts a fresh process even
+// if stale clients (ghost HTTP connections, HLS segmenter) remain.
 func (h *Hub) RequestActivation() {
 	h.mu.Lock()
 	h.needsActivation = true
+	h.mu.Unlock()
+}
+
+// CloseAllClients closes every client channel, causing their HTTP handlers
+// to exit and call Unsubscribe.  Called when FFmpeg is killed to flush out
+// ghost connections that would otherwise hang forever waiting for data.
+func (h *Hub) CloseAllClients() {
+	h.mu.Lock()
+	for ch := range h.clients {
+		close(ch)
+	}
+	// Clear the maps now — the deferred Unsubscribe calls from HTTP
+	// handlers will be no-ops since the channel is already gone.
+	for ch := range h.clients {
+		if t, ok := h.connectTime[ch]; ok {
+			h.viewTotal += time.Since(t)
+		}
+		if d, ok := h.clientDrops[ch]; ok {
+			h.dropsTotal += d.Load()
+		}
+		delete(h.clients, ch)
+		delete(h.clientDrops, ch)
+		delete(h.connectTime, ch)
+	}
 	h.mu.Unlock()
 }
 
@@ -101,9 +125,15 @@ func (h *Hub) Subscribe() chan []byte {
 }
 
 // Unsubscribe removes a client channel and closes it.
+// Safe to call even if the channel was already closed by CloseAllClients.
 func (h *Hub) Unsubscribe(ch chan []byte) {
 	var deactivate bool
 	h.mu.Lock()
+	_, present := h.clients[ch]
+	if !present {
+		h.mu.Unlock()
+		return // already removed by CloseAllClients
+	}
 	if t, ok := h.connectTime[ch]; ok {
 		h.viewTotal += time.Since(t)
 		delete(h.connectTime, ch)
@@ -115,7 +145,9 @@ func (h *Hub) Unsubscribe(ch chan []byte) {
 	delete(h.clients, ch)
 	deactivate = len(h.clients) == 0 && h.OnIdle != nil
 	h.mu.Unlock()
-	close(ch)
+	if present {
+		close(ch)
+	}
 	if deactivate {
 		h.OnIdle()
 	}
