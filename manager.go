@@ -163,6 +163,10 @@ func (m *Manager) ActivePipelines() []admin.PipelineInfo {
 		}
 		musicStream := p.musicStream
 		p.relayMu.Unlock()
+		var ffWarnings int64
+		if ff := p.ff; ff != nil {
+			ffWarnings = ff.Warnings()
+		}
 		diag := p.seg.Diagnostics()
 		hubDiag := p.hub.Diagnostics()
 		infos = append(infos, admin.PipelineInfo{
@@ -181,7 +185,7 @@ func (m *Manager) ActivePipelines() []admin.PipelineInfo {
 			LastSeen:         lastSeen,
 			StreamURL:        p.streamURL,
 			SlowFrames:       p.rnd.SlowFrames(),
-			FFmpegWarns:      p.ff.Warnings(),
+			FFmpegWarns:      ffWarnings,
 			AudioDrops:       audioDrops,
 			ClientDrops:      p.hub.ClientDrops(),
 			StreamChunks:     hubDiag.ChunkCount,
