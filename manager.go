@@ -409,7 +409,16 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 
 	// startFFmpeg launches a fresh FFmpeg process with the given music source,
 	// wires up the hub reader, and points the renderer at the new stdin.
+	// It waits for any previous hub reader goroutine to exit first so there
+	// is never more than one goroutine broadcasting to the hub.
+	var hubReaderDone chan struct{}
 	startFFmpeg := func(music *stream.MusicSource, label string) (*stream.FFmpeg, error) {
+		// Wait for the previous hub reader to finish (it exits on EOF
+		// when the old FFmpeg's stdout pipe closes after Kill).
+		if hubReaderDone != nil {
+			<-hubReaderDone
+		}
+
 		newFF, err := stream.Start(m.cfg.Width, m.cfg.Height, m.cfg.FrameRate, music, loc.ZipCode, m.cfg.VideoMaxRate)
 		if err != nil {
 			return nil, err
@@ -418,7 +427,11 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 		if p.rnd != nil {
 			p.rnd.SetOutput(newFF.Stdin())
 		}
-		go hub.Run(newFF.Stdout())
+		hubReaderDone = make(chan struct{})
+		go func() {
+			hub.Run(newFF.Stdout())
+			close(hubReaderDone)
+		}()
 		pl.Printf("ffmpeg started (%s)", label)
 		return newFF, nil
 	}
