@@ -256,7 +256,7 @@ Each subscriber has a buffered channel (256 chunks). If a pipeline's FFmpeg fall
 
 The relay also tracks which subscribers are **active** (have viewers). When no pipeline has viewers the relay disconnects from the upstream stream to save bandwidth, and reconnects when a viewer arrives.
 
-When multiple admin-configured streams exist, a pipeline rotates to a random stream each time a viewer reconnects. The pipe is detached from the old relay and attached to the new one without closing FFmpeg's input fd, so the transition is seamless.
+When multiple admin-configured streams exist, a pipeline picks a random stream each time a viewer reconnects. Since FFmpeg is restarted fresh on each connection (see *Cold-start FFmpeg* below), the new process simply subscribes to a different relay — no mid-stream pipe swapping needed.
 
 ### Packages
 
@@ -322,9 +322,7 @@ go relay.writer()     → one per subscriber: reads channel → writes to OS pip
 
 ### Design details
 
-**SIGSTOP/SIGCONT for idle pipelines** — When all viewers disconnect from a pipeline, the FFmpeg subprocess is frozen with `SIGSTOP` at the OS level. It doesn't spin in a loop or decode silence — it's fully stopped by the kernel and consumes zero CPU. When a viewer reconnects, it's resumed with `SIGCONT`. This is the main mechanism behind the "does nothing when idle" goal.
-
-**Flush window on resume** — Resuming a frozen FFmpeg creates a problem: old encoded frames and audio sit in FFmpeg's internal thread queue and OS pipe buffers from before the pause. Without intervention, the viewer hears a burst of stale audio. To handle this, the music relay drains stale audio from the kernel pipe buffer using non-blocking reads while FFmpeg is still frozen, and the broadcast hub discards all output for a flush window derived from the audio thread queue size (~1.7s). The window is reset at the actual moment of resume, not when the viewer first connects, so relay reconnection time doesn't eat into it.
+**Cold-start FFmpeg for idle pipelines** — When all viewers disconnect from a pipeline, the FFmpeg subprocess is killed outright. When a viewer reconnects, a fresh FFmpeg is started with silence as the audio source, so video appears immediately. In the background, the music relay connects and a second FFmpeg is started with the live audio stream — the transition from silence to music takes about a second. An earlier design froze FFmpeg with `SIGSTOP` and resumed with `SIGCONT`, but the internal thread queue and muxer buffers retained stale audio from the previous stream that no amount of pipe draining or flush-window tuning could reliably clear. Killing and restarting turned out to be just as fast once the old buffer-purging overhead was removed, and it eliminates stale audio entirely.
 
 **Lock-free weather reads via `atomic.Pointer`** — The renderer reads weather data on every frame (5 fps, ~3.5 MB RGBA per frame). Using `atomic.Pointer[WeatherData]` means the background refresh goroutine can swap in new data without ever blocking the render loop. No mutex on the hottest path in the system.
 
