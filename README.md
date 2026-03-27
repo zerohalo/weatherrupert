@@ -12,7 +12,7 @@ I really loved the idea behind ws4channels serving WS4KP but wanted to push it f
 
 A secondary goal was to keep external imports to a minimum — the standard library does most of the heavy lifting, with only a handful of third-party packages where genuinely needed (2D drawing, font parsing, image decoding). Part of this was practical (fewer dependencies = less to break), but part was deliberate: I wanted to see how far AI-assisted coding could push a complex, real-world Go project while staying close to the standard library. It turned out to be a good stress test for the tooling.
 
-Named in memory of my husband Robbie, known by some as Rupert — I miss him every day. This project is almost certainly overengineered, but it's my grief project and that's okay.
+Named in memory of my husband Robbie, known by some as Rupert — I miss him every single moment of every day. This project is almost certainly overengineered, but it's my grief project and that's okay, so...
 
 ---
 
