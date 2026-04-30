@@ -280,18 +280,20 @@ func makeDaily(base time.Time) []weather.ForecastPeriod {
 func makeAlerts(base time.Time) []weather.Alert {
 	return []weather.Alert{
 		{
-			Event:    "Winter Storm Warning",
-			Severity: "Severe",
-			Headline: "Winter Storm Warning in effect from Friday evening through Saturday afternoon",
-			Onset:    base.Add(12 * time.Hour),
-			Expires:  base.Add(36 * time.Hour),
+			Event:       "Winter Storm Warning",
+			Severity:    "Severe",
+			Headline:    "Winter Storm Warning in effect from Friday evening through Saturday afternoon",
+			Description: "Heavy snow expected. Total snow accumulations of 8 to 14 inches. Winds gusting as high as 45 mph. Travel could be very difficult to impossible.",
+			Onset:       base.Add(12 * time.Hour),
+			Expires:     base.Add(36 * time.Hour),
 		},
 		{
-			Event:    "Wind Advisory",
-			Severity: "Moderate",
-			Headline: "Wind Advisory in effect until Friday 6:00 PM MST",
-			Onset:    base,
-			Expires:  base.Add(8 * time.Hour),
+			Event:       "Wind Advisory",
+			Severity:    "Moderate",
+			Headline:    "Wind Advisory in effect until Friday 6:00 PM MST",
+			Description: "Southwest winds 25 to 35 mph with gusts up to 55 mph expected. Gusty winds could blow around unsecured objects and make driving difficult, especially for high profile vehicles.",
+			Onset:       base,
+			Expires:     base.Add(8 * time.Hour),
 		},
 	}
 }

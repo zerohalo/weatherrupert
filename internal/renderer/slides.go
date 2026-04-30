@@ -2123,11 +2123,27 @@ func slideAlerts(dc *gg.Context, data *weather.WeatherData, use24h, useMetric bo
 		drawShadowText(dc, strings.ToUpper(a.Event), 60, slotTop+42, titleR, titleG, titleB)
 
 		// Headline — white, wrapped, medium size
+		descTop := slotTop + 82 // default if no headline
 		if a.Headline != "" {
 			lines := truncateLines(wrapText(strings.ToUpper(a.Headline), 46), 3)
 			dc.SetFontFace(fonts.medium)
 			for j, line := range lines {
 				drawShadowText(dc, line, 60, slotTop+82+float64(j)*34, textR, textG, textB)
+			}
+			descTop = slotTop + 82 + float64(len(lines))*34 + 8
+		}
+
+		// Description — subdued, wrapped, small size
+		if a.Description != "" {
+			dc.SetFontFace(fonts.small)
+			expiresReserve := 40.0 // space for expires line at bottom
+			maxDescH := (slotTop + slotH - expiresReserve) - descTop
+			maxDescLines := int(maxDescH / 26)
+			if maxDescLines > 0 {
+				descLines := truncateLines(wrapText(a.Description, 60), maxDescLines)
+				for j, line := range descLines {
+					drawShadowText(dc, line, 60, descTop+float64(j)*26, subR, subG, subB)
+				}
 			}
 		}
 
