@@ -3311,15 +3311,24 @@ func slideFeelsLike(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 	}
 
 	// Feels-like line — cyan when cooler, orange-red when warmer.
-	// Skip segments where feels-like ≈ actual so the yellow actual line stays clean.
+	// Use the larger absolute diff of the two endpoints to pick color, so
+	// transitional segments near the crossover stay colored rather than
+	// falling back to yellow and blending with the actual line.
 	if n > 1 {
 		dc.SetLineWidth(2.5)
 		for i := 0; i < n-1; i++ {
-			avgDiff := (feelsLike[i] - actuals[i] + feelsLike[i+1] - actuals[i+1]) / 2
-			if math.Abs(avgDiff) < 1 {
-				continue // too close — skip so actual line shows through cleanly
+			d0 := feelsLike[i] - actuals[i]
+			d1 := feelsLike[i+1] - actuals[i+1]
+
+			// Pick the endpoint with the larger deviation to drive color.
+			d := d0
+			if math.Abs(d1) > math.Abs(d0) {
+				d = d1
 			}
-			if avgDiff > 0 {
+			if math.Abs(d) < 1 {
+				continue // both endpoints essentially equal — let actual line show
+			}
+			if d > 0 {
 				dc.SetRGB(heatR, 0.4, 0.2) // warm orange-red
 			} else {
 				dc.SetRGB(divR, divG, divB) // cool cyan
@@ -3384,10 +3393,10 @@ func slideFeelsLike(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 	// Legend — only show cooler/warmer if present in the data.
 	hasCooler, hasWarmer := false, false
 	for i := range actuals {
-		if feelsLike[i] < actuals[i] {
+		if feelsLike[i] < actuals[i]-1 {
 			hasCooler = true
 		}
-		if feelsLike[i] > actuals[i] {
+		if feelsLike[i] > actuals[i]+1 {
 			hasWarmer = true
 		}
 	}
