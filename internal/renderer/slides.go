@@ -3310,14 +3310,14 @@ func slideFeelsLike(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 		dc.Stroke()
 	}
 
-	// Feels-like line — yellow when same as actual, cyan when cooler, orange-red when warmer.
+	// Feels-like line — cyan when cooler, orange-red when warmer.
+	// When feels-like ≈ actual the lines overlap, so the actual (yellow) line
+	// shows through; no need for a yellow fallback that makes them indistinguishable.
 	if n > 1 {
 		dc.SetLineWidth(2.5)
 		for i := 0; i < n-1; i++ {
 			avgDiff := (feelsLike[i] - actuals[i] + feelsLike[i+1] - actuals[i+1]) / 2
-			if math.Abs(avgDiff) < 1 {
-				dc.SetRGB(hlR, hlG, hlB) // same as actual — yellow
-			} else if avgDiff > 0 {
+			if avgDiff >= 0 {
 				dc.SetRGB(heatR, 0.4, 0.2) // warm orange-red
 			} else {
 				dc.SetRGB(divR, divG, divB) // cool cyan
@@ -3335,14 +3335,12 @@ func slideFeelsLike(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 		x := xs[i]
 		dc.SetFontFace(fonts.small)
 
-		// Pick feels-like color: yellow when same, cyan when cooler, orange-red when warmer.
+		// Pick feels-like color: cyan when cooler, orange-red when warmer.
 		var flR, flG, flB float64
-		if feelsLike[i] > actuals[i]+1 {
+		if feelsLike[i] >= actuals[i] {
 			flR, flG, flB = heatR, 0.4, 0.2 // warm orange-red
-		} else if feelsLike[i] < actuals[i]-1 {
-			flR, flG, flB = divR, divG, divB // cool cyan
 		} else {
-			flR, flG, flB = hlR, hlG, hlB // same as actual — yellow
+			flR, flG, flB = divR, divG, divB // cool cyan
 		}
 
 		diff := math.Abs(actuals[i] - feelsLike[i])
@@ -3384,10 +3382,10 @@ func slideFeelsLike(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 	// Legend — only show cooler/warmer if present in the data.
 	hasCooler, hasWarmer := false, false
 	for i := range actuals {
-		if feelsLike[i] < actuals[i]-1 {
+		if feelsLike[i] < actuals[i] {
 			hasCooler = true
 		}
-		if feelsLike[i] > actuals[i]+1 {
+		if feelsLike[i] > actuals[i] {
 			hasWarmer = true
 		}
 	}
