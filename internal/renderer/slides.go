@@ -3311,13 +3311,15 @@ func slideFeelsLike(dc *gg.Context, data *weather.WeatherData, use24h, useMetric
 	}
 
 	// Feels-like line — cyan when cooler, orange-red when warmer.
-	// When feels-like ≈ actual the lines overlap, so the actual (yellow) line
-	// shows through; no need for a yellow fallback that makes them indistinguishable.
+	// Skip segments where feels-like ≈ actual so the yellow actual line stays clean.
 	if n > 1 {
 		dc.SetLineWidth(2.5)
 		for i := 0; i < n-1; i++ {
 			avgDiff := (feelsLike[i] - actuals[i] + feelsLike[i+1] - actuals[i+1]) / 2
-			if avgDiff >= 0 {
+			if math.Abs(avgDiff) < 1 {
+				continue // too close — skip so actual line shows through cleanly
+			}
+			if avgDiff > 0 {
 				dc.SetRGB(heatR, 0.4, 0.2) // warm orange-red
 			} else {
 				dc.SetRGB(divR, divG, divB) // cool cyan
