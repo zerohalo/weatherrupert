@@ -3,6 +3,7 @@ package weather
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -23,6 +24,25 @@ import (
 var radarIEM = apiurl.IEMRadar
 
 const userAgent = "weatherrupert/1.0 (github.com/zerohalo/weatherrupert)"
+
+// httpError is returned by getJSON for non-200 responses, allowing callers to
+// inspect the status code (e.g. to detect 404s from stale grid coordinates).
+type httpError struct {
+	StatusCode int
+	URL        string
+}
+
+func (e *httpError) Error() string {
+	return fmt.Sprintf("HTTP %d from %s", e.StatusCode, e.URL)
+}
+
+func isHTTP404(err error) bool {
+	var he *httpError
+	if errors.As(err, &he) {
+		return he.StatusCode == http.StatusNotFound
+	}
+	return false
+}
 
 // Client fetches and refreshes weather data from the NWS API.
 // baseURL is typically "https://api.weather.gov" but can be overridden to a
@@ -273,6 +293,17 @@ func (c *Client) Run(ctx context.Context, interval time.Duration, hasClients fun
 
 	doFetch := func() {
 		data, err := c.fetch(ctx)
+		if err != nil && isHTTP404(err) {
+			// NWS grid coordinates have gone stale (grid was updated).
+			// Re-bootstrap to get fresh coordinates and retry.
+			c.log.Printf("got 404 — re-bootstrapping to refresh grid coordinates")
+			if bErr := c.bootstrap(ctx); bErr != nil {
+				c.log.Printf("re-bootstrap failed: %v", bErr)
+				return
+			}
+			c.log.Printf("re-bootstrap succeeded (grid now %s/%d,%d)", c.gridID, c.gridX, c.gridY)
+			data, err = c.fetch(ctx)
+		}
 		if err != nil {
 			c.log.Printf("refresh failed: %v", err)
 			return
@@ -755,7 +786,7 @@ func (c *Client) getJSON(ctx context.Context, url string, dst any) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("HTTP %d from %s", resp.StatusCode, url)
+		return &httpError{StatusCode: resp.StatusCode, URL: url}
 	}
 
 	return json.NewDecoder(resp.Body).Decode(dst)
@@ -771,6 +802,11 @@ func (c *Client) getJSONRetry(ctx context.Context, label string, url string, dst
 			return nil
 		}
 		if ctx.Err() != nil {
+			return err
+		}
+		// Don't retry 404s — they indicate stale grid coordinates, not a
+		// transient failure. The caller should re-bootstrap instead.
+		if isHTTP404(err) {
 			return err
 		}
 		if attempt < maxAttempts {
