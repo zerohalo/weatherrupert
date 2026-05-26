@@ -3193,22 +3193,24 @@ func NewSlideFeelsLike(use24h, useMetric bool, loc *time.Location, getRealisticM
 	}
 }
 
-// computeFeelsLikeF returns the feels-like temperature in Fahrenheit using
-// NWS wind chill and heat index formulas.
+// computeFeelsLikeF returns the apparent ("feels like") temperature in
+// Fahrenheit using the Australian Bureau of Meteorology Apparent Temperature
+// model (non-radiation form):
+//
+//	AT = Ta + 0.33·e − 0.70·ws − 4.00
+//
+// where Ta is air temperature (°C), ws is wind speed (m/s), and e is water
+// vapour pressure (hPa) derived from Ta and relative humidity. Unlike the NWS
+// wind-chill/heat-index pair (which are undefined between 50°F and 80°F), AT is
+// continuous across the whole temperature range, so it yields a meaningful
+// feels-like value — warmer when humid, cooler when windy — in mild weather too.
 func computeFeelsLikeF(tempF, windMph, humidity float64) float64 {
-	// Wind chill: applies when T <= 50F and wind >= 3 mph.
-	if tempF <= 50 && windMph >= 3 {
-		return 35.74 + 0.6215*tempF - 35.75*math.Pow(windMph, 0.16) + 0.4275*tempF*math.Pow(windMph, 0.16)
-	}
-	// Heat index: applies when T >= 80F.
-	if tempF >= 80 && humidity > 0 {
-		hi := -42.379 + 2.04901523*tempF + 10.14333127*humidity -
-			0.22475541*tempF*humidity - 0.00683783*tempF*tempF -
-			0.05481717*humidity*humidity + 0.00122874*tempF*tempF*humidity +
-			0.00085282*tempF*humidity*humidity - 0.00000199*tempF*tempF*humidity*humidity
-		return hi
-	}
-	return tempF
+	ta := (tempF - 32) * 5 / 9 // °F → °C
+	ws := windMph * 0.44704    // mph → m/s
+	// Water-vapour pressure (hPa) from RH via the Magnus saturation formula.
+	e := (humidity / 100) * 6.105 * math.Exp(17.27*ta/(237.7+ta))
+	at := ta + 0.33*e - 0.70*ws - 4.00
+	return at*9/5 + 32 // °C → °F
 }
 
 func slideFeelsLike(dc *gg.Context, data *weather.WeatherData, use24h, useMetric bool, loc *time.Location, getRealisticMoon func() bool, fonts *fontSet) time.Duration {

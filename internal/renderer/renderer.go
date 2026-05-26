@@ -153,7 +153,11 @@ func New(w, h, frameRate int, label string,
 			}()},
 			{name: "wind-forecast", fn: NewSlideWindForecast(use24h, useMetric, loc, getRealisticMoon, fonts)},
 			{name: "feels-like", fn: NewSlideFeelsLike(use24h, useMetric, loc, getRealisticMoon, fonts), skip: func(d *weather.WeatherData) bool {
-				return !feelsLikeDiffers(d, 3)
+				// 2°F threshold suits the Australian AT model, whose apparent
+				// temperature varies continuously with humidity and wind. (The
+				// old NWS model was undefined between 50–80°F, where the diff was
+				// exactly 0, so it needed a larger threshold.)
+				return !feelsLikeDiffers(d, 2)
 			}},
 			{name: "extended-forecast", fn: NewSlideExtendedForecast(use24h, useMetric, loc, getRealisticMoon, getFunSun, fonts)},
 			{name: "weekly-high-low", fn: NewSlideWeeklyHighLow(use24h, useMetric, loc, getRealisticMoon, fonts), skip: func(d *weather.WeatherData) bool { return len(d.DailyPeriods) == 0 }},
