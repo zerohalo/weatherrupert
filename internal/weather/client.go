@@ -484,8 +484,11 @@ func (c *Client) fetch(ctx context.Context) (*WeatherData, error) {
 	// Compute planet positions (pure function, no API call).
 	planets := ComputePlanets(now, c.lat, c.lon)
 
-	// Compute sun data (pure function, no API call).
-	sunData := ComputeSunData(now, c.lat, c.lon)
+	// Compute sun data (pure function, no API call). Must use the location's
+	// timezone so the sunrise/sunset day boundaries align with local midnight;
+	// passing server-local (or UTC) time makes the scan windows miss the
+	// crossings and yields a nil result ("SUN DATA UNAVAILABLE").
+	sunData := ComputeSunData(now.In(c.loc), c.lat, c.lon)
 
 	// Fetch UV index from EPA forecast API (best-effort, falls back to computed model).
 	var uvIndex float64

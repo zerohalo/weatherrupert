@@ -6,6 +6,12 @@ import "time"
 // golden hour for the given time and location. Uses the same solar position
 // math as planet computations (sunAltitude). Returns nil for polar regions
 // where the sun doesn't rise or set.
+//
+// t MUST be expressed in the location's timezone (e.g. now.In(loc)): the day
+// boundaries are derived from t.Location(), and the morning/afternoon scan
+// windows assume midnight falls during local night. Passing a mismatched
+// timezone (server-local or UTC for a distant location) makes the scans miss
+// the crossings and returns a spurious nil.
 func ComputeSunData(t time.Time, lat, lon float64) *SunData {
 	loc := t.Location()
 	latRad := deg2rad(lat)
