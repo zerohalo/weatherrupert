@@ -306,6 +306,17 @@ func (c *Client) Run(ctx context.Context, interval time.Duration, hasClients fun
 		}
 		if err != nil {
 			c.log.Printf("refresh failed: %v", err)
+			// Even though the weather fetch failed, update solar data on
+			// the existing snapshot so the sun-solar slide stays current.
+			// Solar data is fetched independently on a shared hourly loop
+			// and should not be blocked by weather API failures.
+			if solar := c.getSolar(); solar != nil {
+				if existing := c.data.Load(); existing != nil && existing.Solar != solar {
+					updated := *existing
+					updated.Solar = solar
+					c.data.Store(&updated)
+				}
+			}
 			return
 		}
 		c.data.Store(data)
