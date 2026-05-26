@@ -50,6 +50,7 @@ type Renderer struct {
 	label            string // short identifier for log messages (e.g. ZIP code)
 	log              *plog.Logger
 	getSlideDuration func() time.Duration
+	dataMaxAge       time.Duration // weather data older than this renders the loading screen instead (0 = never considered stale)
 	wc               *weather.Client
 	outMu            sync.Mutex
 	out              io.Writer
@@ -102,6 +103,7 @@ type Renderer struct {
 // take effect immediately without restarting the pipeline.
 func New(w, h, frameRate int, label string,
 	getSlideDuration func() time.Duration,
+	dataMaxAge time.Duration,
 	wc *weather.Client, out io.Writer, hasClients func() bool,
 	getAnnouncements func() []ann.Announcement, getAnnDuration func() time.Duration, getAnnInterval func() int,
 	getTriviaItems func() []trivia.TriviaItem, getTriviaDuration func() time.Duration, getTriviaInterval func() int, getTriviaRandomize func() bool,
@@ -121,6 +123,7 @@ func New(w, h, frameRate int, label string,
 		label:            label,
 		log:              plog.New("renderer", label),
 		getSlideDuration: getSlideDuration,
+		dataMaxAge:       dataMaxAge,
 		wc:               wc,
 		out:              out,
 		fonts:            fonts,
@@ -206,6 +209,15 @@ func (r *Renderer) currentSlideName() string {
 		return r.specialSlides[r.specialIdx].name
 	}
 	return r.weatherSlides[r.weatherIdx].name
+}
+
+// stale reports whether weather data is too old to display. When data exceeds
+// dataMaxAge the render loop shows the loading screen instead of stale slides,
+// avoiding the jarring "old data, then a sudden update" flicker seen when a
+// stream resumes from idle or restarts with a stale on-disk cache. The pending
+// fetch (triggered on activation) replaces the data shortly after.
+func (r *Renderer) stale(data *weather.WeatherData) bool {
+	return r.dataMaxAge > 0 && time.Since(data.FetchedAt) > r.dataMaxAge
 }
 
 // shouldSkipCurrent returns true if the current weather slide's skip predicate
@@ -324,7 +336,7 @@ func (r *Renderer) Run(ctx context.Context) error {
 			}
 
 			data := r.wc.Current()
-			if data == nil {
+			if data == nil || r.stale(data) {
 				if err := r.writeLoadingFrame(); err != nil {
 					return err
 				}

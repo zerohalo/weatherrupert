@@ -34,6 +34,7 @@ type Pipeline struct {
 	seg           *stream.HLSSegmenter
 	rnd           *renderer.Renderer
 	ff            *stream.FFmpeg
+	ffIsInitial   bool                      // true while ff is the pre-started silence process; the first OnActive reuses it
 	lastSeen      atomic.Pointer[time.Time] // set when last viewer disconnects
 	cancel        context.CancelFunc
 	locationReady chan struct{}      // closed when bootstrap resolves the city name
@@ -452,19 +453,27 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 		p.activeMu.Lock()
 		defer p.activeMu.Unlock()
 
-		// Kill any leftover FFmpeg from a previous cycle.
-		if p.ff != nil {
-			p.ff.Kill()
-			p.ff = nil
+		// Phase 1: ensure FFmpeg is running with silence so the viewer sees
+		// video immediately. On the very first activation reuse the FFmpeg that
+		// start() already launched — the renderer is wired to its stdin and it
+		// is producing loading frames, so killing and restarting it here would
+		// only add FFmpeg startup latency (plus up to a 3s wait for the previous
+		// hub reader to drain) before the first frame reaches the viewer.
+		if p.ffIsInitial && p.ff != nil {
+			p.ffIsInitial = false
+		} else {
+			// Kill any leftover FFmpeg from a previous cycle and start fresh.
+			if p.ff != nil {
+				p.ff.Kill()
+				p.ff = nil
+			}
+			silenceFF, err := startFFmpeg(stream.NewSilenceSource(), "silence")
+			if err != nil {
+				pl.Printf("ffmpeg start (silence): %v", err)
+				return
+			}
+			p.ff = silenceFF
 		}
-
-		// Phase 1: start FFmpeg with silence so the viewer sees video immediately.
-		silenceFF, err := startFFmpeg(stream.NewSilenceSource(), "silence")
-		if err != nil {
-			pl.Printf("ffmpeg start (silence): %v", err)
-			return
-		}
-		p.ff = silenceFF
 
 		// Phase 2 (background): connect a music relay, then restart FFmpeg
 		// with the relay pipe so the viewer hears music.
@@ -581,21 +590,24 @@ func (m *Manager) start(loc geo.Location, clockFormat, units string, tzLoc *time
 		}
 	}
 
-	// Start initial FFmpeg with silence — the first OnActive will kill it
-	// and start a fresh one.  This lets the HLS segmenter produce segments
-	// from loading frames before any viewer connects.
+	// Start initial FFmpeg with silence so the HLS segmenter can produce
+	// segments from loading frames before any viewer connects. The first
+	// OnActive reuses this process (see ffIsInitial) instead of restarting it,
+	// so the first viewer starts receiving frames without extra startup delay.
 	ff, err := startFFmpeg(stream.NewSilenceSource(), "initial silence")
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("ffmpeg for ZIP %s: %w", loc.ZipCode, err)
 	}
 	p.ff = ff
+	p.ffIsInitial = true
 
 	// Renderer writes frames to FFmpeg stdin.
 	use24h := clockFormat != config.ClockFormat12h
 	useMetric := units == config.UnitsMetric
 	p.rnd = renderer.New(m.cfg.Width, m.cfg.Height, m.cfg.FrameRate, loc.ZipCode,
 		m.store.SlideDuration,
+		2*m.cfg.WeatherRefresh,
 		wc, ff.Stdin(),
 		func() bool { return hub.ClientCount() > 0 },
 		m.store.Announcements, m.store.AnnouncementDuration, m.store.AnnouncementInterval,
